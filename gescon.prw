@@ -13,6 +13,11 @@
 #include "src/malas.prw"
 #include "src/relatorios.prw"
 #include "src/usuarios.prw"
+#include "src/portal.prw"
+
+Private g_cUniPortal   := ""
+Private g_cConPortal   := ""
+Private g_lAutoPortal  := .F.
 
 /*/{Protheus.doc} GesCon
     Ponto de entrada do GesCon — sobe com `advplc serve gescon.prw`,
@@ -24,59 +29,87 @@
 User Function GesCon()
     Local aMenu := {"Unidades", "Condôminos", "Despesas", "Cobranças", "Fechamento Mensal", "Mala Direta", "Relatórios", "Usuários", "Trocar Senha", "Sair"}
     Local nOpcao
+    Local nEscolha
     Local cCompetencia
     Local nEnviados
     Local cDiaVenc
     Local nDiaVenc
+    Local nPortal
+    Local aPortal
 
     ConOut("GesCon — Sistema de Gestão Condominial")
 
-    If !GcLogin()
-        MsgStop("Acesso não autorizado.", "GesCon")
-        Return
-    EndIf
+    // Caminho de acesso: admin (login) ou condômino (token)
+    Local aEscolha := {"Administrador", "Sou condômino"}
+    nEscolha := FWMenuSelect(aEscolha, "Como deseja acessar?")
 
-    // Atualiza status "atrasado" logo após o login — reflete no resto da
-    // sessão (Cobranças, Mala Direta) sem precisar abrir o relatório de
-    // Inadimplência antes.
-    GcAtualizarInadimplentes()
+    Do Case
+        Case nEscolha == 1
+            If !GcLogin()
+                MsgStop("Acesso não autorizado.", "GesCon")
+                Return
+            EndIf
 
-    Do While .T.
-        nOpcao := FWMenuSelect(aMenu, "GesCon — Sistema de Gestão Condominial")
-        Do Case
-            Case nOpcao == 1
-                GcUnidades()
-            Case nOpcao == 2
-                GcCondominos()
-            Case nOpcao == 3
-                GcDespesas()
-            Case nOpcao == 4
-                GcCobrancas()
-            Case nOpcao == 5
-                cCompetencia := FWGetText("Fechar qual competência? (YYYY-MM)", "")
-                If !Empty(cCompetencia)
-                    cDiaVenc := FWGetText("Dia do vencimento no mês seguinte? (1-28)", "10")
-                    nDiaVenc := Val(cDiaVenc)
-                    If GcFecharMes(cCompetencia, nDiaVenc)
-                        MsgInfo("Competência " + cCompetencia + " fechada com sucesso.", "Fechamento Mensal")
-                    Else
-                        MsgAlert("Não foi possível fechar " + cCompetencia + " — já fechada ou sem unidade cadastrada.", "Fechamento Mensal")
-                    EndIf
-                EndIf
-            Case nOpcao == 6
-                cCompetencia := FWGetText("Mala direta de qual competência? (YYYY-MM)", "")
-                If !Empty(cCompetencia)
-                    nEnviados := GcMalaDireta(cCompetencia)
-                    MsgInfo(Str(nEnviados) + " e-mail(s) enviado(s).", "Mala Direta")
-                EndIf
-            Case nOpcao == 7
-                GcMenuRelatorios()
-            Case nOpcao == 8
-                GcMenuUsuarios()
-            Otherwise
-                Exit
-        EndCase
-    EndDo
+            // Atualiza status "atrasado" logo após o login — reflete no resto da
+            // sessão (Cobranças, Mala Direta) sem precisar abrir o relatório de
+            // Inadimplência antes.
+            GcAtualizarInadimplentes()
+
+            Do While .T.
+                nOpcao := FWMenuSelect(aMenu, "GesCon — Sistema de Gestão Condominial")
+                Do Case
+                    Case nOpcao == 1
+                        GcUnidades()
+                    Case nOpcao == 2
+                        GcCondominos()
+                    Case nOpcao == 3
+                        GcDespesas()
+                    Case nOpcao == 4
+                        GcCobrancas()
+                    Case nOpcao == 5
+                        cCompetencia := FWGetText("Fechar qual competência? (YYYY-MM)", "")
+                        If !Empty(cCompetencia)
+                            cDiaVenc := FWGetText("Dia do vencimento no mês seguinte? (1-28)", "10")
+                            nDiaVenc := Val(cDiaVenc)
+                            If GcFecharMes(cCompetencia, nDiaVenc)
+                                MsgInfo("Competência " + cCompetencia + " fechada com sucesso.", "Fechamento Mensal")
+                            Else
+                                MsgAlert("Não foi possível fechar " + cCompetencia + " — já fechada ou sem unidade cadastrada.", "Fechamento Mensal")
+                            EndIf
+                        EndIf
+                    Case nOpcao == 6
+                        cCompetencia := FWGetText("Mala direta de qual competência? (YYYY-MM)", "")
+                        If !Empty(cCompetencia)
+                            nEnviados := GcMalaDireta(cCompetencia)
+                            MsgInfo(Str(nEnviados) + " e-mail(s) enviado(s).", "Mala Direta")
+                        EndIf
+                    Case nOpcao == 7
+                        GcMenuRelatorios()
+                    Case nOpcao == 8
+                        GcMenuUsuarios()
+                    Otherwise
+                        Exit
+                EndCase
+            EndDo
+        Case nEscolha == 2
+            If !GcPortalCondmino()
+                MsgStop("Acesso não autorizado.", "GesCon")
+                Return
+            EndIf
+
+            // Menu do portal do condômino (read-only)
+            Do While .T.
+                aPortal := {"Minhas Cobranças", "Sair"}
+                nPortal := FWMenuSelect(aPortal, "Portal do Condômino")
+                Do Case
+                    Case nPortal == 1
+                        GcPortalBrowse()
+                    Otherwise
+                        GcSairPortal()
+                        Exit
+                EndCase
+            EndDo
+    EndCase
 Return
 
 /*/{Protheus.doc} GcMenuRelatorios
