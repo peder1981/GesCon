@@ -44,6 +44,17 @@ como ferramenta externa — o mesmo binário que qualquer outra fonte AdvPL usa.
 em vez de REST puro ou desktop Fyne porque entrega uma UI usável desde o dia
 1, acessível de qualquer dispositivo sem instalação.
 
+**Revisão em 2026-07-24, depois do menu real (`FWMenuSelect`) ficar
+pronto**: o usuário achou o visual web "precário" e pediu uma aplicação
+executável direta. `advplc build` já existia no AdvPP (standalone Fyne,
+v1.10.2) — GesCon passou a suportar **os dois modos** a partir do mesmo
+`.prw`, sem código duplicado: `advplc serve gescon.prw` (web) e `advplc
+build gescon.prw -o GesConApp` (desktop nativo). A frase acima
+("escolhido em vez de... desktop Fyne") descreve a decisão original do
+v1, não mais o estado atual — mantida aqui pelo valor histórico da
+justificativa, não como descrição do que existe hoje. Ver
+`docs/ARQUITETURA.md`, seção "Stack", para o estado atual.
+
 **Banco de dados**: SQLite via a camada de DB já compartilhada do AdvPP.
 Tabelas criadas por DDL simples na inicialização, seguindo a mesma convenção
 de exclusão lógica estilo Protheus que o AdvEditor já usa (`R_E_C_N_O_`,
@@ -52,6 +63,11 @@ AdvEditor para inspeção/administração manual se necessário.
 
 **Autenticação**: tela de login simples gate na frente das demais telas,
 usuário administrador único (v1). Sem sessões multi-usuário, sem papéis.
+**Implementado** (`src/login.prw`, `GcLogin`) — ficou pendente durante
+boa parte da implementação (nenhuma task do plano cobria explicitamente
+essa operação apesar de listada aqui) até ser cobrado numa revisão de
+completude e implementado com `FWHash` (AdvPP v1.23.5, hash SHA-256 —
+não existia nenhuma função de hash no compilador antes disso).
 
 ## Modelo de dados
 

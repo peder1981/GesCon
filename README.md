@@ -7,15 +7,16 @@ administração de condomínio, e case de validação de robustez do
 compilador — o desenvolvimento deste projeto encontrou e corrigiu 5
 bugs reais (persistência de work-area, `Recover` sem variável nomeada,
 ponto de entrada com `#include`, comparação com `Nil` derrubando a VM,
-diálogos não bloqueantes no desktop) e motivou 3 capacidades novas
-(`TCSqlExec`/`TCSqlQuery`, `TMailMessage`, `FWMenuSelect`/`FWGetText`)
-no AdvPP — ver [`ARQUITETURA.md`](docs/ARQUITETURA.md).
+diálogos não bloqueantes no desktop) e motivou 4 capacidades novas
+(`TCSqlExec`/`TCSqlQuery`, `TMailMessage`, `FWMenuSelect`/`FWGetText`,
+`FWHash`) no AdvPP — ver [`ARQUITETURA.md`](docs/ARQUITETURA.md).
 
-Menu real navegando entre as telas: cadastro de unidades e condôminos,
-lançamento de despesas, Fechamento Mensal com rateio por fração ideal,
-Cobrança e Registro de Pagamento, Mala Direta com envio real de
-e-mail, e Relatórios (Balancete Mensal, Inadimplência, Extrato por
-Unidade, Despesas por Categoria).
+Login de administrador seguido de um menu real navegando entre as
+telas: cadastro de unidades e condôminos, lançamento de despesas,
+Fechamento Mensal com rateio por fração ideal, Cobrança e Registro de
+Pagamento, Mala Direta com envio real de e-mail, e Relatórios
+(Balancete Mensal, Inadimplência, Extrato por Unidade, Despesas por
+Categoria).
 
 - **[Documentação funcional](docs/FUNCIONAL.md)** — o que o sistema faz,
   telas, regras de negócio, limitações conhecidas.
@@ -27,13 +28,14 @@ Unidade, Despesas por Categoria).
 
 ## Requisitos
 
-- [`advplc`](https://github.com/peder1981/AdvPP) **v1.23.4+** —
+- [`advplc`](https://github.com/peder1981/AdvPP) **v1.23.5+** —
   v1.22.1 corrigiu um bug real de ponto de entrada que impedia rodar
   qualquer projeto AdvPL multi-arquivo como o GesCon; v1.23.0 adicionou
   `FWMenuSelect`/`FWGetText` (menu de navegação); v1.23.1-v1.23.4
   trouxeram identidade visual própria (web e desktop) e corrigiram um
-  bug real de diálogo não bloqueante no desktop. Todos
-  achados/motivados durante este projeto.
+  bug real de diálogo não bloqueante no desktop; v1.23.5 adicionou
+  `FWHash` (usado pelo login). Todos achados/motivados durante este
+  projeto.
 - `sqlite3` (CLI, só para o bootstrap do schema).
 
 ## Rodando
@@ -58,6 +60,11 @@ advplc build gescon.prw -o GesConApp
 ./GesConApp
 ```
 
+No primeiro acesso (nenhum usuário cadastrado ainda), o sistema pede
+pra escolher login e senha do administrador e já entra. Não existe
+campo de senha mascarado no AdvPP hoje — a senha fica visível ao
+digitar, mas nunca é gravada em texto puro (hash SHA-256).
+
 ## Testes
 
 ```bash
@@ -66,6 +73,7 @@ advplc run tests/fechamento_test.prw
 advplc run tests/pagamento_test.prw
 advplc run tests/malas_test.prw
 advplc run tests/relatorios_test.prw
+advplc run tests/login_test.prw
 ```
 
 ## Mala direta (envio real de e-mail)
@@ -88,16 +96,20 @@ Sem `GESCON_SMTP_HOST`, `GcMalaDireta` não tenta enviar nada e retorna 0
 
 ## Escopo desta fase (Plano 1 de 2)
 
-Cadastros (Unidades, Condôminos, Despesas), Fechamento Mensal (rateio por
-fração ideal), Cobranças + Registrar Pagamento, Mala Direta (envio real),
-Relatórios (Balancete Mensal, Inadimplência, Extrato por Unidade,
-Despesas por Categoria). **Login fica pro Plano 2** — ver
-[`docs/FUNCIONAL.md`](docs/FUNCIONAL.md) para o escopo completo.
+Login, Cadastros (Unidades, Condôminos, Despesas), Fechamento Mensal
+(rateio por fração ideal), Cobranças + Registrar Pagamento, Mala Direta
+(envio real), Relatórios (Balancete Mensal, Inadimplência, Extrato por
+Unidade, Despesas por Categoria). **Papéis de usuário/permissões ficam
+pro Plano 2** — ver [`docs/FUNCIONAL.md`](docs/FUNCIONAL.md) para o
+escopo completo.
 
-## Limitação conhecida
+## Limitações conhecidas
 
-A tela de Cobranças permite editar/excluir registros livremente pela UI
-(mesmo `FWMBrowse` editável dos demais cadastros) — a garantia de "valor
-travado no fechamento" é imposta pela lógica de negócio, não pela UI.
-Aceitável para a v1 (login único, uso pessoal/piloto). Ver
-[`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) para o motivo técnico.
+- A tela de Cobranças permite editar/excluir registros livremente pela
+  UI (mesmo `FWMBrowse` editável dos demais cadastros) — a garantia de
+  "valor travado no fechamento" é imposta pela lógica de negócio, não
+  pela UI. Aceitável para a v1 (login único, uso pessoal/piloto). Ver
+  [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) para o motivo técnico.
+- Não existe campo de senha mascarado no AdvPP hoje — a senha do login
+  fica visível ao digitar (nunca gravada em texto puro, só o campo de
+  entrada não esconde os caracteres).
