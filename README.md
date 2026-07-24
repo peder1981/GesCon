@@ -1,18 +1,31 @@
 # GesCon — Sistema de Gestão Condominial
 
 Sistema de gestão condominial em AdvPL/TLPP, rodando sobre o
-[AdvPP](https://github.com/peder1981/AdvPP) (compilador/VM open-source).
-Serve dois propósitos: uso real de administração de condomínio, e case de
-validação de robustez do compilador.
+[AdvPP](https://github.com/peder1981/AdvPP) (compilador/VM open-source
+para AdvPL/TLPP, escrito em Go). Serve dois propósitos: uso real de
+administração de condomínio, e case de validação de robustez do
+compilador — o desenvolvimento deste projeto encontrou e corrigiu 5
+bugs reais do AdvPP (ver [`ARQUITETURA.md`](docs/ARQUITETURA.md)).
 
-Ver design completo em
-`docs/superpowers/specs/2026-07-24-gescon-design.md`.
+Cadastro de unidades e condôminos, lançamento de despesas, Fechamento
+Mensal com rateio por fração ideal, Cobrança e Registro de Pagamento, e
+Mala Direta com envio real de e-mail.
+
+- **[Documentação funcional](docs/FUNCIONAL.md)** — o que o sistema faz,
+  telas, regras de negócio, limitações conhecidas.
+- **[Documentação técnica](docs/ARQUITETURA.md)** — stack, estrutura de
+  arquivos, modelo de dados, decisões de implementação.
+- **[Histórico de design](docs/superpowers/)** — spec, plano de
+  implementação e ledger de execução (processo completo, não só o
+  resultado).
 
 ## Requisitos
 
-- `advplc` v1.22.0+ (natives `TCSqlExec`/`TCSqlQuery`, persistência real de
-  work-area, classe `TMailMessage`)
-- `sqlite3` (CLI, só para o bootstrap do schema)
+- [`advplc`](https://github.com/peder1981/AdvPP) **v1.22.1+** — versões
+  anteriores têm um bug real de ponto de entrada que impede rodar
+  qualquer projeto AdvPL multi-arquivo como o GesCon (corrigido na
+  v1.22.1, achado durante este projeto).
+- `sqlite3` (CLI, só para o bootstrap do schema).
 
 ## Rodando
 
@@ -53,12 +66,13 @@ Sem `GESCON_SMTP_HOST`, `GcMalaDireta` não tenta enviar nada e retorna 0
 Cadastros (Unidades, Condôminos, Despesas), Fechamento Mensal (rateio por
 fração ideal), Cobranças + Registrar Pagamento, Mala Direta (envio real).
 **Relatórios (balancete, inadimplência, extrato por unidade, despesas por
-categoria) e login ficam pro Plano 2** — ver spec para o escopo completo.
+categoria) e login ficam pro Plano 2** — ver
+[`docs/FUNCIONAL.md`](docs/FUNCIONAL.md) para o escopo completo.
 
 ## Limitação conhecida
 
 A tela de Cobranças permite editar/excluir registros livremente pela UI
 (mesmo `FWMBrowse` editável dos demais cadastros) — a garantia de "valor
 travado no fechamento" é imposta pela lógica de negócio, não pela UI.
-Aceitável para a v1 (login único, uso pessoal/piloto). Ver spec, seção
-"Decisões explícitas registradas".
+Aceitável para a v1 (login único, uso pessoal/piloto). Ver
+[`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) para o motivo técnico.
