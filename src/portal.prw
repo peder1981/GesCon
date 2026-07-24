@@ -30,7 +30,7 @@ Return .T.
 /*/{Protheus.doc} GcAuthPortalToken
     Autentica um token na tabela GCT_TOKEN.
     Verifica: TOKEN existente, D_E_L_E_T_=' ', VALIDO_ATE > agora, USADO=0.
-    Se válido: marca USADO=1, busca uni_codigopela tabela, retorna .T.
+    Se válido: marca USADO=1, busca uni_codigo pela tabela, retorna .T.
     @type User Function
     @author GesCon
     @since 2026-07-24
@@ -72,12 +72,12 @@ User Function GcPortalBrowse()
     Local nQtd := GcPortalCalcCobrancas()
     Local cMsg := "Cobranças encontradas: " + Str(nQtd)
 
+    MsgInfo(cMsg + Chr(10) + "Selecione 'Sair' no menu para encerrar.", "Portal Condômino")
+
     Local oBrowse := FWMBrowse():New()
     oBrowse:SetAlias("RPT_COND_COBRANCAS")
     oBrowse:SetDescription("Minhas Cobranças — " + g_cConPortal + " (Portal Condômino)")
     oBrowse:Activate()
-
-    MsgInfo(cMsg + Chr(10) + "Selecione 'Sair' no menu para encerrar.", "Portal Condômino")
 Return
 
 /*/{Protheus.doc} GcPortalCalcCobrancas
