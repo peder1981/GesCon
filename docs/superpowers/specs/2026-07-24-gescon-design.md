@@ -104,17 +104,20 @@ existe:
   cadastrados, exportada como texto pronto para uso manual (copiar/colar,
   anexar a um e-mail).
 
-### Envio de e-mail (fora do escopo desta fase)
+### Envio de e-mail
 
-O AdvPP não implementa hoje nenhuma native de envio de e-mail (`TMailMessage`/
-SMTP). Decisão explícita: **não** implementar isso agora, para respeitar a
-prioridade já definida de estabilizar o compilador antes de adicionar
-features novas. GesCon v1 gera o conteúdo da mala direta mas não envia.
-
-**Item de roadmap registrado**: implementar `TMailMessage`/SMTP real no
-AdvPP como uma fase futura, após o GesCon estar funcional — nesse ponto vira
-a próxima feature natural do compilador (uso real já demonstrado pela
-necessidade do GesCon), não uma feature especulativa.
+**Decisão revista em 2026-07-24, durante o planejamento**: o AdvPP não
+implementava nenhuma native de envio de e-mail. A decisão original desta
+spec era não implementar isso agora, respeitando a prioridade de
+estabilizar o compilador antes de features novas — mas ao planejar o Task 1
+(que já precisava mexer no compilador para viabilizar o Fechamento Mensal
+via `TCSqlExec`/`TCSqlQuery`), o usuário pediu explicitamente para
+adiantar `TMailMessage`/SMTP junto, já que o compilador estava sendo
+tocado mesmo. Decisão final: `TMailMessage` (classe nativa, envio real via
+`net/smtp` da stdlib) é implementada no **Plano 1** (Task 3), como
+capacidade de compilador — mas **nenhuma tela do GesCon a consome ainda**
+nesta fase. A mala direta em si (geração de conteúdo + envio de verdade)
+continua no escopo do **Plano 2**, agora com a capacidade já disponível.
 
 ## Testes
 
@@ -137,7 +140,10 @@ Estratégia de teste dupla, aproveitando que isto é dogfooding do compilador:
 - Fração ideal por unidade, não divisão igual nem regra configurável por
   tipo de despesa — mais simples que "configurável por despesa" e mais
   correto que "divisão igual" para uso real.
-- Mala direta gera conteúdo, não envia — SMTP fica para depois.
+- Mala direta gera conteúdo mas não é implementada nesta fase (Plano 2) —
+  a capacidade de envio real (`TMailMessage`) já existe no compilador desde
+  o Plano 1 (decisão revista, ver seção "Envio de e-mail"), mas nenhuma
+  tela do GesCon a consome ainda.
 - Login único de administrador — sem papéis/permissões nesta fase.
 - Vínculo Unidade→Condômino (`UNI_CONDOMINO`) é o código digitado como
   texto, sem combo/lookup vinculado — `FWMBrowse` não expõe esse tipo de
@@ -145,8 +151,9 @@ Estratégia de teste dupla, aproveitando que isto é dogfooding do compilador:
   dados de um condomínio (dezenas de unidades, não milhares).
 - API de banco descoberta durante o planejamento: a API clássica de
   work-area do AdvPP (`DbAppend`/`RecLock`/`FieldPut`/`MsUnlock`) não
-  persiste dados de verdade (confirmado por teste direto) — só `FWMBrowse`
-  grava, via código interno acionado por clique na UI. GesCon depende de
-  `TCSqlExec`/`TCSqlQuery`, duas natives novas expostas no AdvPP v1.22.0
-  especificamente para viabilizar o Fechamento Mensal (que precisa gravar
+  persistia dados de verdade (confirmado por teste direto) — só `FWMBrowse`
+  gravava, via código interno acionado por clique na UI. Corrigida no
+  AdvPP v1.22.0 (persistência real), que também ganhou `TCSqlExec`/
+  `TCSqlQuery` — o caminho que o GesCon usa de fato para o Fechamento
+  Mensal (que precisa gravar
   a partir de lógica de negócio, não de clique de UI).
