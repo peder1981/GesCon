@@ -4,6 +4,12 @@
 // campo customizada na v1 desta integração.
 #include "totvs.ch"
 
+/*/{Protheus.doc} GcDespesas
+    Abre o lançamento de despesas (browse CRUD sobre DES).
+    @type Function
+    @author GesCon
+    @since 2026-07-24
+*/
 User Function GcDespesas()
     Local oBrowse := FWMBrowse():New()
     oBrowse:SetAlias("DES")

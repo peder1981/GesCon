@@ -4,6 +4,13 @@
 #include "totvs.ch"
 #include "src/unidades.prw"
 
+/*/{Protheus.doc} GesCon
+    Ponto de entrada do GesCon — sobe com `advplc serve gescon.prw`,
+    abre o cadastro de Unidades como tela inicial.
+    @type Function
+    @author GesCon
+    @since 2026-07-24
+*/
 User Function GesCon()
     ConOut("GesCon — Sistema de Gestão Condominial")
     GcUnidades()

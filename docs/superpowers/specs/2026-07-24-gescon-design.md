@@ -99,10 +99,13 @@ existe:
 - **Extrato por unidade**: histórico de cobranças/pagamentos de uma unidade.
 - **Relatório de despesas por categoria**: soma agrupada por `categoria` no
   período.
-- **Mala direta (geração, não envio)**: monta uma mensagem personalizada por
-  condômino (nome, unidade, situação/saldo) a partir dos dados já
-  cadastrados, exportada como texto pronto para uso manual (copiar/colar,
-  anexar a um e-mail).
+- **Mala direta (geração + envio real)**: monta uma mensagem personalizada
+  por condômino (nome, unidade, valor, vencimento, status) a partir das
+  cobranças não pagas de uma competência, e envia via `TMailMessage`
+  (`GcMalaDireta`, `src/malas.prw`). Balancete, inadimplência, extrato por
+  unidade e despesas por categoria continuam no **Plano 2** (leitura
+  read-only sobre o modelo existente, sem dependência de capacidade nova
+  de compilador).
 
 ### Envio de e-mail
 
@@ -113,11 +116,26 @@ estabilizar o compilador antes de features novas — mas ao planejar o Task 1
 (que já precisava mexer no compilador para viabilizar o Fechamento Mensal
 via `TCSqlExec`/`TCSqlQuery`), o usuário pediu explicitamente para
 adiantar `TMailMessage`/SMTP junto, já que o compilador estava sendo
-tocado mesmo. Decisão final: `TMailMessage` (classe nativa, envio real via
-`net/smtp` da stdlib) é implementada no **Plano 1** (Task 3), como
-capacidade de compilador — mas **nenhuma tela do GesCon a consome ainda**
-nesta fase. A mala direta em si (geração de conteúdo + envio de verdade)
-continua no escopo do **Plano 2**, agora com a capacidade já disponível.
+tocado mesmo. `TMailMessage` (classe nativa, envio real via `net/smtp` da
+stdlib) foi implementada no **Plano 1** (Task 3).
+
+**Segunda revisão, ainda em 2026-07-24, após a implementação e revisão
+final do branch**: como a única razão original para adiar a mala direta
+pro Plano 2 era a ausência de `TMailMessage` — e essa ausência não existe
+mais — o usuário pediu para trazer a mala direta pro Plano 1 também.
+Implementada em `GcMalaDireta(cCompetencia)` (`src/malas.prw`): busca as
+`Cobrança` não pagas da competência via `JOIN` com `Unidade`/`Condômino`,
+monta o corpo da mensagem, e envia via `TMailMessage` para cada
+condômino com e-mail cadastrado — condôminos sem e-mail são pulados,
+falha de envio individual (`Begin Sequence/Recover`) não aborta o
+restante do lote. Configuração SMTP via variáveis de ambiente
+(`GESCON_SMTP_HOST/PORT/USER/PASS/FROM`), **não** via `GetMV()` — testado
+e confirmado que `GetMV()` é um stub no AdvPP (sempre retorna o valor
+padrão passado, nunca lê configuração real), então `GetEnv()` é o único
+mecanismo real de configuração sem segredo hardcoded disponível hoje.
+Sem `GESCON_SMTP_HOST` configurado, `GcMalaDireta` não tenta enviar nada
+e retorna 0 (comportamento seguro por padrão). Testado de ponta a ponta
+com um servidor SMTP de teste local — ver `tests/malas_test.prw`.
 
 ## Testes
 
@@ -140,10 +158,12 @@ Estratégia de teste dupla, aproveitando que isto é dogfooding do compilador:
 - Fração ideal por unidade, não divisão igual nem regra configurável por
   tipo de despesa — mais simples que "configurável por despesa" e mais
   correto que "divisão igual" para uso real.
-- Mala direta gera conteúdo mas não é implementada nesta fase (Plano 2) —
-  a capacidade de envio real (`TMailMessage`) já existe no compilador desde
-  o Plano 1 (decisão revista, ver seção "Envio de e-mail"), mas nenhuma
-  tela do GesCon a consome ainda.
+- Mala direta trazida pro Plano 1 (decisão revista pela 2ª vez, ver seção
+  "Envio de e-mail") — implementada com envio real via `TMailMessage`,
+  já que a única razão pra adiar era a ausência dessa capacidade, e ela
+  deixou de existir assim que o Plano 1 a implementou. Balancete,
+  inadimplência, extrato por unidade e despesas por categoria continuam
+  no Plano 2.
 - Login único de administrador — sem papéis/permissões nesta fase.
 - Vínculo Unidade→Condômino (`UNI_CONDOMINO`) é o código digitado como
   texto, sem combo/lookup vinculado — `FWMBrowse` não expõe esse tipo de
