@@ -15,10 +15,13 @@
     @author GesCon
     @since 2026-07-24
     @param cCompetencia, character, competência "YYYY-MM" a fechar
+    @param nDiaVencimento, numeric, dia do mês seguinte pro vencimento
+        (1-28; fora dessa faixa ou não informado usa 10 — padrão que
+        existe em todo mês, evitando datas inválidas em fevereiro)
     @return lOk, logical, .T. se fechou; .F. se já estava fechada ou
         não há unidade cadastrada
 */
-User Function GcFecharMes(cCompetencia)
+User Function GcFecharMes(cCompetencia, nDiaVencimento)
     Local nTotalDespesas := 0
     Local aExistente := TCSqlQuery("SELECT COB_UNIDADE FROM COB WHERE COB_COMPET = '" + GcSqlLit(cCompetencia) + "' AND D_E_L_E_T_ = ' '")
     If Len(aExistente) > 0
@@ -47,7 +50,7 @@ User Function GcFecharMes(cCompetencia)
         ConOut("GcFecharMes: aviso — soma das frações ideais das unidades ativas é " + cValToChar(nSomaFracoes) + ", não 1.0 (100%)")
     EndIf
 
-    Local cVencimento := GcProximoVencimento(cCompetencia)
+    Local cVencimento := GcProximoVencimento(cCompetencia, nDiaVencimento)
     Local i
     For i := 1 To Len(aUnidades)
         Local nValorUnidade := nTotalDespesas * Val(aUnidades[i]:UNI_FRACAO)
@@ -58,20 +61,25 @@ User Function GcFecharMes(cCompetencia)
 Return .T.
 
 /*/{Protheus.doc} GcProximoVencimento
-    Calcula o dia 10 do mês seguinte à competência informada. Dia fixo
-    nesta v1 — configurável fica pra uma fase futura se necessário.
+    Calcula um dia do mês seguinte à competência informada — dia
+    configurável (1-28; fora da faixa ou não informado usa 10).
     @type Function
     @author GesCon
     @since 2026-07-24
     @param cCompetencia, character, competência "YYYY-MM"
+    @param nDia, numeric, dia do vencimento (1-28; default 10)
     @return cVencimento, character, data "YYYY-MM-DD" do mês seguinte
 */
-User Function GcProximoVencimento(cCompetencia)
+User Function GcProximoVencimento(cCompetencia, nDia)
     Local nAno := Val(Left(cCompetencia, 4))
     Local nMes := Val(SubStr(cCompetencia, 6, 2))
+    Local nDiaUsar := nDia
     nMes++
     If nMes > 12
         nMes := 1
         nAno++
     EndIf
-Return StrZero(nAno, 4) + "-" + StrZero(nMes, 2) + "-10"
+    If nDiaUsar == Nil .Or. nDiaUsar < 1 .Or. nDiaUsar > 28
+        nDiaUsar := 10
+    EndIf
+Return StrZero(nAno, 4) + "-" + StrZero(nMes, 2) + "-" + StrZero(nDiaUsar, 2)

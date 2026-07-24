@@ -25,13 +25,18 @@ User Function RelatoriosTest()
     Local nSaldo := GcBalanceteMensal("2095-05")
     ConOut("saldo=" + Str(nSaldo))
 
-    // Inadimplência: deve conter RPT01/2095-06
+    // Inadimplência: deve conter RPT01/2095-06, e o status real da
+    // Cobrança deve ter sido promovido pra "atrasado" (não fica só no
+    // relatório — GcInadimplenciaCalc chama GcAtualizarInadimplentes)
     GcInadimplenciaCalc()
     Local aInadim := TCSqlQuery("SELECT RIN_UNIDADE, RIN_VALOR FROM RPT_INADIM WHERE RIN_UNIDADE = 'RPT01'")
     ConOut("inadim_qtd=" + Str(Len(aInadim)))
     If Len(aInadim) > 0
         ConOut("inadim_valor=" + aInadim[1]:RIN_VALOR)
     EndIf
+
+    Local aStatus := TCSqlQuery("SELECT COB_STATUS FROM COB WHERE COB_UNIDADE = 'RPT01' AND COB_COMPET = '2095-06'")
+    ConOut("status_real=" + aStatus[1]:COB_STATUS)
 
     // Extrato da unidade RPT01: deve ter as 2 cobranças
     GcExtratoUnidadeCalc("RPT01")

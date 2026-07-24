@@ -42,20 +42,40 @@ User Function GcBalanceteMensal(cCompetencia)
         "Saldo: R$ " + cValToChar(nSaldo), "Balancete Mensal")
 Return nSaldo
 
+/*/{Protheus.doc} GcAtualizarInadimplentes
+    Promove pra status "atrasado" toda Cobrança "pendente" com
+    vencimento já passado. Sem job agendado no AdvPP hoje — chamada
+    explicitamente após o login (GesCon) e antes de recalcular o
+    relatório de Inadimplência, então o status gravado em COB nunca
+    fica velho por mais do que a duração de uma sessão.
+    @type Function
+    @author GesCon
+    @since 2026-07-24
+    @return nQtd, numeric, quantidade de Cobranças promovidas a atrasado
+*/
+User Function GcAtualizarInadimplentes()
+    TCSqlExec("UPDATE COB SET COB_STATUS = 'atrasado' " + ;
+        "WHERE COB_STATUS = 'pendente' AND COB_VENCTO < date('now') AND D_E_L_E_T_ = ' '")
+    Local aQtd := TCSqlQuery("SELECT COUNT(*) AS QTD FROM COB WHERE COB_STATUS = 'atrasado' AND D_E_L_E_T_ = ' '")
+Return Val(aQtd[1]:QTD)
+
 /*/{Protheus.doc} GcInadimplenciaCalc
-    Recalcula RPT_INADIM do zero: unidades com Cobrança pendente e
-    vencida, valor e dias de atraso.
+    Recalcula RPT_INADIM do zero: unidades com Cobrança em status
+    "atrasado" (chama GcAtualizarInadimplentes primeiro, pra garantir
+    que o status reflete a data atual), valor e dias de atraso.
     @type Function
     @author GesCon
     @since 2026-07-24
     @return nQtd, numeric, quantidade de linhas geradas
 */
 User Function GcInadimplenciaCalc()
+    GcAtualizarInadimplentes()
+
     TCSqlExec("DELETE FROM RPT_INADIM")
     TCSqlExec("INSERT INTO RPT_INADIM (RIN_UNIDADE, RIN_COMPET, RIN_VALOR, RIN_VENCTO, RIN_ATRASO) " + ;
         "SELECT COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, " + ;
         "CAST(julianday('now') - julianday(COB_VENCTO) AS INTEGER) " + ;
-        "FROM COB WHERE COB_STATUS = 'pendente' AND COB_VENCTO < date('now') AND D_E_L_E_T_ = ' ' " + ;
+        "FROM COB WHERE COB_STATUS = 'atrasado' AND D_E_L_E_T_ = ' ' " + ;
         "ORDER BY COB_VENCTO")
     Local aQtd := TCSqlQuery("SELECT COUNT(*) AS QTD FROM RPT_INADIM")
 Return Val(aQtd[1]:QTD)
