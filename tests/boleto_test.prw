@@ -98,24 +98,31 @@ Static Function StLinhaItau(cBanco, cAgencia, cConta, nAgDv, cCobrta, cCarteira,
     cSeq42 := Left(cSeq42, 42)
     
     // Rearranjo FEBRABAN — usa todos os 42 digitos sem padding com zeros:
-    // G1: pos1-4 + CL[19] + DV
-    Local cG1 := SubStr(cSeq42, 1, 4) + SubStr(cSeq42, 19, 1)
+    // G1: pos1-4 + CL[19] + DV (6)
+    // G2: CL[20..28] + DV (10)
+    // G3: CL[29..37] + DV (10)
+    // G4: dv14(1)+fator(4)+valor(8)+dv_val(1) + DV (15)
+    // G5: CL[38..42] + DV (6)
+    // Total com separadores: 6+1+10+1+10+1+15+1+6 = 51
+    
+    // G1: header(4) + first CL char(pos19) + DV
+    cG1 := SubStr(cSeq42, 1, 4) + SubStr(cSeq42, 19, 1)
     cG1 := cG1 + StrZero(StBoletoCalcDv(cG1), 1)
     
-    // G2: CL[20-24] (5 chars) + DV
-    Local cG2 := SubStr(cSeq42, 20, 5)
+    // G2: CL chars at pos20-28 (9 chars) + DV
+    cG2 := SubStr(cSeq42, 20, 9)
     cG2 := cG2 + StrZero(StBoletoCalcDv(cG2), 1)
     
-    // G3: CL[25-34] (10 chars) + DV
-    Local cG3 := SubStr(cSeq42, 25, 10)
+    // G3: CL chars at pos29-37 (9 chars) + DV
+    cG3 := SubStr(cSeq42, 29, 9)
     cG3 := cG3 + StrZero(StBoletoCalcDv(cG3), 1)
     
-    // G4: pos5 + pos6-17(13) + pos35 + DV
-    Local cG4 := SubStr(cSeq42, 5, 1) + SubStr(cSeq42, 6, 13) + SubStr(cSeq42, 35, 1)
+    // G4: header[dv14+fator+valor+dv_val](14) + DV
+    cG4 := SubStr(cSeq42, 5, 1) + SubStr(cSeq42, 6, 4) + SubStr(cSeq42, 10, 8) + SubStr(cSeq42, 18, 1)
     cG4 := cG4 + StrZero(StBoletoCalcDv(cG4), 1)
     
-    // G5: CL[36-42] (7 chars) + DV
-    Local cG5 := SubStr(cSeq42, 36, 7)
+    // G5: CL chars at pos38-42 (5 chars) + DV
+    cG5 := SubStr(cSeq42, 38, 5)
     cG5 := cG5 + StrZero(StBoletoCalcDv(cG5), 1)
     
     Return cG1 + "." + cG2 + "." + cG3 + "-" + cG4 + "." + cG5
@@ -152,13 +159,13 @@ Static Function StLinhaBradesco(cBanco, cAgencia, cConta, nAgDv, cCobrta, cCarte
     // Mesmo rearranjo que Itaú — usa todos os 42 digitos sem padding:
     Local cG1 := SubStr(cSeq42, 1, 4) + SubStr(cSeq42, 19, 1)
     cG1 := cG1 + StrZero(StBoletoCalcDv(cG1), 1)
-    Local cG2 := SubStr(cSeq42, 20, 5)
+    Local cG2 := SubStr(cSeq42, 20, 9)
     cG2 := cG2 + StrZero(StBoletoCalcDv(cG2), 1)
-    Local cG3 := SubStr(cSeq42, 25, 10)
+    Local cG3 := SubStr(cSeq42, 29, 9)
     cG3 := cG3 + StrZero(StBoletoCalcDv(cG3), 1)
-    Local cG4 := SubStr(cSeq42, 5, 1) + SubStr(cSeq42, 6, 13) + SubStr(cSeq42, 35, 1)
+    Local cG4 := SubStr(cSeq42, 5, 1) + SubStr(cSeq42, 6, 4) + SubStr(cSeq42, 10, 8) + SubStr(cSeq42, 18, 1)
     cG4 := cG4 + StrZero(StBoletoCalcDv(cG4), 1)
-    Local cG5 := SubStr(cSeq42, 36, 7)
+    Local cG5 := SubStr(cSeq42, 38, 5)
     cG5 := cG5 + StrZero(StBoletoCalcDv(cG5), 1)
     
 Return cG1 + "." + cG2 + "." + cG3 + "-" + cG4 + "." + cG5

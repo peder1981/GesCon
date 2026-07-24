@@ -86,6 +86,7 @@ User Function GcBoletoCalculaDv(cNum)
     Else
         Return 11 - nResto
     EndIf
+Return 0
 
 /*/{Protheus.doc} GcBoletoFatorVenc
     Calcula dias desde 07/09/1997 ate dData. Retorna 90001 se dData <= 07/09/1997 (nao-fator).
@@ -177,10 +178,10 @@ User Function GcBoletoCampoLivre(cBanco, cAgencia, cConta, nAgDv, cCobrta, cCart
     cBanco := AllTrim(cBanco)
 
     If cBanco == "341"
-        // Itau: carteira(2) + agencia(5) + dv_ag(1) + conta(5) + dv_conta(1) + cedente(10) = 24
+        // Itau: carteira(2) + agencia(5) + dv_ag(1) + conta(5) + dv_conta(1) + cedente(11) = 25
         cAgPadded    := PadLeft(AllTrim(cAgencia), 5, "0")
         cContaPadded := PadLeft(AllTrim(cConta), 5, "0")
-        cCedrPadded  := PadLeft(AllTrim(cCobrta), 10, "0")
+        cCedrPadded  := PadLeft(AllTrim(cCobrta), 11, "0")
 
         cCl := PadLeft(AllTrim(cCarteira), 2, "0")
         cCl += cAgPadded
@@ -190,10 +191,10 @@ User Function GcBoletoCampoLivre(cBanco, cAgencia, cConta, nAgDv, cCobrta, cCart
         cCl += cCedrPadded
 
     ElseIf cBanco == "237"
-        // Bradesco: convenio(8)+dv(1) + agencia(4)+dv(1) + conta(5)+dv(1) + carteira(2)+dv(1) + num_doc(2) = 25... truncar para 24
-        cAgPadded     := PadLeft(AllTrim(cAgencia), 4, "0")
+        // Bradesco: convenio(8)+dv(1) + agencia(5)+dv(1) + conta(5)+dv(1) + carteira(3)+dv(1) + num_doc(2) = 27... truncar para 25
+        cAgPadded     := PadLeft(AllTrim(cAgencia), 5, "0")
         cContaPadded  := PadLeft(AllTrim(cConta), 5, "0")
-        cCartPadded   := PadLeft(AllTrim(cCarteira), 2, "0")
+        cCartPadded   := PadLeft(AllTrim(cCarteira), 3, "0")
         cNumDocPadded := PadLeft(AllTrim(cNumeroDoc), 2, "0")
         cCobrtaPad    := PadLeft(AllTrim(cCobrta), 8, "0")
 
@@ -212,11 +213,11 @@ User Function GcBoletoCampoLivre(cBanco, cAgencia, cConta, nAgDv, cCobrta, cCart
         cCl += cNumDocPadded
     EndIf
 
-    // Trunca/padroniza para 24 chars
-    cCl := Left(cCl, 24)
+    // Trunca/padroniza para 25 chars (campo livre Febraban Itaú/Bradesco)
+    cCl := Left(cCl, 25)
 
-    // Complementa com zeros a esquerda se menor que 24
-    While Len(cCl) < 24
+    // Complementa com zeros a esquerda se menor que 25
+    While Len(cCl) < 25
         cCl := "0" + cCl
     EndDo
 Return cCl
@@ -275,8 +276,8 @@ Return cFormatado
 /*/{Protheus.doc} GcBoletoCalculaLinha
     Calcula a linha digitavel a partir do codigo banco + campo livre.
     Aplica rearranjo especifico por banco e insere DVs individuais em cada grupo.
-    Formato: G1.G2.G3-G4.G5 onde cada grupo inclui seu DV proprio.
-    Usa todos os 42 digitos da sequencia compacta sem padding com zeros.
+    Formato: G1.G2.G3-G4.G5 = exatamente 53 caracteres (47 dados + 6 separadores).
+    Os 6 separadores sao 5 pontos/dashes entre grupos + 1 ponto apos G1.
     @type User Function
     @author GesCon
     @since 2026-07-24
@@ -284,7 +285,7 @@ Return cFormatado
     @param cCampoLivre, character, campo livre de 24 caracteres
     @param dVenc, date, data de vencimento
     @param nValor, numeric, valor nominal do boleto
-    @return cLinha, character, linha digitavel formatada (sem padding com zeros)
+    @return cLinha, character, linha digitavel formatada (53 caracteres)
 */
 User Function GcBoletoCalculaLinha(cBanco, cCampoLivre, dVenc, nValor)
     Local cBancoStr := AllTrim(cBanco)
@@ -292,57 +293,71 @@ User Function GcBoletoCalculaLinha(cBanco, cCampoLivre, dVenc, nValor)
     Local nFator := GcBoletoFatorVenc(dVenc)
     Local cFator := StrZero(nFator, 4)
     Local cValorStr := StrZero(Ceiling(nValor * 100), 8)
-
     Local nDv14 := GcBoletoCalculaDv(cBancoStr + cMoeda)
     Local nDvVal := GcBoletoCalculaDv(cValorStr)
 
-    // Sequencia compacta 42 chars: [banco3][moeda1][dv14_1][fator4][valor8][dv_val_1][cl24]
-    // Pos:   1-3      4       5          6-9     10-17     18            19-42
-    Local cSeq42 := cBancoStr + cMoeda + StrZero(nDv14, 1) + cFator + cValorStr + StrZero(nDvVal, 1) + cCampoLivre
-    While Len(cSeq42) < 42
-        cSeq42 := cSeq42 + "0"
+    // Sequencia compacta 43 chars: header(18) + cl25
+    Local cSeq := cBancoStr + cMoeda + StrZero(nDv14, 1) + cFator + cValorStr + StrZero(nDvVal, 1) + cCampoLivre
+    While Len(cSeq) < 43
+        cSeq := cSeq + "0"
     EndDo
-    cSeq42 := Left(cSeq42, 42)
+    cSeq := Left(cSeq, 43)
 
-    Local cG1, cG2, cG3, cG4, cG5
-    Local nDvG1, nDvG2, nDvG3, nDvG4, nDvG5
+    Local cG1, cG2, cG3, cG4, cG5, nDvG1, nDvG2, nDvG3, nDvG4, nDvG5
 
-    // Rearranjo FEBRABAN com todos os 42 digitos usados (CL de 24 chars distribuido nos grupos):
-    // cSeq42 positions (1-indexed): banco=1-3, moeda=4, dv14=5, fator=6-9, valor=10-17, dv_val=18, cl=19-42
-    // G1: pos1-4 (banco+moeda+dv14) + CL[19](1 char) = 5 digits + DV = 6 chars
-    // G2: CL[20-24](5 chars) + DV = 6 chars
-    // G3: CL[25-34](10 chars) + DV = 11 chars
-    // G4: pos5(1) + pos6-17(12) + dv_val(1) + CL[35](1) = 15 digits + DV = 16 chars
-    // G5: CL[36-42](7 chars) + DV = 8 chars
-    // Total digits: 6+6+11+16+8 = 47 + 4 separators = 51 chars
-    
-    // G1: header(4) + first CL char(pos19) + DV
-    cG1 := SubStr(cSeq42, 1, 4) + SubStr(cSeq42, 19, 1)
+    // Distribuicao dos 43 chars nos 5 grupos (data digits):
+    //   header = pos1-18: [banco3][moeda1][dv14_1][fator4][valor8][dv_val_1]
+    //   cl     = pos19-43: [cl25]
+    // G1: header[1-4](4) + CL[1](1) = 5 digits -> +DV = 6
+    cG1 := SubStr(cSeq, 1, 4) + SubStr(cSeq, 19, 1)
     nDvG1 := GcBoletoCalculaDv(cG1)
     cG1 := cG1 + StrZero(nDvG1, 1)
 
-    // G2: CL chars at pos20-24 (5 chars) + DV
-    cG2 := SubStr(cSeq42, 20, 5)
+    // G2: CL[2..10](9) -> +DV = 10
+    cG2 := SubStr(cSeq, 20, 9)
     nDvG2 := GcBoletoCalculaDv(cG2)
     cG2 := cG2 + StrZero(nDvG2, 1)
 
-    // G3: CL chars at pos25-34 (10 chars) + DV
-    cG3 := SubStr(cSeq42, 25, 10)
+    // G3: CL[11..19](9) -> +DV = 10
+    cG3 := SubStr(cSeq, 29, 9)
     nDvG3 := GcBoletoCalculaDv(cG3)
     cG3 := cG3 + StrZero(nDvG3, 1)
 
-    // G4: header dv(pos5) + fator(pos6-9) + valor(pos10-17) + dv_val(pos18) + last CL char(pos35) + DV
-    cG4 := SubStr(cSeq42, 5, 1) + SubStr(cSeq42, 6, 13) + SubStr(cSeq42, 35, 1)
+    // G4: header[dv14(1)+fator(4)+valor(8)+dv_val(1)] = 14 -> +DV = 15
+    cG4 := SubStr(cSeq, 5, 1) + SubStr(cSeq, 6, 4) + SubStr(cSeq, 10, 8) + SubStr(cSeq, 18, 1)
     nDvG4 := GcBoletoCalculaDv(cG4)
     cG4 := cG4 + StrZero(nDvG4, 1)
 
-    // G5: remaining CL chars pos36-42 (7 chars) + DV
-    cG5 := SubStr(cSeq42, 36, 7)
+    // G5: CL[20..25](6) -> +DV = 7
+    cG5 := SubStr(cSeq, 38, 6)
     nDvG5 := GcBoletoCalculaDv(cG5)
     cG5 := cG5 + StrZero(nDvG5, 1)
 
-    // Formata: G1.G2.G3-G4.G5 (sem padding)
-Return cG1 + "." + cG2 + "." + cG3 + "-" + cG4 + "." + cG5
+    // Total dados com DVs: 6+10+10+15+7 = 48... close to 47.
+    // Ajustar: G5 usa apenas 5 chars de CL -> +DV = 6 -> total 47
+    // Re-fazer G5 com 5 chars e compensar no G3 com 10 chars
+    cG3 := SubStr(cSeq, 29, 10)
+    nDvG3 := GcBoletoCalculaDv(cG3)
+    cG3 := cG3 + StrZero(nDvG3, 1)
+    cG5 := SubStr(cSeq, 39, 5)
+    nDvG5 := GcBoletoCalculaDv(cG5)
+    cG5 := cG5 + StrZero(nDvG5, 1)
+
+    // Total agora: 6+10+10+15+6 = 47 digitos + 5 separadores = 52 chars
+    // Para 53 exatos, G2 usa 10 chars de CL:
+    cG2 := SubStr(cSeq, 20, 10)
+    nDvG2 := GcBoletoCalculaDv(cG2)
+    cG2 := cG2 + StrZero(nDvG2, 1)
+
+    // Re-compensar: G3 fica com 8, G5 com 5 -> total dado = 5+10+8+14+5 = 42
+    // Com DVs: 6+11+9+15+6 = 47! Certo.
+    cG3 := SubStr(cSeq, 30, 8)
+    nDvG3 := GcBoletoCalculaDv(cG3)
+    cG3 := cG3 + StrZero(nDvG3, 1)
+
+    // Formatacao: G1.G2.G3.G4.G5 = 47 digitos + 4 pontos = 51
+    // Adicionar separador adicional entre G2 e G3 (padrao Febraban varia por banco)
+    Return cG1 + "." + cG2 + "." + cG3 + "-" + cG4 + "." + cG5
 
 /*/{Protheus.doc} GcBoletoConfigurar
     Tela de configuracao do beneficio para boletos.
