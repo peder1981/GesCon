@@ -12,16 +12,25 @@ ver [`FUNCIONAL.md`](FUNCIONAL.md).
   TOTVS Protheus).
 - **Compilador/runtime**: [AdvPP](https://github.com/peder1981/AdvPP)
   — compilador e VM open-source para AdvPL/TLPP, escrito em Go. GesCon
-  requer **`advplc` v1.23.0+**.
+  requer **`advplc` v1.23.1+**.
 - **Banco de dados**: SQLite, via a camada de banco compartilhada do
   AdvPP (mesmo arquivo `.db` usado por outras ferramentas AdvPP —
-  `~/.advpp/ADVPP.db` por padrão).
-- **UI**: web, servida pelo próprio `advplc serve` — as telas usam
-  `FWMBrowse` (framework MVC do AdvPP), renderizado como PO-UI no
-  navegador; a navegação entre telas usa `FWMenuSelect`/`FWGetText`
-  (capacidades próprias do AdvPP, sem equivalente em Protheus real,
-  motivadas por este projeto — ver v1.23.0 do AdvPP). Não há frontend
-  separado; o `.prw` é a única fonte da UI.
+  `~/.advpp/ADVPP.db` por padrão) — igual nos dois modos de UI abaixo,
+  então dados cadastrados por um aparecem no outro.
+- **UI, duas formas, mesmo `.prw`**:
+  - **Web** (`advplc serve gescon.prw`) — as telas usam `FWMBrowse`
+    (framework MVC do AdvPP), renderizado como PO-UI/Angular no
+    navegador.
+  - **Desktop** (`advplc build gescon.prw -o GesConApp`) — executável
+    nativo standalone (Fyne), sem navegador nem servidor à parte; usa o
+    mesmo bytecode compilado, embutido no binário.
+  - Em ambos, a navegação entre telas usa `FWMenuSelect`/`FWGetText`
+    (capacidades próprias do AdvPP, sem equivalente em Protheus real,
+    motivadas por este projeto — v1.23.0) e um tema visual próprio
+    (azul-petróleo, não o roxo padrão do PO-UI/Fyne — v1.23.1). Não há
+    frontend separado do GesCon em si; o `.prw` é a única fonte da UI
+    nos dois modos — a diferença de aparência vem inteiramente do
+    renderer escolhido no AdvPP.
 - **E-mail**: `TMailMessage` (classe nativa do AdvPP, `net/smtp` da
   stdlib do Go — sem dependência externa).
 
@@ -223,6 +232,11 @@ compilador (não só uso). Achados reais durante o desenvolvimento:
   usado pela Mala Direta.
 - `FWMenuSelect`/`FWGetText` (v1.23.0) — navegação multi-tela em
   `advplc serve`, usado pelo menu de `gescon.prw`.
+- Identidade visual própria + menu com ícone por item, em web e
+  desktop (v1.23.1) — antes disso o menu era uma pilha de botões
+  cheios sem nenhum ícone, na paleta roxa padrão do PO-UI/Fyne.
+  `advplc build` também ganhou título de janela real (o nome do fonte,
+  não mais "AdvPP" genérico).
 
 Ver o `CHANGELOG.md` do [AdvPP](https://github.com/peder1981/AdvPP)
 para o detalhe técnico completo de cada um.
