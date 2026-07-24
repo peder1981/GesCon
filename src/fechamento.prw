@@ -7,6 +7,17 @@
 #include "totvs.ch"
 #include "db.prw"
 
+/*/{Protheus.doc} GcFecharMes
+    Fecha uma competência: soma as despesas, rateia por fração ideal de
+    cada unidade ativa e grava uma Cobrança por unidade. Trava contra
+    fechar a mesma competência duas vezes.
+    @type Function
+    @author GesCon
+    @since 2026-07-24
+    @param cCompetencia, character, competência "YYYY-MM" a fechar
+    @return lOk, logical, .T. se fechou; .F. se já estava fechada ou
+        não há unidade cadastrada
+*/
 User Function GcFecharMes(cCompetencia)
     Local nTotalDespesas := 0
     Local aExistente := TCSqlQuery("SELECT COB_UNIDADE FROM COB WHERE COB_COMPET = '" + GcSqlLit(cCompetencia) + "' AND D_E_L_E_T_ = ' '")
@@ -46,9 +57,15 @@ User Function GcFecharMes(cCompetencia)
     Next
 Return .T.
 
-// GcProximoVencimento: dia 10 do mês seguinte à competência (formato
-// "YYYY-MM" -> "YYYY-MM-DD" do mês seguinte). Dia fixo nesta v1 —
-// configurável fica pra uma fase futura se necessário.
+/*/{Protheus.doc} GcProximoVencimento
+    Calcula o dia 10 do mês seguinte à competência informada. Dia fixo
+    nesta v1 — configurável fica pra uma fase futura se necessário.
+    @type Function
+    @author GesCon
+    @since 2026-07-24
+    @param cCompetencia, character, competência "YYYY-MM"
+    @return cVencimento, character, data "YYYY-MM-DD" do mês seguinte
+*/
 User Function GcProximoVencimento(cCompetencia)
     Local nAno := Val(Left(cCompetencia, 4))
     Local nMes := Val(SubStr(cCompetencia, 6, 2))
