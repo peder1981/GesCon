@@ -9,7 +9,7 @@
 
 User Function GcFecharMes(cCompetencia)
     Local nTotalDespesas := 0
-    Local aExistente := TCSqlQuery("SELECT COB_UNIDADE FROM COB WHERE COB_COMPET = '" + GcSqlLit(cCompetencia) + "'")
+    Local aExistente := TCSqlQuery("SELECT COB_UNIDADE FROM COB WHERE COB_COMPET = '" + GcSqlLit(cCompetencia) + "' AND D_E_L_E_T_ = ' '")
     If Len(aExistente) > 0
         ConOut("GcFecharMes: competência " + cCompetencia + " já foi fechada")
         Return .F.
