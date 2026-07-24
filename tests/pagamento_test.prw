@@ -14,4 +14,7 @@ User Function PagamentoTest()
     Local aConfere := TCSqlQuery("SELECT COB_STATUS, COB_DTPAG FROM COB WHERE R_E_C_N_O_ = " + Str(nRecno))
     ConOut("status=" + aConfere[1]:COB_STATUS)
     ConOut("dtpag=" + aConfere[1]:COB_DTPAG)
+
+    // Teardown — não deixa fixture no banco real compartilhado
+    TCSqlExec("DELETE FROM COB WHERE COB_UNIDADE = 'PAGTEST'")
 Return
