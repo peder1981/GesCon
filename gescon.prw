@@ -1,8 +1,10 @@
 // gescon.prw — ponto de entrada do GesCon. `advplc serve gescon.prw` sobe
 // a UI web com um menu real (FWMenuSelect, AdvPP v1.23.0+) navegando
-// entre todas as telas sem reiniciar o processo. Login fica pro Plano 2.
+// entre todas as telas sem reiniciar o processo. Login único de
+// administrador (GcLogin) gate na frente do menu — sem papéis/permissões.
 #include "totvs.ch"
 #include "src/db.prw"
+#include "src/login.prw"
 #include "src/unidades.prw"
 #include "src/condominos.prw"
 #include "src/despesas.prw"
@@ -23,8 +25,20 @@ User Function GesCon()
     Local nOpcao
     Local cCompetencia
     Local nEnviados
+    Local cDiaVenc
+    Local nDiaVenc
 
     ConOut("GesCon — Sistema de Gestão Condominial")
+
+    If !GcLogin()
+        MsgStop("Acesso não autorizado.", "GesCon")
+        Return
+    EndIf
+
+    // Atualiza status "atrasado" logo após o login — reflete no resto da
+    // sessão (Cobranças, Mala Direta) sem precisar abrir o relatório de
+    // Inadimplência antes.
+    GcAtualizarInadimplentes()
 
     Do While .T.
         nOpcao := FWMenuSelect(aMenu, "GesCon — Sistema de Gestão Condominial")
@@ -40,7 +54,9 @@ User Function GesCon()
             Case nOpcao == 5
                 cCompetencia := FWGetText("Fechar qual competência? (YYYY-MM)", "")
                 If !Empty(cCompetencia)
-                    If GcFecharMes(cCompetencia)
+                    cDiaVenc := FWGetText("Dia do vencimento no mês seguinte? (1-28)", "10")
+                    nDiaVenc := Val(cDiaVenc)
+                    If GcFecharMes(cCompetencia, nDiaVenc)
                         MsgInfo("Competência " + cCompetencia + " fechada com sucesso.", "Fechamento Mensal")
                     Else
                         MsgAlert("Não foi possível fechar " + cCompetencia + " — já fechada ou sem unidade cadastrada.", "Fechamento Mensal")
