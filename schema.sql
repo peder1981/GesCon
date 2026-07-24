@@ -53,10 +53,47 @@ CREATE TABLE IF NOT EXISTS USR (
     USR_SENHA TEXT NOT NULL
 );
 
+-- Tabelas de relatório (Plano 2): snapshot recalculado do zero (DELETE +
+-- INSERT) toda vez que o relatório é aberto, mesmo padrão que
+-- GcFecharMes já usa pra gravar Cobrança — FWMBrowse só sabe abrir uma
+-- tabela física por alias (SELECT rowid ..., UPDATE/DELETE ... WHERE
+-- rowid = ?), não dá pra apontar pra uma query parametrizada ou VIEW sem
+-- rowid direto. Read-only por convenção, mas tecnicamente editável pela
+-- mesma limitação já aceita na tela de Cobranças (ver ARQUITETURA.md).
+CREATE TABLE IF NOT EXISTS RPT_INADIM (
+    R_E_C_N_O_ INTEGER PRIMARY KEY AUTOINCREMENT,
+    D_E_L_E_T_ TEXT DEFAULT ' ',
+    R_E_C_D_E_L_ INTEGER DEFAULT 0,
+    RIN_UNIDADE TEXT,
+    RIN_COMPET TEXT,
+    RIN_VALOR REAL,
+    RIN_VENCTO TEXT,
+    RIN_ATRASO INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS RPT_EXTRATO (
+    R_E_C_N_O_ INTEGER PRIMARY KEY AUTOINCREMENT,
+    D_E_L_E_T_ TEXT DEFAULT ' ',
+    R_E_C_D_E_L_ INTEGER DEFAULT 0,
+    REX_COMPET TEXT,
+    REX_VALOR REAL,
+    REX_VENCTO TEXT,
+    REX_STATUS TEXT,
+    REX_DTPAG TEXT
+);
+
+CREATE TABLE IF NOT EXISTS RPT_DESCAT (
+    R_E_C_N_O_ INTEGER PRIMARY KEY AUTOINCREMENT,
+    D_E_L_E_T_ TEXT DEFAULT ' ',
+    R_E_C_D_E_L_ INTEGER DEFAULT 0,
+    RDC_CATEG TEXT,
+    RDC_TOTAL REAL
+);
+
 -- Metadados SX3 (títulos/tipos de coluna pro FWMBrowse — ver browseColumns
 -- em pkg/vm/browse.go do AdvPP: sem essas linhas, o browse cai no fallback
 -- de mostrar toda coluna física como texto, sem título amigável).
-DELETE FROM SX3 WHERE X3_ARQUIVO IN ('CON','UNI','DES','COB','USR');
+DELETE FROM SX3 WHERE X3_ARQUIVO IN ('CON','UNI','DES','COB','USR','RPT_INADIM','RPT_EXTRATO','RPT_DESCAT');
 
 INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
 ('CON', 1, 'CON_CODIGO', 'C', 10, 0, 'Código'),
@@ -81,4 +118,19 @@ INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL
 ('COB', 3, 'COB_VALOR',   'N', 14, 2, 'Valor'),
 ('COB', 4, 'COB_VENCTO',  'C', 10, 0, 'Vencimento'),
 ('COB', 5, 'COB_STATUS',  'C', 10, 0, 'Status'),
-('COB', 6, 'COB_DTPAG',   'C', 10, 0, 'Data Pagamento');
+('COB', 6, 'COB_DTPAG',   'C', 10, 0, 'Data Pagamento'),
+
+('RPT_INADIM', 1, 'RIN_UNIDADE', 'C', 10, 0, 'Unidade'),
+('RPT_INADIM', 2, 'RIN_COMPET',  'C', 7,  0, 'Competência'),
+('RPT_INADIM', 3, 'RIN_VALOR',   'N', 14, 2, 'Valor'),
+('RPT_INADIM', 4, 'RIN_VENCTO',  'C', 10, 0, 'Vencimento'),
+('RPT_INADIM', 5, 'RIN_ATRASO',  'N', 5,  0, 'Dias de Atraso'),
+
+('RPT_EXTRATO', 1, 'REX_COMPET', 'C', 7,  0, 'Competência'),
+('RPT_EXTRATO', 2, 'REX_VALOR',  'N', 14, 2, 'Valor'),
+('RPT_EXTRATO', 3, 'REX_VENCTO', 'C', 10, 0, 'Vencimento'),
+('RPT_EXTRATO', 4, 'REX_STATUS', 'C', 10, 0, 'Status'),
+('RPT_EXTRATO', 5, 'REX_DTPAG',  'C', 10, 0, 'Data Pagamento'),
+
+('RPT_DESCAT', 1, 'RDC_CATEG', 'C', 30, 0, 'Categoria'),
+('RPT_DESCAT', 2, 'RDC_TOTAL', 'N', 14, 2, 'Total');
