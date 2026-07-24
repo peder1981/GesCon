@@ -34,4 +34,9 @@ User Function FechamentoTest()
     // Fechar de novo deve ser bloqueado (trava contra duplicidade)
     Local lSegundaVez := GcFecharMes("2099-01")
     ConOut("segunda_vez=" + cValToChar(lSegundaVez))
+
+    // Teardown — não deixa fixture no banco real compartilhado
+    TCSqlExec("DELETE FROM COB WHERE COB_COMPET = '2099-01'")
+    TCSqlExec("DELETE FROM DES WHERE DES_COMPET = '2099-01'")
+    TCSqlExec("DELETE FROM UNI WHERE UNI_CODIGO IN ('T01','T02')")
 Return
