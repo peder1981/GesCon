@@ -44,6 +44,7 @@ GesCon/
 │   └── bootstrap-db.sh      # aplica schema.sql no banco compartilhado
 ├── src/
 │   ├── db.prw                # GcSqlLit — escape de literal SQL
+│   ├── login.prw             # GcLogin, GcCriarAdmin, GcAutenticar — gate de acesso
 │   ├── condominos.prw        # GcCondominos — cadastro (browse sobre CON)
 │   ├── unidades.prw          # GcUnidades — cadastro (browse sobre UNI)
 │   ├── despesas.prw          # GcDespesas — lançamento (browse sobre DES)
@@ -53,6 +54,7 @@ GesCon/
 │   └── relatorios.prw        # Balancete/Inadimplência/Extrato/Despesas por categoria
 ├── tests/
 │   ├── db_test.prw
+│   ├── login_test.prw
 │   ├── fechamento_test.prw
 │   ├── pagamento_test.prw
 │   ├── malas_test.prw
@@ -80,7 +82,7 @@ completo.
 | `UNI` | `UNI_CODIGO`, `UNI_BLOCO`, `UNI_FRACAO`, `UNI_CONDOMINO` | Unidade — `UNI_CONDOMINO` é o `CON_CODIGO` do responsável, texto livre |
 | `DES` | `DES_DESCR`, `DES_CATEG`, `DES_VALOR`, `DES_COMPET`, `DES_DTLANC` | Despesa lançada numa competência ("YYYY-MM") |
 | `COB` | `COB_UNIDADE`, `COB_COMPET`, `COB_VALOR`, `COB_VENCTO`, `COB_STATUS`, `COB_DTPAG` | Cobrança — gerada só pelo Fechamento Mensal |
-| `USR` | `USR_LOGIN`, `USR_SENHA` | Usuário administrador único (login ainda não implementado na UI) |
+| `USR` | `USR_LOGIN`, `USR_SENHA` | Usuário administrador único — `USR_SENHA` guarda o hash SHA-256 (`FWHash`), nunca texto puro |
 | `RPT_INADIM` | `RIN_UNIDADE`, `RIN_COMPET`, `RIN_VALOR`, `RIN_VENCTO`, `RIN_ATRASO` | Snapshot do relatório de Inadimplência — recalculado a cada abertura |
 | `RPT_EXTRATO` | `REX_COMPET`, `REX_VALOR`, `REX_VENCTO`, `REX_STATUS`, `REX_DTPAG` | Snapshot do Extrato por Unidade — recalculado a cada abertura |
 | `RPT_DESCAT` | `RDC_CATEG`, `RDC_TOTAL` | Snapshot de Despesas por Categoria — recalculado a cada abertura |
@@ -127,6 +129,7 @@ o browse, só funciona em `advplc serve`/`build`) — mesmo motivo de
 
 ```
 gescon.prw ──include──> src/db.prw
+           ──include──> src/login.prw       (que também inclui db.prw)
            ──include──> src/unidades.prw
            ──include──> src/condominos.prw
            ──include──> src/despesas.prw
@@ -166,6 +169,9 @@ depois de todos os `#include`s.
 |---|---|---|---|
 | `GesCon` | `gescon.prw` | `GesCon()` | — (ponto de entrada; loop de menu via `FWMenuSelect`/`FWGetText`, AdvPP v1.23.0+) |
 | `GcSqlLit` | `src/db.prw` | `GcSqlLit(cValor)` | `character` — valor com aspas simples escapadas |
+| `GcLogin` | `src/login.prw` | `GcLogin()` | `logical` — `.T.` se autenticado |
+| `GcCriarAdmin` | `src/login.prw` | `GcCriarAdmin()` | `logical` — bootstrap do 1º acesso |
+| `GcAutenticar` | `src/login.prw` | `GcAutenticar()` | `logical` — confere login/senha (hash) |
 | `GcCondominos` | `src/condominos.prw` | `GcCondominos()` | — (abre browse) |
 | `GcUnidades` | `src/unidades.prw` | `GcUnidades()` | — (abre browse) |
 | `GcDespesas` | `src/despesas.prw` | `GcDespesas()` | — (abre browse) |
@@ -262,6 +268,9 @@ compilador (não só uso). Achados reais durante o desenvolvimento:
 4. Comparar uma variável nunca atribuída a `Nil` derrubava a VM com
    `SIGSEGV` (`Local x` sem inicializador, ou parâmetro não passado).
    Corrigido no v1.22.1 — achado junto com o bug 3.
+5. `MsgInfo`/`MsgAlert`/`MsgStop` não bloqueavam no backend desktop
+   (Fyne) — a VM seguia em frente sem esperar o usuário ver o diálogo,
+   empilhando telas num loop de menu. Corrigido no v1.23.2.
 
 **Capacidades novas motivadas por necessidade real deste projeto:**
 
@@ -276,6 +285,9 @@ compilador (não só uso). Achados reais durante o desenvolvimento:
   cheios sem nenhum ícone, na paleta roxa padrão do PO-UI/Fyne.
   `advplc build` também ganhou título de janela real (o nome do fonte,
   não mais "AdvPP" genérico).
+- `FWHash` (v1.23.5) — hash SHA-256 (stdlib do Go), usado pelo login
+  pra nunca gravar senha em texto puro; o AdvPP não tinha função de
+  hash nenhuma antes disso.
 
 Ver o `CHANGELOG.md` do [AdvPP](https://github.com/peder1981/AdvPP)
 para o detalhe técnico completo de cada um.

@@ -8,22 +8,36 @@ Para como o sistema é construído por dentro, ver
 
 GesCon é um sistema de gestão condominial: cadastro de unidades e
 condôminos, lançamento de despesas, rateio mensal por fração ideal,
-cobrança e registro de pagamento, e mala direta por e-mail. Um
-condomínio por instância — se precisar administrar mais de um, sobe-se
-outra instância do sistema.
+cobrança e registro de pagamento, mala direta por e-mail, relatórios,
+e login de administrador. Um condomínio por instância — se precisar
+administrar mais de um, sobe-se outra instância do sistema.
+
+## Login
+
+Gate de acesso antes de qualquer tela — administrador único, sem
+papéis/permissões. No primeiro acesso (nenhum usuário cadastrado
+ainda), o sistema pede pra escolher login e senha e cria o
+administrador na hora. Nos acessos seguintes, pede login e senha e
+confere contra o que foi cadastrado (até 3 tentativas). A senha nunca
+é gravada em texto puro — sempre em hash SHA-256 (`FWHash`, AdvPP
+v1.23.5+).
+
+**Limitação conhecida**: não existe campo de senha mascarado no AdvPP
+hoje (`FWGetText` é um campo de texto comum) — a senha fica visível
+enquanto é digitada, tanto na criação quanto no login.
 
 ## Menu e navegação
 
 `advplc serve gescon.prw` (sobe em `http://localhost:8080` por padrão)
-abre num **menu real** — clique numa opção pra abrir a tela, feche a
-tela (botão "Fechar browse") pra voltar ao menu. Nenhum reinício de
-processo, nenhuma troca de porta/aba:
+mostra a tela de login e, depois, um **menu real** — clique numa opção
+pra abrir a tela, feche a tela (botão "Fechar browse") pra voltar ao
+menu. Nenhum reinício de processo, nenhuma troca de porta/aba:
 
 1. Unidades
 2. Condôminos
 3. Despesas
 4. Cobranças
-5. Fechamento Mensal (pede a competência, mostra o resultado)
+5. Fechamento Mensal (pede a competência e o dia de vencimento, mostra o resultado)
 6. Mala Direta (pede a competência, mostra quantos e-mails foram enviados)
 7. Relatórios (abre um submenu — ver seção própria abaixo)
 8. Sair
@@ -71,8 +85,9 @@ Regras:
   ideais das unidades ativas não bate com 100%, ou se a competência não
   tem nenhuma despesa lançada (nesse caso, gera Cobranças de valor
   zero — fecha mesmo assim).
-- O vencimento de cada Cobrança é fixado no dia 10 do mês seguinte à
-  competência.
+- O vencimento de cada Cobrança é no mês seguinte à competência, num
+  dia configurável (o menu pergunta; padrão dia 10). Dias fora da faixa
+  1-28 caem no padrão (evita datas inválidas em fevereiro).
 
 ## Registrar Pagamento
 
@@ -102,8 +117,13 @@ cadastrados — nenhum muda Cobrança, Despesa, Unidade ou Condômino.
   receitas (soma de Cobrança com status `pago`), despesas (soma de
   Despesa lançada), saldo (receitas − despesas).
 - **Inadimplência** — lista, sem precisar de nenhum parâmetro, toda
-  Cobrança com status `pendente` e vencimento já passado: unidade,
-  competência, valor, vencimento, dias de atraso.
+  Cobrança em status `atrasado`: unidade, competência, valor,
+  vencimento, dias de atraso. Antes de listar, promove pra `atrasado`
+  toda Cobrança `pendente` com vencimento já passado (`GcAtualizarInadimplentes`
+  — também roda automaticamente logo após o login, então o status
+  gravado na Cobrança em si — visível também na tela de Cobranças e na
+  Mala Direta — nunca fica desatualizado por mais que a duração de uma
+  sessão).
 - **Extrato por Unidade** — pede o código da unidade, lista todo o
   histórico de Cobrança dela (competência, valor, vencimento, status,
   data de pagamento).
@@ -116,10 +136,10 @@ uma abertura e outra.
 
 ## O que ainda não existe (Plano 2)
 
-- **Login** — hoje qualquer pessoa com acesso à URL do `advplc serve`
-  usa o sistema; não há tela de autenticação nem controle de acesso.
 - **Papéis de usuário** — administrador único, sem porteiro nem portal
-  do condômino.
+  do condômino (login existe, mas sem controle de permissões).
+- **Campo de senha mascarado** — depende de uma capacidade que não
+  existe no AdvPP hoje (ver "Login" acima).
 - **Boleto bancário real** — Cobrança é um registro de débito interno
   (valor, vencimento, status), não um boleto FEBRABAN com código de
   barras/linha digitável.
