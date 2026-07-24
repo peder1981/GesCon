@@ -12,13 +12,16 @@ ver [`FUNCIONAL.md`](FUNCIONAL.md).
   TOTVS Protheus).
 - **Compilador/runtime**: [AdvPP](https://github.com/peder1981/AdvPP)
   — compilador e VM open-source para AdvPL/TLPP, escrito em Go. GesCon
-  requer **`advplc` v1.22.1+**.
+  requer **`advplc` v1.23.0+**.
 - **Banco de dados**: SQLite, via a camada de banco compartilhada do
   AdvPP (mesmo arquivo `.db` usado por outras ferramentas AdvPP —
   `~/.advpp/ADVPP.db` por padrão).
 - **UI**: web, servida pelo próprio `advplc serve` — as telas usam
   `FWMBrowse` (framework MVC do AdvPP), renderizado como PO-UI no
-  navegador. Não há frontend separado; o `.prw` é a única fonte da UI.
+  navegador; a navegação entre telas usa `FWMenuSelect`/`FWGetText`
+  (capacidades próprias do AdvPP, sem equivalente em Protheus real,
+  motivadas por este projeto — ver v1.23.0 do AdvPP). Não há frontend
+  separado; o `.prw` é a única fonte da UI.
 - **E-mail**: `TMailMessage` (classe nativa do AdvPP, `net/smtp` da
   stdlib do Go — sem dependência externa).
 
@@ -81,13 +84,19 @@ fallback de mostrar toda coluna física como texto cru.
 ## Grafo de dependências (`#include`)
 
 ```
-gescon.prw ──include──> src/unidades.prw
-src/fechamento.prw ──include──> src/db.prw
-src/malas.prw ──include──> src/db.prw
-src/cobrancas.prw            (sem include próprio — só totvs.ch)
-src/condominos.prw           (sem include próprio — só totvs.ch)
-src/despesas.prw             (sem include próprio — só totvs.ch)
+gescon.prw ──include──> src/db.prw
+           ──include──> src/unidades.prw
+           ──include──> src/condominos.prw
+           ──include──> src/despesas.prw
+           ──include──> src/cobrancas.prw
+           ──include──> src/fechamento.prw (que também inclui db.prw)
+           ──include──> src/malas.prw      (que também inclui db.prw)
 ```
+
+`gescon.prw` inclui todas as telas — é o único arquivo raiz real do
+projeto (`advplc serve gescon.prw`), então precisa trazer tudo que
+`GesCon()` (a única função declarada diretamente nele) usa, direta ou
+transitivamente.
 
 **Gotcha real do AdvPP, documentado em código onde apareceu**: `#include`
 é resolvido **relativo ao diretório do arquivo RAIZ compilado**, não de
@@ -112,7 +121,7 @@ depois de todos os `#include`s.
 
 | Função | Arquivo | Assinatura | Retorno |
 |---|---|---|---|
-| `GesCon` | `gescon.prw` | `GesCon()` | — (ponto de entrada) |
+| `GesCon` | `gescon.prw` | `GesCon()` | — (ponto de entrada; loop de menu via `FWMenuSelect`/`FWGetText`, AdvPP v1.23.0+) |
 | `GcSqlLit` | `src/db.prw` | `GcSqlLit(cValor)` | `character` — valor com aspas simples escapadas |
 | `GcCondominos` | `src/condominos.prw` | `GcCondominos()` | — (abre browse) |
 | `GcUnidades` | `src/unidades.prw` | `GcUnidades()` | — (abre browse) |
@@ -184,6 +193,39 @@ Estratégia dupla:
   **e no teardown** — o banco usado é o mesmo compartilhado da aplicação
   real (`~/.advpp/ADVPP.db`), não há banco de teste isolado, então o
   teardown não é opcional.
+
+## Bugs reais e capacidades novas encontradas/motivadas no AdvPP
+
+Este projeto é, deliberadamente, um caso real de validação do
+compilador (não só uso). Achados reais durante o desenvolvimento:
+
+**Bugs corrigidos:**
+
+1. `DbAppend`/`RecLock`/`FieldPut`/`MsUnlock` não persistiam dado
+   nenhum de verdade — só `FWMBrowse` gravava (código Go interno
+   acionado por clique de UI). Corrigido no AdvPP v1.22.0.
+2. `Begin Sequence...Recover` sem `Using oErr` corrompia o slot local 0
+   da função com o objeto de erro — qualquer variável declarada
+   primeiro, sem relação nenhuma com o catch. Corrigido no v1.22.0.
+3. Ponto de entrada implícito (arquivo sem código de nível superior)
+   escolhia a primeira `User Function` declarada em vez da própria do
+   arquivo raiz, quando havia `#include` de uma lib auxiliar. Corrigido
+   no v1.22.1.
+4. Comparar uma variável nunca atribuída a `Nil` derrubava a VM com
+   `SIGSEGV` (`Local x` sem inicializador, ou parâmetro não passado).
+   Corrigido no v1.22.1 — achado junto com o bug 3.
+
+**Capacidades novas motivadas por necessidade real deste projeto:**
+
+- `TCSqlExec`/`TCSqlQuery` (v1.22.0) — SQL direto pra lógica de
+  negócio, usado pelo Fechamento Mensal e pela Mala Direta.
+- `TMailMessage` (v1.22.0) — envio real de e-mail via `net/smtp`,
+  usado pela Mala Direta.
+- `FWMenuSelect`/`FWGetText` (v1.23.0) — navegação multi-tela em
+  `advplc serve`, usado pelo menu de `gescon.prw`.
+
+Ver o `CHANGELOG.md` do [AdvPP](https://github.com/peder1981/AdvPP)
+para o detalhe técnico completo de cada um.
 
 ## Histórico de design
 
