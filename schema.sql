@@ -1,6 +1,21 @@
 -- GesCon — schema v1. Convenção de exclusão lógica estilo Protheus
 -- (R_E_C_N_O_/D_E_L_E_T_/R_E_C_D_E_L_), mesma que o AdvEditor usa.
 
+-- Tabela de metadados SX3 (títulos/tipos de coluna pro FWMBrowse).
+CREATE TABLE IF NOT EXISTS SX3 (
+    R_E_C_N_O_ INTEGER PRIMARY KEY AUTOINCREMENT,
+    D_E_L_E_T_ TEXT DEFAULT ' ',
+    X3_ARQUIVO TEXT NOT NULL,
+    X3_ORDEM  INTEGER NOT NULL,
+    X3_CAMPO  TEXT NOT NULL,
+    X3_TIPO   TEXT NOT NULL,
+    X3_TAMANHO INTEGER NOT NULL,
+    X3_DECIMAL INTEGER DEFAULT 0,
+    X3_QUICK  TEXT DEFAULT 'N',
+    X3_VLADB  TEXT DEFAULT '',
+    X3_TITULO TEXT
+);
+
 CREATE TABLE IF NOT EXISTS CON (
     R_E_C_N_O_ INTEGER PRIMARY KEY AUTOINCREMENT,
     D_E_L_E_T_ TEXT DEFAULT ' ',
@@ -90,10 +105,50 @@ CREATE TABLE IF NOT EXISTS RPT_DESCAT (
     RDC_TOTAL REAL
 );
 
+-- GesCon — CFG_BOLETO: configuração do beneficiário para geração de boletos.
+-- Uma única linha (estilo MV; INSERT/UPDATE direto).
+CREATE TABLE IF NOT EXISTS CFG_BOLETO (
+    R_E_C_N_O_ INTEGER PRIMARY KEY AUTOINCREMENT,
+    D_E_L_E_T_ TEXT DEFAULT ' ',
+    R_E_C_D_E_L_ INTEGER DEFAULT 0,
+    CFG_BANCO TEXT NOT NULL DEFAULT '237',
+    CFG_AGENCIA TEXT NOT NULL,
+    CFG_CONTA TEXT NOT NULL,
+    CFG_COBRT TEXT NOT NULL,
+    CFG_CARTEIRA TEXT NOT NULL
+);
+
+-- GesCon — GCT_TOKEN: tokens temporários para acesso condômino.
+CREATE TABLE IF NOT EXISTS GCT_TOKEN (
+    TOKEN TEXT PRIMARY KEY,
+    USR_LOGIN TEXT NOT NULL,
+    CON_CODIGO TEXT NOT NULL,
+    UNI_CODIGO TEXT NOT NULL,
+    CRIPTADO TEXT NOT NULL,
+    VALIDO_ATE TEXT NOT NULL,
+    USADO INTEGER DEFAULT 0,
+    D_E_L_E_T_ TEXT DEFAULT ' ',
+    R_E_C_D_E_L_ INTEGER DEFAULT 0
+);
+
+-- GesCon — RPT_COND_COBRANCAS: snapshot de cobranças filtrado por unidade
+-- (para acesso read-only do condômino via portal).
+CREATE TABLE IF NOT EXISTS RPT_COND_COBRANCAS (
+    RCC_UNIDADE TEXT NOT NULL,
+    RCC_COMPET TEXT NOT NULL,
+    RCC_VALOR REAL,
+    RCC_VENCTO TEXT,
+    RCC_STATUS TEXT,
+    RCC_DTPAG TEXT,
+    R_E_C_N_O_ INTEGER PRIMARY KEY AUTOINCREMENT,
+    D_E_L_E_T_ TEXT DEFAULT ' ',
+    R_E_C_D_E_L_ INTEGER DEFAULT 0
+);
+
 -- Metadados SX3 (títulos/tipos de coluna pro FWMBrowse — ver browseColumns
 -- em pkg/vm/browse.go do AdvPP: sem essas linhas, o browse cai no fallback
 -- de mostrar toda coluna física como texto, sem título amigável).
-DELETE FROM SX3 WHERE X3_ARQUIVO IN ('CON','UNI','DES','COB','USR','RPT_INADIM','RPT_EXTRATO','RPT_DESCAT');
+DELETE FROM SX3 WHERE X3_ARQUIVO IN ('CON','UNI','DES','COB','USR','RPT_INADIM','RPT_EXTRATO','RPT_DESCAT','CFG_BOLETO','GCT_TOKEN','RPT_COND_COBRANCAS');
 
 INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
 ('CON', 1, 'CON_CODIGO', 'C', 10, 0, 'Código'),
@@ -134,3 +189,37 @@ INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL
 
 ('RPT_DESCAT', 1, 'RDC_CATEG', 'C', 30, 0, 'Categoria'),
 ('RPT_DESCAT', 2, 'RDC_TOTAL', 'N', 14, 2, 'Total');
+
+-- GesCon — USR_PERFIL: perfil do usuário (Plano 2).
+ALTER TABLE USR ADD COLUMN USR_PERFIL TEXT DEFAULT 'ADMIN';
+
+-- Metadados SX3 para CFG_BOLETO
+INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
+('CFG_BOLETO', 1, 'CFG_BANCO',    'C',  4, 0, 'Código do Banco'),
+('CFG_BOLETO', 2, 'CFG_AGENCIA',  'C', 10, 0, 'Agência'),
+('CFG_BOLETO', 3, 'CFG_CONTA',    'C', 15, 0, 'Conta Corrente'),
+('CFG_BOLETO', 4, 'CFG_COBRT',    'C', 15, 0, 'Carta/Cedente ou Convênio'),
+('CFG_BOLETO', 5, 'CFG_CARTEIRA', 'C', 10, 0, 'Carteira');
+
+-- Metadados SX3 para GCT_TOKEN
+INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
+('GCT_TOKEN', 1, 'TOKEN',      'C', 36, 0, 'Token'),
+('GCT_TOKEN', 2, 'USR_LOGIN',  'C', 40, 0, 'Gerado por'),
+('GCT_TOKEN', 3, 'CON_CODIGO', 'C', 10, 0, 'Condômino'),
+('GCT_TOKEN', 4, 'UNI_CODIGO', 'C', 10, 0, 'Unidade'),
+('GCT_TOKEN', 5, 'CRIPTADO',   'C', 19, 0, 'Criado em'),
+('GCT_TOKEN', 6, 'VALIDO_ATE', 'C', 19, 0, 'Válido até'),
+('GCT_TOKEN', 7, 'USADO',      'N',  1, 0, 'Usado');
+
+-- Metadados SX3 para RPT_COND_COBRANCAS
+INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
+('RPT_COND_COBRANCAS', 1, 'RCC_UNIDADE', 'C', 10, 0, 'Unidade'),
+('RPT_COND_COBRANCAS', 2, 'RCC_COMPET',  'C',  7, 0, 'Competência'),
+('RPT_COND_COBRANCAS', 3, 'RCC_VALOR',   'N', 14, 2, 'Valor'),
+('RPT_COND_COBRANCAS', 4, 'RCC_VENCTO',  'C', 10, 0, 'Vencimento'),
+('RPT_COND_COBRANCAS', 5, 'RCC_STATUS',  'C', 10, 0, 'Status'),
+('RPT_COND_COBRANCAS', 6, 'RCC_DTPAG',   'C', 10, 0, 'Data Pagamento');
+
+-- Metadados SX3 para USR_PERFIL
+INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
+('USR', 3, 'USR_PERFIL', 'C', 20, 0, 'Perfil do Usuário');
