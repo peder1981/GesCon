@@ -1,4 +1,12 @@
 // tests/fechamento_test.prw
+// NOTA: #include "../src/db.prw" abaixo parece redundante com o #include
+// de fechamento.prw (que também inclui db.prw), mas NÃO é — o AdvPP
+// resolve #include de forma relativa ao diretório do arquivo RAIZ
+// compilado, não ao diretório de quem faz o include. O "db.prw" (sem
+// caminho) dentro de src/fechamento.prw só resolve quando a raiz está em
+// src/; daqui (tests/), precisa do caminho explícito. Removê-lo quebra
+// `advplc run` com "unknown function: GcSqlLit" mesmo com `advplc check`
+// passando limpo (check não pega isso).
 #include "totvs.ch"
 #include "../src/db.prw"
 #include "../src/fechamento.prw"
