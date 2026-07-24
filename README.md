@@ -26,18 +26,34 @@ e-mail.
 
 ## Requisitos
 
-- [`advplc`](https://github.com/peder1981/AdvPP) **v1.23.0+** —
+- [`advplc`](https://github.com/peder1981/AdvPP) **v1.23.1+** —
   v1.22.1 corrigiu um bug real de ponto de entrada que impedia rodar
   qualquer projeto AdvPL multi-arquivo como o GesCon; v1.23.0 adicionou
-  `FWMenuSelect`/`FWGetText`, que o menu de navegação do GesCon usa.
-  Ambos achados/motivados durante este projeto.
+  `FWMenuSelect`/`FWGetText` (menu de navegação); v1.23.1 trouxe
+  identidade visual própria (web e desktop) pros dois. Todos
+  achados/motivados durante este projeto.
 - `sqlite3` (CLI, só para o bootstrap do schema).
 
 ## Rodando
 
+Duas formas de rodar, mesmo banco de dados e mesmo menu por baixo:
+
+**Web** (`advplc serve`) — abre num navegador, útil pra acessar de
+qualquer dispositivo na rede:
+
 ```bash
 ./scripts/bootstrap-db.sh   # cria as tabelas (uma vez, ou após mudar schema.sql)
 advplc serve gescon.prw     # sobe em http://localhost:8080
+```
+
+**Desktop** (`advplc build`) — um executável nativo só, sem navegador,
+sem servidor rodando à parte:
+
+```bash
+./scripts/bootstrap-db.sh
+export ADVPP_SRC=/caminho/pro/checkout/do/AdvPP   # necessário pra compilar
+advplc build gescon.prw -o GesConApp
+./GesConApp
 ```
 
 ## Testes
