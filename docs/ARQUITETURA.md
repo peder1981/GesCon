@@ -39,7 +39,7 @@ ver [`FUNCIONAL.md`](FUNCIONAL.md).
 ```
 GesCon/
 ├── gescon.prw              # ponto de entrada — advplc serve gescon.prw
-├── schema.sql               # DDL das 5 tabelas + metadados SX3 (labels)
+├── schema.sql               # DDL das 8 tabelas + metadados SX3 (labels)
 ├── scripts/
 │   └── bootstrap-db.sh      # aplica schema.sql no banco compartilhado
 ├── src/
@@ -49,12 +49,14 @@ GesCon/
 │   ├── despesas.prw          # GcDespesas — lançamento (browse sobre DES)
 │   ├── fechamento.prw        # GcFecharMes, GcProximoVencimento
 │   ├── cobrancas.prw         # GcCobrancas, GcRegistrarPagamento
-│   └── malas.prw             # GcMalaDireta — mala direta com envio real
+│   ├── malas.prw             # GcMalaDireta — mala direta com envio real
+│   └── relatorios.prw        # Balancete/Inadimplência/Extrato/Despesas por categoria
 ├── tests/
 │   ├── db_test.prw
 │   ├── fechamento_test.prw
 │   ├── pagamento_test.prw
-│   └── malas_test.prw
+│   ├── malas_test.prw
+│   └── relatorios_test.prw
 └── docs/
     ├── ARQUITETURA.md        # este arquivo
     ├── FUNCIONAL.md
@@ -68,7 +70,7 @@ query.
 
 ## Modelo de dados
 
-5 tabelas, todas com a convenção de exclusão lógica estilo Protheus
+8 tabelas, todas com a convenção de exclusão lógica estilo Protheus
 (`R_E_C_N_O_`/`D_E_L_E_T_`/`R_E_C_D_E_L_`) — ver `schema.sql` para o DDL
 completo.
 
@@ -79,16 +81,47 @@ completo.
 | `DES` | `DES_DESCR`, `DES_CATEG`, `DES_VALOR`, `DES_COMPET`, `DES_DTLANC` | Despesa lançada numa competência ("YYYY-MM") |
 | `COB` | `COB_UNIDADE`, `COB_COMPET`, `COB_VALOR`, `COB_VENCTO`, `COB_STATUS`, `COB_DTPAG` | Cobrança — gerada só pelo Fechamento Mensal |
 | `USR` | `USR_LOGIN`, `USR_SENHA` | Usuário administrador único (login ainda não implementado na UI) |
+| `RPT_INADIM` | `RIN_UNIDADE`, `RIN_COMPET`, `RIN_VALOR`, `RIN_VENCTO`, `RIN_ATRASO` | Snapshot do relatório de Inadimplência — recalculado a cada abertura |
+| `RPT_EXTRATO` | `REX_COMPET`, `REX_VALOR`, `REX_VENCTO`, `REX_STATUS`, `REX_DTPAG` | Snapshot do Extrato por Unidade — recalculado a cada abertura |
+| `RPT_DESCAT` | `RDC_CATEG`, `RDC_TOTAL` | Snapshot de Despesas por Categoria — recalculado a cada abertura |
 
 Relacionamentos: `UNI.UNI_CONDOMINO → CON.CON_CODIGO` (texto livre, sem
 FK/combo — ver "Limitações conhecidas"). `COB.COB_UNIDADE →
 UNI.UNI_CODIGO`. `DES` não se relaciona com unidade — despesas são do
-condomínio como um todo, rateadas por fração ideal no fechamento.
+condomínio como um todo, rateadas por fração ideal no fechamento. As
+3 tabelas `RPT_*` não têm relacionamento formal — são só a área de
+staging de cada relatório tabular (ver seção "Relatórios" abaixo).
 
 A tabela `SX3` (compartilhada com outras ferramentas AdvPP) guarda
 metadados de coluna (título amigável, tipo, tamanho) que o `FWMBrowse`
 usa para renderizar as colunas — sem essas linhas o browse cai no
 fallback de mostrar toda coluna física como texto cru.
+
+## Relatórios: por que uma tabela de snapshot, não uma VIEW
+
+`FWMBrowse` só sabe abrir uma tabela física por um alias fixo — o
+Go por trás (`pkg/vm/browse.go`) monta a query como
+`SELECT rowid AS browse_recno_, * FROM <alias>` e as ações de
+Editar/Excluir como `UPDATE/DELETE ... WHERE rowid = ?`. Não dá pra
+passar parâmetro nenhum (competência, unidade) nem apontar pra uma
+consulta agregada direto — e uma `VIEW` do SQLite não tem `rowid`
+próprio (views não têm armazenamento), então `UPDATE`/`DELETE` contra
+ela falhariam.
+
+Solução adotada, consistente com como `GcFecharMes` já grava
+`Cobrança`: cada relatório tabular (Inadimplência, Extrato por
+Unidade, Despesas por Categoria) tem sua própria tabela `RPT_*` de
+"snapshot" — a função recalcula o conteúdo do zero (`DELETE` + `INSERT`)
+toda vez que é aberto, então nunca fica desatualizado, e o
+`FWMBrowse` funciona sem nenhuma mudança no AdvPP. Balancete Mensal é
+a exceção: é um resumo de 3 números (receitas/despesas/saldo), não uma
+lista — mostrado via `MsgInfo`, sem tabela nenhuma.
+
+Cada relatório tabular vem em duas funções — `GcXxxCalc()` (só grava o
+snapshot, testável via `advplc run`) e `GcXxx()` (chama a `Calc` e abre
+o browse, só funciona em `advplc serve`/`build`) — mesmo motivo de
+`GcCondominos`/`GcUnidades`/etc nunca serem testadas via `advplc run`:
+`FWMBrowse:Activate()` exige uma sessão de UI de verdade.
 
 ## Grafo de dependências (`#include`)
 
@@ -98,8 +131,9 @@ gescon.prw ──include──> src/db.prw
            ──include──> src/condominos.prw
            ──include──> src/despesas.prw
            ──include──> src/cobrancas.prw
-           ──include──> src/fechamento.prw (que também inclui db.prw)
-           ──include──> src/malas.prw      (que também inclui db.prw)
+           ──include──> src/fechamento.prw  (que também inclui db.prw)
+           ──include──> src/malas.prw       (que também inclui db.prw)
+           ──include──> src/relatorios.prw  (que também inclui db.prw)
 ```
 
 `gescon.prw` inclui todas as telas — é o único arquivo raiz real do
@@ -140,6 +174,11 @@ depois de todos os `#include`s.
 | `GcCobrancas` | `src/cobrancas.prw` | `GcCobrancas()` | — (abre browse) |
 | `GcRegistrarPagamento` | `src/cobrancas.prw` | `GcRegistrarPagamento(nRecno, dData)` | `logical` |
 | `GcMalaDireta` | `src/malas.prw` | `GcMalaDireta(cCompetencia)` | `numeric` — quantidade enviada |
+| `GcBalanceteMensal` | `src/relatorios.prw` | `GcBalanceteMensal(cCompetencia)` | `numeric` — saldo (receitas − despesas); mostra `MsgInfo` |
+| `GcInadimplenciaCalc` / `GcInadimplencia` | `src/relatorios.prw` | `GcInadimplenciaCalc()` / `GcInadimplencia()` | `numeric` (Calc) / — (abre browse) |
+| `GcExtratoUnidadeCalc` / `GcExtratoUnidade` | `src/relatorios.prw` | `GcExtratoUnidadeCalc(cUnidade)` / `GcExtratoUnidade(cUnidade)` | `numeric` (Calc) / — (abre browse) |
+| `GcDespesasCategoriaCalc` / `GcDespesasCategoria` | `src/relatorios.prw` | `GcDespesasCategoriaCalc(cCompetencia)` / `GcDespesasCategoria(cCompetencia)` | `numeric` (Calc) / — (abre browse) |
+| `GcMenuRelatorios` | `gescon.prw` | `GcMenuRelatorios()` | — (submenu de Relatórios) |
 
 ## Acesso a dados
 
