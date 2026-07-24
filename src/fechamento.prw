@@ -17,11 +17,23 @@ User Function GcFecharMes(cCompetencia)
 
     Local aDespesas := TCSqlQuery("SELECT COALESCE(SUM(DES_VALOR),0) AS TOTAL FROM DES WHERE DES_COMPET = '" + GcSqlLit(cCompetencia) + "' AND D_E_L_E_T_ = ' '")
     nTotalDespesas := Val(aDespesas[1]:TOTAL)
+    If nTotalDespesas == 0
+        ConOut("GcFecharMes: aviso — competência " + cCompetencia + " não tem nenhuma despesa lançada, fechando mesmo assim")
+    EndIf
 
     Local aUnidades := TCSqlQuery("SELECT UNI_CODIGO, UNI_FRACAO FROM UNI WHERE D_E_L_E_T_ = ' '")
     If Len(aUnidades) == 0
         ConOut("GcFecharMes: nenhuma unidade cadastrada")
         Return .F.
+    EndIf
+
+    Local nSomaFracoes := 0
+    Local j
+    For j := 1 To Len(aUnidades)
+        nSomaFracoes += Val(aUnidades[j]:UNI_FRACAO)
+    Next
+    If nSomaFracoes < 0.999 .Or. nSomaFracoes > 1.001
+        ConOut("GcFecharMes: aviso — soma das frações ideais das unidades ativas é " + cValToChar(nSomaFracoes) + ", não 1.0 (100%)")
     EndIf
 
     Local cVencimento := GcProximoVencimento(cCompetencia)
