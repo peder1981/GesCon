@@ -11,7 +11,12 @@
 User Function AT06TokenInvalido()
     Local lOk := .T.
     Local aResultado := GcAuthPortalToken("00000000-0000-0000-0000-000000000000")
-    ConOut("token_invalido=" + cValToChar(!lOk .And. !aResultado))
+    If Len(aResultado) == 0
+        ConOut("AT06PASS: token invalido rejeitado")
+    Else
+        lOk := .F.
+        ConOut("AT06FAIL: token invalido NAO rejeitado")
+    EndIf
 Return lOk
 
 /*/{Protheus.doc} TestaGcPortalAuthValido
@@ -35,10 +40,8 @@ User Function AT06TokenValido()
         TCSqlExec("INSERT INTO CON (CON_CODIGO, CON_NOME, CON_CPF, CON_EMAIL, CON_FONE, CON_UNI) VALUES ('C999', 'Condï¿½mino Teste', '000.000.000-00', 'teste@teste.com', '11111111', '99')")
     EndIf
 
-    // Gera token vï¿½lido com validade futura usando funï¿½ï¿½o real
-    Local cTokenId := GcGerarTokenId()
-    Local dValidade := Date() + 1
-    Local cValidadeIso := GcDateToIso(dValidade) + " " + Left(TimeToString(), 8)
+    // Gera token válido com validade futura (data fixa para teste)
+    Local cValidadeIso := "2099-12-31 23:59:59"
 
     TCSqlExec("INSERT INTO GCT_TOKEN (TOKEN, USR_LOGIN, CON_CODIGO, UNI_CODIGO, CRIPTADO, VALIDO_ATE, USADO) " + ;
         "VALUES ('test-token-0000-0000-0000-000000000001', 'admin', 'C999', '99', '" + GcSqlLit(cValidadeIso) + "', '" + GcSqlLit(cValidadeIso) + "', 0)")
@@ -143,4 +146,32 @@ User Function AT06SairPortal()
     If !Empty(g_cUniPortal) .Or. !Empty(g_cConPortal) .Or. g_lAutoPortal
         lOk := .F.
     EndIf
+Return lOk
+
+/*/{Protheus.doc} AT08TokenUsado
+    Token com USADO=1 deve ser rejeitado (ataque de reutilizacao).
+*/
+User Function AT08TokenUsado()
+    Local lOk := .T.
+
+    // Insere token já marcado como usado
+    TCSqlExec("DELETE FROM GCT_TOKEN WHERE TOKEN = 'test-token-0008-0000-0000-000000000008' AND D_E_L_E_T_ = ' '")
+    TCSqlExec("INSERT INTO GCT_TOKEN (TOKEN, USR_LOGIN, CON_CODIGO, UNI_CODIGO, CRIPTADO, VALIDO_ATE, USADO) " + ;
+        "VALUES ('test-token-0008-0000-0000-000000000008', 'admin', 'C999', '99', 'criptado', '" + ;
+        "2099-12-31 23:59:59', 1)")
+
+    // Autentica — deve falhar porque USADO=1
+    Local lAutenticado := GcAuthPortalToken("test-token-0008-0000-0000-000000000008")
+    If lAutenticado
+        lOk := .F.
+        ConOut("AT08FAIL: token_usado nao foi rejeitado")
+    Else
+        ConOut("AT08PASS: token usado rejeitado")
+    EndIf
+
+    // Limpa
+    TCSqlExec("DELETE FROM GCT_TOKEN WHERE TOKEN = 'test-token-0008-0000-0000-000000000008'")
+    g_cUniPortal := ""
+    g_cConPortal := ""
+    g_lAutoPortal := .F.
 Return lOk
