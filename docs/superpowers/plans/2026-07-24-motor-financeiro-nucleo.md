@@ -488,7 +488,7 @@ Expected:
 qtd=1
 codigo=X1
 valor=42
-fieldpos=1
+fieldpos=4
 ```
 
 - [ ] **Step 8: Escrever o teste Go de regressão**
@@ -535,7 +535,7 @@ func TestWorkareaFixture(t *testing.T) {
 	if err != nil {
 		t.Fatalf("advplc run tests/workarea_test.prw falhou: %v\n%s", err, out)
 	}
-	want := []string{"qtd=1", "codigo=X1", "valor=42", "fieldpos=1"}
+	want := []string{"qtd=1", "codigo=X1", "valor=42", "fieldpos=4"}
 	got := string(out)
 	for _, w := range want {
 		if !strings.Contains(got, w) {
