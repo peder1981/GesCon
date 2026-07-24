@@ -36,3 +36,11 @@ fração ideal), Cobranças + Registrar Pagamento. **Relatórios, mala direta e
 login ficam pro Plano 2** — ver spec para o escopo completo. `TMailMessage`
 (envio real de e-mail) já existe no compilador desde este plano, mas nenhuma
 tela do GesCon a consome ainda.
+
+## Limitação conhecida
+
+A tela de Cobranças permite editar/excluir registros livremente pela UI
+(mesmo `FWMBrowse` editável dos demais cadastros) — a garantia de "valor
+travado no fechamento" é imposta pela lógica de negócio, não pela UI.
+Aceitável para a v1 (login único, uso pessoal/piloto). Ver spec, seção
+"Decisões explícitas registradas".

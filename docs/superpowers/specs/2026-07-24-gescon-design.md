@@ -157,3 +157,19 @@ Estratégia de teste dupla, aproveitando que isto é dogfooding do compilador:
   `TCSqlQuery` — o caminho que o GesCon usa de fato para o Fechamento
   Mensal (que precisa gravar
   a partir de lógica de negócio, não de clique de UI).
+- **Limitação conhecida e aceita, registrada na revisão final do branch
+  (Plano 1)**: a tela de Cobranças (`GcCobrancas`) usa o mesmo `FWMBrowse`
+  editável dos demais cadastros — o que dá Incluir/Alterar/Excluir "de
+  graça", inclusive sobre `COB_VALOR`. Isso significa que a garantia
+  "valor travado no fechamento, nunca recalculado retroativamente" é
+  imposta pela lógica de negócio (`GcFecharMes`/`GcRegistrarPagamento`),
+  mas **não é imposta pela UI** — o mesmo administrador que fecha o mês
+  também pode editar uma cobrança na mão pelo browse. Aceitável para a
+  v1 (login único, sem papéis, uso pessoal/piloto). O AdvPP tem um campo
+  `ReadOnly` em `FWFormBrowse` (`pkg/mvc/browse.go`), mas ele não está
+  ligado a nada — nem ao dispatch de método nativo, nem ao renderer web
+  — então hoje não há como tornar um `FWMBrowse` de fato somente-leitura.
+  Tornar isso real exigiria trabalho novo no compilador AdvPP (fora do
+  escopo deste plano) ou trocar a tela por algo customizado sem
+  `FWMBrowse` no GesCon. Fica como candidato pro Plano 2 se o uso real
+  mostrar que o risco importa.
