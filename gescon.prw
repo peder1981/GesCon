@@ -12,6 +12,7 @@
 #include "src/fechamento.prw"
 #include "src/malas.prw"
 #include "src/relatorios.prw"
+#include "src/usuarios.prw"
 
 /*/{Protheus.doc} GesCon
     Ponto de entrada do GesCon — sobe com `advplc serve gescon.prw`,
@@ -21,7 +22,7 @@
     @since 2026-07-24
 */
 User Function GesCon()
-    Local aMenu := {"Unidades", "Condôminos", "Despesas", "Cobranças", "Fechamento Mensal", "Mala Direta", "Relatórios", "Trocar Senha", "Sair"}
+    Local aMenu := {"Unidades", "Condôminos", "Despesas", "Cobranças", "Fechamento Mensal", "Mala Direta", "Relatórios", "Usuários", "Trocar Senha", "Sair"}
     Local nOpcao
     Local cCompetencia
     Local nEnviados
@@ -70,6 +71,8 @@ User Function GesCon()
                 EndIf
             Case nOpcao == 7
                 GcMenuRelatorios()
+            Case nOpcao == 8
+                GcMenuUsuarios()
             Otherwise
                 Exit
         EndCase
