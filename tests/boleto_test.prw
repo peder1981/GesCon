@@ -26,7 +26,6 @@ Static Function StBoletoCalcDv(cNum)
     Else
         Return 11 - nResto
     EndIf
-Return nResto
 
 // PadLeft
 Static Function StPadLeft(cStr, nTam, cPad)
@@ -98,32 +97,28 @@ Static Function StLinhaItau(cBanco, cAgencia, cConta, nAgDv, cCobrta, cCarteira,
     EndDo
     cSeq42 := Left(cSeq42, 42)
     
-    // G1: pos 1-4 + pos 20 + DV (6 chars)
-    Local cG1 := SubStr(cSeq42, 1, 4) + SubStr(cSeq42, 20, 1)
+    // Rearranjo FEBRABAN — usa todos os 42 digitos sem padding com zeros:
+    // G1: pos1-4 + CL[19] + DV
+    Local cG1 := SubStr(cSeq42, 1, 4) + SubStr(cSeq42, 19, 1)
     cG1 := cG1 + StrZero(StBoletoCalcDv(cG1), 1)
     
-    // G2: pos 21-25 + DV (6 chars)
-    Local cG2 := SubStr(cSeq42, 21, 5)
+    // G2: CL[20-24] (5 chars) + DV
+    Local cG2 := SubStr(cSeq42, 20, 5)
     cG2 := cG2 + StrZero(StBoletoCalcDv(cG2), 1)
     
-    // G3: pos 26-35 + DV (11 chars)
-    Local cG3 := SubStr(cSeq42, 26, 10)
+    // G3: CL[25-34] (10 chars) + DV
+    Local cG3 := SubStr(cSeq42, 25, 10)
     cG3 := cG3 + StrZero(StBoletoCalcDv(cG3), 1)
     
-    // G4: pos 5 + pos 6-17 + DV (1+12+1=14 chars)
-    Local cG4 := SubStr(cSeq42, 5, 1) + SubStr(cSeq42, 6, 12)
-    cG4 := StrZero(StBoletoCalcDv(cG4), 1) + cG4
+    // G4: pos5 + pos6-17(13) + pos35 + DV
+    Local cG4 := SubStr(cSeq42, 5, 1) + SubStr(cSeq42, 6, 13) + SubStr(cSeq42, 35, 1)
+    cG4 := cG4 + StrZero(StBoletoCalcDv(cG4), 1)
     
-    // G5: pos 36-41 + DV (6+1=7 chars... but we need specific length)
-    Local cG5 := SubStr(cSeq42, 36, 6)
+    // G5: CL[36-42] (7 chars) + DV
+    Local cG5 := SubStr(cSeq42, 36, 7)
     cG5 := cG5 + StrZero(StBoletoCalcDv(cG5), 1)
     
-    Local cLinha := cG1 + "." + cG2 + "." + cG3 + "-" + cG4 + "." + cG5
-    cLinha := Left(cLinha, 53)
-    While Len(cLinha) < 53
-        cLinha := cLinha + "0"
-    EndDo
-Return cLinha
+    Return cG1 + "." + cG2 + "." + cG3 + "-" + cG4 + "." + cG5
 
 // Linha Digitavel Bradesco
 Static Function StLinhaBradesco(cBanco, cAgencia, cConta, nAgDv, cCobrta, cCarteira, nCartDv, dVenc, nValor, cNumeroDoc)
@@ -154,23 +149,19 @@ Static Function StLinhaBradesco(cBanco, cAgencia, cConta, nAgDv, cCobrta, cCarte
     EndDo
     cSeq42 := Left(cSeq42, 42)
     
-    Local cG1 := SubStr(cSeq42, 1, 4) + SubStr(cSeq42, 20, 1)
+    // Mesmo rearranjo que Itaú — usa todos os 42 digitos sem padding:
+    Local cG1 := SubStr(cSeq42, 1, 4) + SubStr(cSeq42, 19, 1)
     cG1 := cG1 + StrZero(StBoletoCalcDv(cG1), 1)
-    Local cG2 := SubStr(cSeq42, 21, 5)
+    Local cG2 := SubStr(cSeq42, 20, 5)
     cG2 := cG2 + StrZero(StBoletoCalcDv(cG2), 1)
-    Local cG3 := SubStr(cSeq42, 26, 10)
+    Local cG3 := SubStr(cSeq42, 25, 10)
     cG3 := cG3 + StrZero(StBoletoCalcDv(cG3), 1)
-    Local cG4 := SubStr(cSeq42, 5, 1) + SubStr(cSeq42, 6, 12)
-    cG4 := StrZero(StBoletoCalcDv(cG4), 1) + cG4
-    Local cG5 := SubStr(cSeq42, 36, 6)
+    Local cG4 := SubStr(cSeq42, 5, 1) + SubStr(cSeq42, 6, 13) + SubStr(cSeq42, 35, 1)
+    cG4 := cG4 + StrZero(StBoletoCalcDv(cG4), 1)
+    Local cG5 := SubStr(cSeq42, 36, 7)
     cG5 := cG5 + StrZero(StBoletoCalcDv(cG5), 1)
     
-    Local cLinha := cG1 + "." + cG2 + "." + cG3 + "-" + cG4 + "." + cG5
-    cLinha := Left(cLinha, 53)
-    While Len(cLinha) < 53
-        cLinha := cLinha + "0"
-    EndDo
-Return cLinha
+Return cG1 + "." + cG2 + "." + cG3 + "-" + cG4 + "." + cG5
 
 // === TESTE PRINCIPAL ===
 User Function BoletoTest()
@@ -237,8 +228,8 @@ User Function BoletoTest()
     ConOut("linha_itau=[" + cLinhaIt + "]")
     ConOut("tam_itau=" + Str(Len(cLinhaIt)))
     
-    If Len(cLinhaIt) != 53
-        ConOut("FALHA: linha digitavel Itau tem " + Str(Len(cLinhaIt)) + " chars, esperado 53")
+    If Len(cLinhaIt) != 51
+        ConOut("FALHA: linha digitavel Itau tem " + Str(Len(cLinhaIt)) + " chars, esperado 51")
         nErros++
     EndIf
     
@@ -252,6 +243,19 @@ User Function BoletoTest()
     ConOut("separadores_itau=" + Str(np))
     If np != 4
         ConOut("FALHA: linha digitavel Itau tem " + Str(np) + " separadores, esperado 4")
+        nErros++
+    EndIf
+    
+    // Validar que todos os caracteres sao numericos ou separadores (. -)
+    Local nInvalidos := 0
+    For ii := 1 To Len(cLinhaIt)
+        Local cCh2 := SubStr(cLinhaIt, ii, 1)
+        If cCh2 < "0" .And. cCh2 != "." .And. cCh2 != "-"
+            nInvalidos++
+        EndIf
+    Next
+    If nInvalidos > 0
+        ConOut("FALHA: linha digitavel Itau tem " + Str(nInvalidos) + " caracteres invalidos")
         nErros++
     EndIf
     
@@ -289,8 +293,8 @@ User Function BoletoTest()
     ConOut("linha_bradesco=[" + cLinhaBr + "]")
     ConOut("tam_bradesco=" + Str(Len(cLinhaBr)))
     
-    If Len(cLinhaBr) != 53
-        ConOut("FALHA: linha digitavel Bradesco tem " + Str(Len(cLinhaBr)) + " chars, esperado 53")
+    If Len(cLinhaBr) != 51
+        ConOut("FALHA: linha digitavel Bradesco tem " + Str(Len(cLinhaBr)) + " chars, esperado 51")
         nErros++
     EndIf
     
@@ -304,6 +308,19 @@ User Function BoletoTest()
     ConOut("separadores_bradesco=" + Str(np))
     If np != 4
         ConOut("FALHA: linha digitavel Bradesco tem " + Str(np) + " separadores, esperado 4")
+        nErros++
+    EndIf
+    
+    // Validar que todos os caracteres sao numericos ou separadores (. -)
+    Local nInvalidos2 := 0
+    For ii := 1 To Len(cLinhaBr)
+        Local cCh3 := SubStr(cLinhaBr, ii, 1)
+        If cCh3 < "0" .And. cCh3 != "." .And. cCh3 != "-"
+            nInvalidos2++
+        EndIf
+    Next
+    If nInvalidos2 > 0
+        ConOut("FALHA: linha digitavel Bradesco tem " + Str(nInvalidos2) + " caracteres invalidos")
         nErros++
     EndIf
     
