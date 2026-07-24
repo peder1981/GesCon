@@ -25,7 +25,8 @@ processo, nenhuma troca de porta/aba:
 4. Cobranças
 5. Fechamento Mensal (pede a competência, mostra o resultado)
 6. Mala Direta (pede a competência, mostra quantos e-mails foram enviados)
-7. Sair
+7. Relatórios (abre um submenu — ver seção própria abaixo)
+8. Sair
 
 ## Telas
 
@@ -45,6 +46,7 @@ Consultar) automaticamente:
 Fechamento Mensal e Mala Direta não são telas de cadastro — são ações:
 o menu pede a competência (`FWMenuSelect`/`FWGetText`, capacidades do
 AdvPP v1.23.0+) e mostra o resultado num diálogo, sem sair do menu.
+Relatórios (abaixo) usam o mesmo mecanismo de submenu.
 
 ## Fechamento Mensal
 
@@ -90,10 +92,30 @@ Para funcionar, o servidor SMTP precisa estar configurado (ver
 [`README.md`](../README.md), seção "Mala direta"). Sem essa
 configuração, a mala direta simplesmente não envia nada (sem erro).
 
+## Relatórios
+
+Acessados via "Relatórios" no menu principal (abre um submenu com as 4
+opções abaixo + "Voltar"). Todos são leitura sobre os dados já
+cadastrados — nenhum muda Cobrança, Despesa, Unidade ou Condômino.
+
+- **Balancete Mensal** — pede a competência, mostra num diálogo:
+  receitas (soma de Cobrança com status `pago`), despesas (soma de
+  Despesa lançada), saldo (receitas − despesas).
+- **Inadimplência** — lista, sem precisar de nenhum parâmetro, toda
+  Cobrança com status `pendente` e vencimento já passado: unidade,
+  competência, valor, vencimento, dias de atraso.
+- **Extrato por Unidade** — pede o código da unidade, lista todo o
+  histórico de Cobrança dela (competência, valor, vencimento, status,
+  data de pagamento).
+- **Despesas por Categoria** — pede a competência (vazio = todas),
+  soma as despesas agrupadas por categoria, maior valor primeiro.
+
+Cada relatório recalcula seu conteúdo do zero toda vez que é aberto —
+sempre reflete os dados mais recentes, não fica desatualizado entre
+uma abertura e outra.
+
 ## O que ainda não existe (Plano 2)
 
-- **Relatórios**: balancete mensal, inadimplência, extrato por unidade,
-  despesas por categoria.
 - **Login** — hoje qualquer pessoa com acesso à URL do `advplc serve`
   usa o sistema; não há tela de autenticação nem controle de acesso.
 - **Papéis de usuário** — administrador único, sem porteiro nem portal
@@ -113,5 +135,10 @@ configuração, a mala direta simplesmente não envia nada (sem erro).
   motivo técnico.
 - **Vínculo unidade→condômino é texto livre**, sem validação de que o
   código digitado existe de fato em Condôminos.
+- **Os relatórios também são telas de `FWMBrowse`**, então tecnicamente
+  dá pra clicar Incluir/Alterar/Excluir neles — não faz sentido editar
+  um relatório (o conteúdo é recalculado do zero na próxima abertura,
+  então a edição não sobrevive), mas nada impede clicar. Mesma
+  limitação técnica da tela de Cobranças.
 - Multi-condomínio, multi-usuário e boleto bancário real estão fora do
   escopo desta fase — ver "O que ainda não existe" acima.
