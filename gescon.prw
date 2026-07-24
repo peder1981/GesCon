@@ -9,6 +9,7 @@
 #include "src/cobrancas.prw"
 #include "src/fechamento.prw"
 #include "src/malas.prw"
+#include "src/relatorios.prw"
 
 /*/{Protheus.doc} GesCon
     Ponto de entrada do GesCon — sobe com `advplc serve gescon.prw`,
@@ -18,7 +19,7 @@
     @since 2026-07-24
 */
 User Function GesCon()
-    Local aMenu := {"Unidades", "Condôminos", "Despesas", "Cobranças", "Fechamento Mensal", "Mala Direta", "Sair"}
+    Local aMenu := {"Unidades", "Condôminos", "Despesas", "Cobranças", "Fechamento Mensal", "Mala Direta", "Relatórios", "Sair"}
     Local nOpcao
     Local cCompetencia
     Local nEnviados
@@ -51,8 +52,42 @@ User Function GesCon()
                     nEnviados := GcMalaDireta(cCompetencia)
                     MsgInfo(Str(nEnviados) + " e-mail(s) enviado(s).", "Mala Direta")
                 EndIf
+            Case nOpcao == 7
+                GcMenuRelatorios()
             Otherwise
                 Exit
         EndCase
     EndDo
+Return
+
+/*/{Protheus.doc} GcMenuRelatorios
+    Submenu de relatórios — Balancete Mensal, Inadimplência, Extrato
+    por Unidade, Despesas por Categoria.
+    @type Function
+    @author GesCon
+    @since 2026-07-24
+*/
+User Function GcMenuRelatorios()
+    Local aMenu := {"Balancete Mensal", "Inadimplência", "Extrato por Unidade", "Despesas por Categoria", "Voltar"}
+    Local nOpcao := FWMenuSelect(aMenu, "Relatórios")
+    Local cCompetencia
+    Local cUnidade
+
+    Do Case
+        Case nOpcao == 1
+            cCompetencia := FWGetText("Balancete de qual competência? (YYYY-MM)", "")
+            If !Empty(cCompetencia)
+                GcBalanceteMensal(cCompetencia)
+            EndIf
+        Case nOpcao == 2
+            GcInadimplencia()
+        Case nOpcao == 3
+            cUnidade := FWGetText("Extrato de qual unidade?", "")
+            If !Empty(cUnidade)
+                GcExtratoUnidade(cUnidade)
+            EndIf
+        Case nOpcao == 4
+            cCompetencia := FWGetText("Despesas por categoria de qual competência? (vazio = todas)", "")
+            GcDespesasCategoria(cCompetencia)
+    EndCase
 Return
