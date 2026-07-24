@@ -4,12 +4,17 @@ Sistema de gestão condominial em AdvPL/TLPP, rodando sobre o
 [AdvPP](https://github.com/peder1981/AdvPP) (compilador/VM open-source
 para AdvPL/TLPP, escrito em Go). Serve dois propósitos: uso real de
 administração de condomínio, e case de validação de robustez do
-compilador — o desenvolvimento deste projeto encontrou e corrigiu 5
-bugs reais do AdvPP (ver [`ARQUITETURA.md`](docs/ARQUITETURA.md)).
+compilador — o desenvolvimento deste projeto encontrou e corrigiu 4
+bugs reais (persistência de work-area, `Recover` sem variável nomeada,
+ponto de entrada com `#include`, comparação com `Nil` derrubando a VM)
+e motivou 3 capacidades novas (`TCSqlExec`/`TCSqlQuery`,
+`TMailMessage`, `FWMenuSelect`/`FWGetText`) no AdvPP — ver
+[`ARQUITETURA.md`](docs/ARQUITETURA.md).
 
-Cadastro de unidades e condôminos, lançamento de despesas, Fechamento
-Mensal com rateio por fração ideal, Cobrança e Registro de Pagamento, e
-Mala Direta com envio real de e-mail.
+Menu real navegando entre as telas: cadastro de unidades e condôminos,
+lançamento de despesas, Fechamento Mensal com rateio por fração ideal,
+Cobrança e Registro de Pagamento, e Mala Direta com envio real de
+e-mail.
 
 - **[Documentação funcional](docs/FUNCIONAL.md)** — o que o sistema faz,
   telas, regras de negócio, limitações conhecidas.
@@ -21,10 +26,11 @@ Mala Direta com envio real de e-mail.
 
 ## Requisitos
 
-- [`advplc`](https://github.com/peder1981/AdvPP) **v1.22.1+** — versões
-  anteriores têm um bug real de ponto de entrada que impede rodar
-  qualquer projeto AdvPL multi-arquivo como o GesCon (corrigido na
-  v1.22.1, achado durante este projeto).
+- [`advplc`](https://github.com/peder1981/AdvPP) **v1.23.0+** —
+  v1.22.1 corrigiu um bug real de ponto de entrada que impedia rodar
+  qualquer projeto AdvPL multi-arquivo como o GesCon; v1.23.0 adicionou
+  `FWMenuSelect`/`FWGetText`, que o menu de navegação do GesCon usa.
+  Ambos achados/motivados durante este projeto.
 - `sqlite3` (CLI, só para o bootstrap do schema).
 
 ## Rodando

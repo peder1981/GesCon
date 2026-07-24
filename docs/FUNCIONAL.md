@@ -12,11 +12,25 @@ cobrança e registro de pagamento, e mala direta por e-mail. Um
 condomínio por instância — se precisar administrar mais de um, sobe-se
 outra instância do sistema.
 
+## Menu e navegação
+
+`advplc serve gescon.prw` (sobe em `http://localhost:8080` por padrão)
+abre num **menu real** — clique numa opção pra abrir a tela, feche a
+tela (botão "Fechar browse") pra voltar ao menu. Nenhum reinício de
+processo, nenhuma troca de porta/aba:
+
+1. Unidades
+2. Condôminos
+3. Despesas
+4. Cobranças
+5. Fechamento Mensal (pede a competência, mostra o resultado)
+6. Mala Direta (pede a competência, mostra quantos e-mails foram enviados)
+7. Sair
+
 ## Telas
 
-Todas as telas são acessadas via `advplc serve gescon.prw` (sobe em
-`http://localhost:8080` por padrão) e dão CRUD completo (Incluir,
-Alterar, Excluir, Consultar) automaticamente.
+As quatro primeiras dão CRUD completo (Incluir, Alterar, Excluir,
+Consultar) automaticamente:
 
 - **Condôminos** — nome, CPF, e-mail, telefone.
 - **Unidades** — código, bloco, fração ideal, e o código do condômino
@@ -28,9 +42,9 @@ Alterar, Excluir, Consultar) automaticamente.
   pagamento). Tecnicamente editável pela mesma tela de CRUD — ver
   "Limitações" abaixo.
 
-A tela inicial (`gescon.prw`) abre em Unidades; navegar entre módulos
-pela URL/menu do AdvPP até o Plano 2 trazer um menu de navegação e
-login.
+Fechamento Mensal e Mala Direta não são telas de cadastro — são ações:
+o menu pede a competência (`FWMenuSelect`/`FWGetText`, capacidades do
+AdvPP v1.23.0+) e mostra o resultado num diálogo, sem sair do menu.
 
 ## Fechamento Mensal
 
