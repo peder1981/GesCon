@@ -4,9 +4,9 @@
 
 **Goal:** Entregar o motor financeiro central do GesCon funcionando de ponta a ponta: cadastro de unidades/condôminos/despesas, fechamento mensal com rateio por fração ideal, e registro de cobrança/pagamento — tudo via web (`advplc serve`) com persistência real em SQLite.
 
-**Architecture:** Duas camadas de código em dois repositórios. (1) AdvPP (`/home/peder/Projetos/AdvPP`): duas natives novas (`TCSqlExec`/`TCSqlQuery`) expõem a camada SQL já existente internamente (`pkg/db`, hoje só usada por `FWMBrowse`) para uso livre em `User Function`, porque a API clássica de work-area (`DbAppend`/`RecLock`/`FieldPut`) é hoje um stub sem persistência real — achado confirmado por teste direto, não suposição. (2) GesCon (`~/Projetos/GesCon`): aplicação AdvPL/TLPP pura, cadastros via `FWMBrowse` (CRUD grátis, sem código customizado) e lógica de negócio (fechamento mensal) via as novas natives SQL.
+**Architecture:** Duas camadas de código em dois repositórios. (1) AdvPP (`/home/peder/Projetos/AdvPP`): quatro capacidades novas no compilador — `TCSqlExec`/`TCSqlQuery` (SQL direto pra `User Function`), persistência real de `DbAppend`/`RecLock`/`FieldPut`/`MsUnlock` (a API clássica de work-area, hoje um stub sem efeito — achado confirmado por teste direto), e a classe `TMailMessage` (envio de e-mail real via `net/smtp`, stdlib). (2) GesCon (`~/Projetos/GesCon`): aplicação AdvPL/TLPP pura, cadastros via `FWMBrowse` (CRUD grátis, sem código customizado) e lógica de negócio (fechamento mensal) via `TCSqlExec`/`TCSqlQuery`.
 
-**Tech Stack:** Go 1.24 (AdvPP), AdvPL/TLPP (GesCon), SQLite (banco compartilhado `~/.advpp/ADVPP.db`), PO-UI via `advplc serve` (navegador).
+**Tech Stack:** Go 1.24 (AdvPP), AdvPL/TLPP (GesCon), SQLite (banco compartilhado `~/.advpp/ADVPP.db`), PO-UI via `advplc serve` (navegador), `net/smtp` (stdlib, sem dependência externa).
 
 ## Global Constraints
 
@@ -16,11 +16,12 @@
 - `User Function` (nunca `Function` puro) para toda rotina de negócio do GesCon.
 - `IIf()` proibido — usar `If/Else/EndIf`.
 - Fechamento mensal nunca recalcula/reescreve uma `Cobrança` já gerada — trava contra fechar a mesma competência duas vezes.
-- Sem envio de e-mail nesta fase (fora de escopo, ver spec).
+- AdvPP: sem CGO, sem dependências externas novas — só stdlib do Go (mesma exigência do resto do projeto).
+- GesCon nesta fase não envia mala direta (fora de escopo do Plano 1, ver spec) — `TMailMessage` é capacidade do compilador, não consumida por nenhuma tela do GesCon ainda; fica disponível pro Plano 2.
 
 ---
 
-## Parte A — AdvPP: expor SQL direto como native
+## Parte A — AdvPP: quatro capacidades novas no compilador
 
 ### Task 1: Natives `TCSqlExec`/`TCSqlQuery`
 
@@ -71,10 +72,9 @@ Em `pkg/vm/natives.go`, dentro de `registerNatives()`, logo após a entrada `"RE
 ```go
 		// TCSqlExec/TCSqlQuery: acesso SQL direto exposto a User Function —
 		// a API clássica de work-area (DbAppend/RecLock/FieldPut/MsUnlock)
-		// não persiste nada de verdade hoje (só FWMBrowse grava, via
-		// browseSave/browseDelete em pkg/vm/browse.go, acionado por clique
-		// na UI web); lógica de negócio que precisa gravar programaticamente
-		// (ex.: fechamento mensal de um app real) não tinha caminho nenhum.
+		// era um stub sem persistência real (corrigida no Task 2 deste
+		// plano); lógica de negócio que precisa gravar programaticamente em
+		// lote (ex.: fechamento mensal) usa este caminho, mais direto.
 		// Reaproveita a mesma interface SQLEngine (Exec/QueryRows) que o
 		// FWMBrowse já usa internamente, só que exposta ao AdvPL.
 		"TCSQLEXEC": func(args []advplrt.Value) (advplrt.Value, error) {
@@ -190,10 +190,10 @@ Em `CHANGELOG.md`, adicione no topo de `## [Não lançado]`:
 ### `TCSqlExec`/`TCSqlQuery` — SQL direto pra User Function
 
 A API clássica de work-area (`DbAppend`/`RecLock`/`FieldPut`/`MsUnlock`) não
-persiste dados de verdade hoje — só `FWMBrowse` grava (via código Go interno
-acionado por clique na UI web). Lógica de negócio que precisa gravar
-programaticamente (loop de inserção, processamento em lote) não tinha
-caminho nenhum. `TCSqlExec(cQuery)` (INSERT/UPDATE/DELETE) e
+persistia dados de verdade até este release — só `FWMBrowse` gravava (via
+código Go interno acionado por clique na UI web). Lógica de negócio que
+precisa gravar programaticamente (loop de inserção, processamento em lote)
+não tinha caminho nenhum. `TCSqlExec(cQuery)` (INSERT/UPDATE/DELETE) e
 `TCSqlQuery(cQuery)` (SELECT, devolve array de `JsonObject`) expõem a mesma
 camada SQL que o `FWMBrowse` já usa internamente. Achado motivado por uso
 real (GesCon, sistema de gestão condominial construído sobre o AdvPP).
@@ -206,14 +206,656 @@ git add pkg/vm/natives.go tests/tcsql_test.prw cmd/advplc/tcsql_test.go CHANGELO
 git commit -m "vm: expõe TCSqlExec/TCSqlQuery — SQL direto pra User Function"
 ```
 
-### Task 2: Publicar release v1.22.0 e apontar o GesCon pra ela
+### Task 2: Persistência real em `DbAppend`/`RecLock`/`FieldPut`/`MsUnlock`
+
+**Files:**
+- Modify: `pkg/db/sqlite.go`
+- Modify: `pkg/vm/vm.go` (interface `DBEngine`)
+- Modify: `pkg/vm/natives.go` (`DBAPPEND`, `FIELDPOS`)
+- Test: `tests/workarea_test.prw` (novo)
+- Test: `cmd/advplc/workarea_test.go` (novo)
+- Modify: `CHANGELOG.md`
+
+**Interfaces:**
+- Consumes: nada do Task 1 (independente — mexe num caminho de código diferente: opcodes `OP_FIELD_GET`/`OP_FIELD_PUT`, não as natives novas).
+- Produces:
+  - `DbAppend()` — grava um registro em branco de verdade no SQLite (`INSERT`) e posiciona nele. Antes: no-op, `RecCount()` não mudava.
+  - `RecLock()`/`MsUnlock()` — `MsUnlock()` agora empurra o registro corrente pro banco via `UPDATE` (fecha o ciclo `DbAppend`/`RecLock` → `alias->campo := valor` → `MsUnlock`).
+  - `FieldPos(cCampo As Character) As Numeric` — posição real (1-based) da coluna física. Antes: stub, sempre `0`.
+
+- [ ] **Step 1: Escrever o teste (cenário completo: incluir, editar via `alias->campo`, confirmar persistência reabrindo)**
+
+```advpl
+// tests/workarea_test.prw — DbAppend/RecLock/FieldPut(via alias->campo)/
+// MsUnlock agora persistem de verdade em SQLite (antes eram stubs sem
+// efeito — achado confirmado durante o planejamento do GesCon, ver
+// CHANGELOG). Usa TCSqlExec só pra preparar/conferir a tabela de teste,
+// não pra exercitar o que este fixture testa.
+User Function WorkareaTest()
+    TCSqlExec("CREATE TABLE IF NOT EXISTS WA_TEST (R_E_C_N_O_ INTEGER PRIMARY KEY AUTOINCREMENT, D_E_L_E_T_ TEXT DEFAULT ' ', R_E_C_D_E_L_ INTEGER DEFAULT 0, WA_CODIGO TEXT, WA_VALOR REAL)")
+    TCSqlExec("DELETE FROM WA_TEST")
+
+    DbSelectArea("WA_TEST")
+    DbAppend()
+    RecLock()
+    WA_TEST->WA_CODIGO := "X1"
+    WA_TEST->WA_VALOR := 42
+    MsUnlock()
+
+    Local aConfere := TCSqlQuery("SELECT WA_CODIGO, WA_VALOR FROM WA_TEST")
+    ConOut("qtd=" + Str(Len(aConfere)))
+    ConOut("codigo=" + aConfere[1]:WA_CODIGO)
+    ConOut("valor=" + aConfere[1]:WA_VALOR)
+
+    Local nPos := FieldPos("WA_CODIGO")
+    ConOut("fieldpos=" + Str(nPos))
+Return
+```
+
+- [ ] **Step 2: Rodar e confirmar que falha (ou dá resultado errado)**
+
+Run: `cd /home/peder/Projetos/AdvPP && go build -o advplc ./cmd/advplc && ./advplc run tests/workarea_test.prw`
+Expected: `qtd=0` (DbAppend não gravou nada) e/ou `fieldpos=0` — evidência de que a API clássica não persiste
+
+- [ ] **Step 3: Adicionar rastreamento de colunas físicas + `loadColumns` em `pkg/db/sqlite.go`**
+
+No topo do arquivo, adicione o tipo e ajuste o struct:
+
+```go
+type columnInfo struct {
+	name    string
+	sqlType string
+}
+
+type SQLiteEngine struct {
+	db      *sql.DB
+	alias   string
+	columns []columnInfo
+	records []map[string]advplrt.Value
+	current int
+}
+```
+
+Adicione o método `loadColumns` (usado por `SelectArea`, `Append`, `MsUnlock`, `FieldPos`):
+
+```go
+// loadColumns lê a estrutura física da tabela (nome + tipo declarado de
+// cada coluna, na ordem real) — base pra Append (valores em branco
+// tipo-apropriados), MsUnlock (UPDATE coluna a coluna) e FieldPos.
+func (e *SQLiteEngine) loadColumns() error {
+	rows, err := e.db.Query(fmt.Sprintf("PRAGMA table_info(%s)", e.alias))
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	e.columns = nil
+	for rows.Next() {
+		var cid, notnull, pk int
+		var name, ctype string
+		var dflt interface{}
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return err
+		}
+		e.columns = append(e.columns, columnInfo{name: strings.ToUpper(name), sqlType: strings.ToUpper(ctype)})
+	}
+	return rows.Err()
+}
+```
+
+- [ ] **Step 4: Chamar `loadColumns` em `SelectArea`, implementar `Append`, `FieldPos`, reescrever `MsUnlock`**
+
+Em `SelectArea`, logo depois de `e.alias = strings.ToUpper(alias)`, adicione:
+
+```go
+	if err := e.loadColumns(); err != nil {
+		return err
+	}
+```
+
+Substitua o corpo de `MsUnlock` (hoje um comentário sem efeito) por:
+
+```go
+// MsUnlock grava o registro corrente no banco via UPDATE — fecha o ciclo
+// DbAppend/RecLock -> FieldPut (via alias->campo) -> MsUnlock. Antes desta
+// correção, era um no-op: toda mutação via FieldPut ficava só em memória e
+// se perdia ao fechar o processo.
+func (e *SQLiteEngine) MsUnlock() error {
+	if e.current < 0 || e.current >= len(e.records) {
+		return nil
+	}
+	record := e.records[e.current]
+	recno, ok := record["R_E_C_N_O_"]
+	if !ok {
+		return fmt.Errorf("MsUnlock: registro sem R_E_C_N_O_")
+	}
+
+	var setClauses []string
+	var vals []any
+	for _, c := range e.columns {
+		if c.name == "R_E_C_N_O_" {
+			continue
+		}
+		setClauses = append(setClauses, c.name+" = ?")
+		vals = append(vals, valueToSQL(record[c.name]))
+	}
+	vals = append(vals, valueToSQL(recno))
+
+	query := fmt.Sprintf("UPDATE %s SET %s WHERE R_E_C_N_O_ = ?", e.alias, strings.Join(setClauses, ", "))
+	_, err := e.db.Exec(query, vals...)
+	return err
+}
+
+// valueToSQL converte um advplrt.Value de volta pro tipo Go que o driver
+// SQL espera — inverso de convertDBValue.
+func valueToSQL(v advplrt.Value) any {
+	if v == nil {
+		return nil
+	}
+	switch v.Type() {
+	case "N":
+		return v.(*advplrt.NumberValue).Val
+	case "C", "M":
+		return v.(*advplrt.StringValue).Val
+	case "L":
+		if v.(*advplrt.BoolValue).Val {
+			return 1
+		}
+		return 0
+	default:
+		return v.String()
+	}
+}
+
+// Append insere um registro em branco de verdade (valores tipo-apropriados
+// pela coluna: numérico 0, texto "") e posiciona nele — DbAppend() no
+// AdvPL. Antes desta correção era um no-op: RecCount() não mudava.
+func (e *SQLiteEngine) Append() error {
+	if e.alias == "" || len(e.columns) == 0 {
+		return fmt.Errorf("DbAppend: nenhuma área selecionada")
+	}
+
+	var cols []string
+	var placeholders []string
+	var vals []any
+	blank := make(map[string]advplrt.Value)
+	for _, c := range e.columns {
+		if c.name == "R_E_C_N_O_" {
+			continue
+		}
+		var v any
+		switch {
+		case c.name == "D_E_L_E_T_":
+			v = " "
+			blank[c.name] = advplrt.NewString(" ")
+		case c.name == "R_E_C_D_E_L_":
+			v = 0
+			blank[c.name] = advplrt.NewNumber(0)
+		case strings.Contains(c.sqlType, "INT") || strings.Contains(c.sqlType, "REAL") || strings.Contains(c.sqlType, "NUM"):
+			v = 0
+			blank[c.name] = advplrt.NewNumber(0)
+		default:
+			v = ""
+			blank[c.name] = advplrt.NewString("")
+		}
+		cols = append(cols, c.name)
+		placeholders = append(placeholders, "?")
+		vals = append(vals, v)
+	}
+
+	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", e.alias, strings.Join(cols, ","), strings.Join(placeholders, ","))
+	res, err := e.db.Exec(query, vals...)
+	if err != nil {
+		return err
+	}
+	newRecno, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	blank["R_E_C_N_O_"] = advplrt.NewNumber(float64(newRecno))
+	e.records = append(e.records, blank)
+	e.current = len(e.records) - 1
+	return nil
+}
+
+// FieldPos devolve a posição 1-based da coluna física — 0 se não existir.
+// Antes desta correção era um stub, sempre devolvia 0.
+func (e *SQLiteEngine) FieldPos(field string) int {
+	field = strings.ToUpper(field)
+	for i, c := range e.columns {
+		if c.name == field {
+			return i + 1
+		}
+	}
+	return 0
+}
+```
+
+- [ ] **Step 5: Adicionar `Append`/`FieldPos` à interface `DBEngine` em `pkg/vm/vm.go`**
+
+Localize `type DBEngine interface` e adicione as duas linhas (mantendo o resto igual):
+
+```go
+type DBEngine interface {
+	SelectArea(alias string) error
+	Seek(key string) (bool, error)
+	Skip(count int) error
+	GoTop() error
+	GoBottom() error
+	EOF() bool
+	BOF() bool
+	FieldGet(field string) (advplrt.Value, error)
+	FieldPut(field string, val advplrt.Value) error
+	RecLock() error
+	MsUnlock() error
+	RecCount() int
+	RecNo() int
+	Append() error
+	FieldPos(field string) int
+}
+```
+
+- [ ] **Step 6: Ligar `DBAPPEND` e `FIELDPOS` às novas natives em `pkg/vm/natives.go`**
+
+Substitua o corpo de `"DBAPPEND"` (hoje `return advplrt.Nil, nil`):
+
+```go
+		"DBAPPEND": func(args []advplrt.Value) (advplrt.Value, error) {
+			if v.dbEngine != nil {
+				return advplrt.Nil, v.dbEngine.Append()
+			}
+			return advplrt.Nil, nil
+		},
+```
+
+Substitua o corpo de `"FIELDPOS"` (hoje `return advplrt.NewNumber(0), nil`):
+
+```go
+		"FIELDPOS": func(args []advplrt.Value) (advplrt.Value, error) {
+			if v.dbEngine != nil {
+				name := advplrt.ToString(getArg(args, 0))
+				return advplrt.NewNumber(float64(v.dbEngine.FieldPos(name))), nil
+			}
+			return advplrt.NewNumber(0), nil
+		},
+```
+
+- [ ] **Step 7: Rodar o fixture de novo e confirmar que passa**
+
+Run: `cd /home/peder/Projetos/AdvPP && go build -o advplc ./cmd/advplc && ./advplc run tests/workarea_test.prw`
+Expected:
+```
+qtd=1
+codigo=X1
+valor=42
+fieldpos=1
+```
+
+- [ ] **Step 8: Escrever o teste Go de regressão**
+
+Crie `cmd/advplc/workarea_test.go` (mesmo padrão de `cmd/advplc/tcsql_test.go`):
+
+```go
+package main
+
+import (
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+)
+
+// TestWorkareaFixture roda tests/workarea_test.prw — exercita a API
+// clássica de work-area (DbAppend/RecLock/FieldPut/MsUnlock) com
+// persistência real. Ver CHANGELOG.
+func TestWorkareaFixture(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builda o binário; pulado com -short")
+	}
+
+	repoRoot, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatalf("filepath.Abs: %v", err)
+	}
+	binName := "advplc"
+	if runtime.GOOS == "windows" {
+		binName += ".exe"
+	}
+	binPath := filepath.Join(t.TempDir(), binName)
+	build := exec.Command("go", "build", "-o", binPath, "./cmd/advplc")
+	build.Dir = repoRoot
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("go build: %v\n%s", err, out)
+	}
+
+	run := exec.Command(binPath, "run", "tests/workarea_test.prw")
+	run.Dir = repoRoot
+	out, err := run.CombinedOutput()
+	if err != nil {
+		t.Fatalf("advplc run tests/workarea_test.prw falhou: %v\n%s", err, out)
+	}
+	want := []string{"qtd=1", "codigo=X1", "valor=42", "fieldpos=1"}
+	got := string(out)
+	for _, w := range want {
+		if !strings.Contains(got, w) {
+			t.Errorf("saída não contém %q; saída completa:\n%s", w, got)
+		}
+	}
+}
+```
+
+Run: `cd /home/peder/Projetos/AdvPP && go test ./cmd/advplc/... -run TestWorkareaFixture -v`
+Expected: `--- PASS: TestWorkareaFixture`
+
+- [ ] **Step 9: Rodar a suíte completa (zero regressão)**
+
+Run: `cd /home/peder/Projetos/AdvPP && go build ./... && go vet ./... && go test ./...`
+Expected: todos os pacotes `ok`, nenhum `FAIL`
+
+- [ ] **Step 10: Documentar no CHANGELOG e commitar**
+
+Em `CHANGELOG.md`, adicione no topo de `## [Não lançado]`:
+
+```markdown
+### `DbAppend`/`RecLock`/`FieldPut`/`MsUnlock` — persistência real
+
+A API clássica de work-area do AdvPP era stub: `DbAppend()` não criava
+registro nenhum (`RecCount()` não mudava), `FieldPut` (via `alias->campo :=
+valor`) só mutava memória, `MsUnlock()` não gravava nada, `FieldPos` sempre
+devolvia `0`. Corrigido: `DbAppend()` insere um registro real (`INSERT`,
+valores em branco tipo-apropriados por coluna), `MsUnlock()` grava o
+registro corrente via `UPDATE`, `FieldPos` resolve a posição física real.
+Achado confirmado por teste direto durante o planejamento do GesCon.
+```
+
+Run:
+```bash
+cd /home/peder/Projetos/AdvPP
+git add pkg/db/sqlite.go pkg/vm/vm.go pkg/vm/natives.go tests/workarea_test.prw cmd/advplc/workarea_test.go CHANGELOG.md
+git commit -m "db: persistência real em DbAppend/RecLock/FieldPut/MsUnlock"
+```
+
+### Task 3: Classe `TMailMessage` (envio de e-mail via `net/smtp`)
+
+**Files:**
+- Create: `pkg/vm/mail_native.go`
+- Modify: `pkg/compiler/codegen.go` (mapa de classes nativas)
+- Modify: `pkg/vm/vm.go` (instanciação + dispatch de método)
+- Test: `tests/mail_test.prw` (novo)
+- Test: `cmd/advplc/mail_test.go` (novo)
+- Modify: `CHANGELOG.md`
+
+**Interfaces:**
+- Consumes: nenhuma capacidade de outro task deste plano.
+- Produces: classe `TMailMessage` — `New()`, `SetServer(cHost, cPorta)`, `SetAuth(cUser, cSenha)`, `SetFrom(cEmail)`, `AddTo(cEmail)`, `SetSubject(cAssunto)`, `SetBody(cCorpo)`, `Send() As Logical` (envia via SMTP real, `.T.`/erro).
+
+**Nota sobre teste**: `Send()` real exige um servidor SMTP de verdade — o fixture testa o caminho de validação (erro claro quando `Send()` é chamado sem `SetServer`/`SetFrom`/`AddTo`), não um envio de rede de fato. Envio real fica pra verificação manual com um servidor SMTP disponível (não é possível automatizar sem credenciais externas).
+
+- [ ] **Step 1: Escrever o teste**
+
+```advpl
+// tests/mail_test.prw — TMailMessage: caminho de validação (Send() sem
+// configurar servidor/remetente/destinatário deve falhar com erro claro,
+// não travar nem enviar nada). Envio real de rede não é testável aqui sem
+// um servidor SMTP disponível — ver nota no plano de implementação.
+User Function MailTest()
+    Local oMail := TMailMessage():New()
+    Local lErro := .F.
+
+    Begin Sequence
+        oMail:Send()
+    Recover
+        lErro := .T.
+    End Sequence
+
+    ConOut("erro_sem_config=" + cValToChar(lErro))
+
+    oMail:SetServer("smtp.exemplo.invalido", "587")
+    oMail:SetFrom("sindico@exemplo.invalido")
+    oMail:AddTo("condomino@exemplo.invalido")
+    oMail:SetSubject("Teste")
+    oMail:SetBody("Corpo do teste")
+
+    // Servidor não existe de verdade — Send() deve falhar (erro de rede),
+    // não travar o processo nem devolver sucesso falso.
+    Local lErro2 := .F.
+    Begin Sequence
+        oMail:Send()
+    Recover
+        lErro2 := .T.
+    End Sequence
+    ConOut("erro_servidor_invalido=" + cValToChar(lErro2))
+Return
+```
+
+- [ ] **Step 2: Rodar e confirmar que falha (classe não existe)**
+
+Run: `cd /home/peder/Projetos/AdvPP && go build -o advplc ./cmd/advplc && ./advplc run tests/mail_test.prw`
+Expected: erro de classe/função desconhecida (`TMailMessage` ou `TMAILMESSAGE`)
+
+- [ ] **Step 3: Implementar `pkg/vm/mail_native.go`**
+
+```go
+package vm
+
+import (
+	"fmt"
+	"net/smtp"
+	"strings"
+
+	advplrt "github.com/advpl/compiler/pkg/runtime"
+)
+
+// mailState é o estado Go da classe TMailMessage: parâmetros da mensagem e
+// do servidor SMTP, setados via métodos antes de Send() (mesmo estilo de
+// configuração por método já usado em WSRestServer/MCPServer neste
+// projeto, em vez de emular a API por-propriedade do TMailMessage real do
+// Protheus). Envio via net/smtp da stdlib — sem CGO, sem dependência
+// externa, mesmo padrão do resto do AdvPP.
+type mailState struct {
+	from    string
+	to      []string
+	subject string
+	body    string
+	server  string
+	port    string
+	user    string
+	pass    string
+}
+
+func newTMailMessageObject() *advplrt.ObjectValue {
+	obj := advplrt.NewObject("TMailMessage", nil)
+	obj.Native = &mailState{port: "587"}
+	return obj
+}
+
+// callTMailMessageMethod implementa a classe nativa TMailMessage: envio de
+// e-mail real via SMTP (net/smtp, stdlib) — capacidade de compilador nova,
+// motivada pela necessidade futura de mala direta do GesCon (o GesCon em
+// si não consome esta classe ainda; fica disponível pro Plano 2).
+func (v *VM) callTMailMessageMethod(obj *advplrt.ObjectValue, method string, args []advplrt.Value) error {
+	st, ok := obj.Native.(*mailState)
+	if !ok {
+		return fmt.Errorf("TMailMessage: objeto sem estado interno")
+	}
+
+	switch method {
+	case "NEW":
+		v.push(obj)
+	case "SETSERVER":
+		st.server = advplrt.ToString(getArg(args, 0))
+		if len(args) > 1 {
+			st.port = advplrt.ToString(args[1])
+		}
+		v.push(advplrt.Nil)
+	case "SETAUTH":
+		st.user = advplrt.ToString(getArg(args, 0))
+		st.pass = advplrt.ToString(getArg(args, 1))
+		v.push(advplrt.Nil)
+	case "SETFROM":
+		st.from = advplrt.ToString(getArg(args, 0))
+		v.push(advplrt.Nil)
+	case "ADDTO":
+		st.to = append(st.to, advplrt.ToString(getArg(args, 0)))
+		v.push(advplrt.Nil)
+	case "SETSUBJECT":
+		st.subject = advplrt.ToString(getArg(args, 0))
+		v.push(advplrt.Nil)
+	case "SETBODY":
+		st.body = advplrt.ToString(getArg(args, 0))
+		v.push(advplrt.Nil)
+	case "SEND":
+		if st.server == "" {
+			return fmt.Errorf("TMailMessage:Send: chame SetServer() primeiro")
+		}
+		if st.from == "" || len(st.to) == 0 {
+			return fmt.Errorf("TMailMessage:Send: chame SetFrom() e AddTo() primeiro")
+		}
+		msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\n\r\n%s\r\n",
+			st.from, strings.Join(st.to, ", "), st.subject, st.body)
+		var auth smtp.Auth
+		if st.user != "" {
+			auth = smtp.PlainAuth("", st.user, st.pass, st.server)
+		}
+		addr := st.server + ":" + st.port
+		if err := smtp.SendMail(addr, auth, st.from, st.to, []byte(msg)); err != nil {
+			v.push(advplrt.False)
+			return err
+		}
+		v.push(advplrt.True)
+	default:
+		return fmt.Errorf("TMailMessage: método desconhecido %s", method)
+	}
+	return nil
+}
+```
+
+- [ ] **Step 4: Registrar a classe (3 pontos de integração)**
+
+Em `pkg/compiler/codegen.go`, ache o mapa de classes nativas (contém `"MCPSERVER": true,` e `"WSRESTSERVER": true,`) e adicione:
+
+```go
+	"TMAILMESSAGE": true,
+```
+
+Em `pkg/vm/vm.go`, na função de instanciação (switch que contém `case "MCPSERVER": v.push(newMCPServerObject()); return nil`), adicione:
+
+```go
+		case "TMAILMESSAGE":
+			v.push(newTMailMessageObject())
+			return nil
+```
+
+Na função `callNativeMethod` (switch em `obj.ClassName`, contém `case "MCPServer": return v.callMCPServerMethod(...)`), adicione:
+
+```go
+	case "TMailMessage":
+		return v.callTMailMessageMethod(obj, upperMethod, args)
+```
+
+- [ ] **Step 5: Rodar e confirmar que passa**
+
+Run: `cd /home/peder/Projetos/AdvPP && go build -o advplc ./cmd/advplc && ./advplc run tests/mail_test.prw`
+Expected:
+```
+erro_sem_config=.T.
+erro_servidor_invalido=.T.
+```
+
+- [ ] **Step 6: Escrever o teste Go de regressão**
+
+Crie `cmd/advplc/mail_test.go` (mesmo padrão dos anteriores):
+
+```go
+package main
+
+import (
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+)
+
+// TestMailFixture roda tests/mail_test.prw — exercita a classe
+// TMailMessage no caminho de validação (Send() sem config falha com erro
+// claro; envio de rede real não é testável sem servidor SMTP). Ver
+// CHANGELOG.
+func TestMailFixture(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builda o binário; pulado com -short")
+	}
+
+	repoRoot, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatalf("filepath.Abs: %v", err)
+	}
+	binName := "advplc"
+	if runtime.GOOS == "windows" {
+		binName += ".exe"
+	}
+	binPath := filepath.Join(t.TempDir(), binName)
+	build := exec.Command("go", "build", "-o", binPath, "./cmd/advplc")
+	build.Dir = repoRoot
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("go build: %v\n%s", err, out)
+	}
+
+	run := exec.Command(binPath, "run", "tests/mail_test.prw")
+	run.Dir = repoRoot
+	out, err := run.CombinedOutput()
+	if err != nil {
+		t.Fatalf("advplc run tests/mail_test.prw falhou: %v\n%s", err, out)
+	}
+	want := []string{"erro_sem_config=.T.", "erro_servidor_invalido=.T."}
+	got := string(out)
+	for _, w := range want {
+		if !strings.Contains(got, w) {
+			t.Errorf("saída não contém %q; saída completa:\n%s", w, got)
+		}
+	}
+}
+```
+
+Run: `cd /home/peder/Projetos/AdvPP && go test ./cmd/advplc/... -run TestMailFixture -v`
+Expected: `--- PASS: TestMailFixture`
+
+- [ ] **Step 7: Rodar a suíte completa (zero regressão)**
+
+Run: `cd /home/peder/Projetos/AdvPP && go build ./... && go vet ./... && go test ./...`
+Expected: todos os pacotes `ok`, nenhum `FAIL`
+
+- [ ] **Step 8: Documentar no CHANGELOG e commitar**
+
+Em `CHANGELOG.md`, adicione no topo de `## [Não lançado]`:
+
+```markdown
+### Classe `TMailMessage` — envio de e-mail real (`net/smtp`)
+
+Nova capacidade de compilador: `TMailMessage():New()` + `SetServer`/
+`SetAuth`/`SetFrom`/`AddTo`/`SetSubject`/`SetBody`/`Send()` envia e-mail via
+SMTP real (stdlib `net/smtp`, sem CGO, sem dependência externa). Motivada
+pela necessidade futura de mala direta do GesCon — capacidade adicionada
+ao compilador antes do consumidor de verdade (decisão consciente do
+usuário, adiantando um item que já estava no roadmap).
+```
+
+Run:
+```bash
+cd /home/peder/Projetos/AdvPP
+git add pkg/vm/mail_native.go pkg/compiler/codegen.go pkg/vm/vm.go tests/mail_test.prw cmd/advplc/mail_test.go CHANGELOG.md
+git commit -m "vm: classe TMailMessage — envio de e-mail real via net/smtp"
+```
+
+### Task 4: Publicar release v1.22.0 e apontar o GesCon pra ela
 
 **Files:**
 - Modify: `CHANGELOG.md` (corte de versão, mesmo padrão das releases anteriores)
 
 **Interfaces:**
-- Consumes: commit do Task 1 já testado e limpo.
-- Produces: binário `advplc` v1.22.0 instalado em `~/.local/bin` (ou onde o GesCon vai rodar), com `TCSqlExec`/`TCSqlQuery` disponíveis.
+- Consumes: commits dos Tasks 1-3, já testados e limpos.
+- Produces: binário `advplc` v1.22.0 instalado em `~/.local/bin` (ou onde o GesCon vai rodar), com `TCSqlExec`/`TCSqlQuery`, persistência real de work-area, e `TMailMessage` disponíveis.
 
 - [ ] **Step 1: Cortar a versão no CHANGELOG**
 
@@ -222,7 +864,8 @@ Em `CHANGELOG.md`, adicione logo abaixo de `## [Não lançado]`:
 ```markdown
 ## [1.22.0] — 2026-07-24
 
-`TCSqlExec`/`TCSqlQuery` — SQL direto pra User Function, motivado por uso
+`TCSqlExec`/`TCSqlQuery`, persistência real de `DbAppend`/`RecLock`/
+`FieldPut`/`MsUnlock`, e classe `TMailMessage` — todas motivadas por uso
 real (GesCon).
 ```
 
@@ -230,7 +873,7 @@ Run:
 ```bash
 cd /home/peder/Projetos/AdvPP
 git add CHANGELOG.md
-git commit -m "release: cut v1.22.0 (TCSqlExec/TCSqlQuery)"
+git commit -m "release: cut v1.22.0 (TCSql, persistência real, TMailMessage)"
 git push origin master
 ```
 
@@ -242,13 +885,13 @@ Expected: tag `v1.22.0` criada e empurrada, link do GitHub Actions impresso
 - [ ] **Step 3: Instalar a versão nova localmente pro GesCon usar**
 
 Run: `cd /home/peder/Projetos/AdvPP && go build -o ~/.local/bin/advplc ./cmd/advplc && ~/.local/bin/advplc version`
-Expected: `advplc v1.22.0` (ou a versão local buildada, mesmo se a release do GitHub Actions ainda estiver rodando — o binário local já tem a native)
+Expected: `advplc v1.22.0` (ou a versão local buildada, mesmo se a release do GitHub Actions ainda estiver rodando — o binário local já tem as natives)
 
 ---
 
 ## Parte B — GesCon: schema e camada de acesso
 
-### Task 3: Schema SQL (DDL + metadados SX3 pros títulos de coluna)
+### Task 5: Schema SQL (DDL + metadados SX3 pros títulos de coluna)
 
 **Files:**
 - Create: `~/Projetos/GesCon/schema.sql`
@@ -374,7 +1017,7 @@ git add schema.sql scripts/bootstrap-db.sh
 git commit -m "db: schema v1 (Unidade, Condomino, Despesa, Cobranca, Usuario) + metadados SX3"
 ```
 
-### Task 4: Camada de acesso (`src/db.prw`)
+### Task 6: Camada de acesso (`src/db.prw`)
 
 **Files:**
 - Create: `~/Projetos/GesCon/src/db.prw`
@@ -439,13 +1082,13 @@ git commit -m "db: camada de acesso (GcSqlLit)"
 
 ## Parte C — Cadastros (CRUD via FWMBrowse)
 
-### Task 5: Cadastro de Condôminos
+### Task 7: Cadastro de Condôminos
 
 **Files:**
 - Create: `~/Projetos/GesCon/src/condominos.prw`
 
 **Interfaces:**
-- Consumes: tabela `CON` (Task 3).
+- Consumes: tabela `CON` (Task 5).
 - Produces: `User Function GcCondominos()` — abre o browse; CRUD completo (Incluir/Alterar/Excluir) vem de graça do `FWMBrowse`, sem código adicional.
 
 - [ ] **Step 1: Escrever `src/condominos.prw`**
@@ -477,13 +1120,13 @@ git add src/condominos.prw
 git commit -m "cadastro: condôminos (FWMBrowse sobre CON)"
 ```
 
-### Task 6: Cadastro de Unidades
+### Task 8: Cadastro de Unidades
 
 **Files:**
 - Create: `~/Projetos/GesCon/src/unidades.prw`
 
 **Interfaces:**
-- Consumes: tabela `UNI` (Task 3).
+- Consumes: tabela `UNI` (Task 5).
 - Produces: `User Function GcUnidades()`.
 
 - [ ] **Step 1: Escrever `src/unidades.prw`**
@@ -515,13 +1158,13 @@ git add src/unidades.prw
 git commit -m "cadastro: unidades (FWMBrowse sobre UNI)"
 ```
 
-### Task 7: Lançamento de Despesas
+### Task 9: Lançamento de Despesas
 
 **Files:**
 - Create: `~/Projetos/GesCon/src/despesas.prw`
 
 **Interfaces:**
-- Consumes: tabela `DES` (Task 3).
+- Consumes: tabela `DES` (Task 5).
 - Produces: `User Function GcDespesas()`.
 
 - [ ] **Step 1: Escrever `src/despesas.prw`**
@@ -529,7 +1172,7 @@ git commit -m "cadastro: unidades (FWMBrowse sobre UNI)"
 ```advpl
 // src/despesas.prw — lançamento de despesas. Mesmo padrão de browse das
 // telas anteriores; DES_VALOR <= 0 fica pra validação no Fechamento
-// Mensal (Task 8), não bloqueado aqui — FWMBrowse não expõe validação de
+// Mensal (Task 10), não bloqueado aqui — FWMBrowse não expõe validação de
 // campo customizada na v1 desta integração.
 #include "totvs.ch"
 
@@ -558,14 +1201,14 @@ git commit -m "cadastro: despesas (FWMBrowse sobre DES)"
 
 ## Parte D — Fechamento Mensal (o coração do sistema)
 
-### Task 8: Fechamento Mensal
+### Task 10: Fechamento Mensal
 
 **Files:**
 - Create: `~/Projetos/GesCon/src/fechamento.prw`
 - Test: `~/Projetos/GesCon/tests/fechamento_test.prw`
 
 **Interfaces:**
-- Consumes: `TCSqlExec`/`TCSqlQuery` (Task 1), `GcSqlLit` (Task 4), tabelas `UNI`/`DES`/`COB`.
+- Consumes: `TCSqlExec`/`TCSqlQuery` (Task 1), `GcSqlLit` (Task 6), tabelas `UNI`/`DES`/`COB`.
 - Produces: `User Function GcFecharMes(cCompetencia As Character) As Logical` — `.T.` se fechou, `.F.` se já estava fechada (trava) ou não havia nada a fechar.
 
 - [ ] **Step 1: Escrever o teste (cenário completo)**
@@ -682,14 +1325,14 @@ git commit -m "negocio: fechamento mensal (rateio por fração ideal, trava cont
 
 ## Parte E — Cobranças e Pagamento
 
-### Task 9: Tela de Cobranças + Registrar Pagamento
+### Task 11: Tela de Cobranças + Registrar Pagamento
 
 **Files:**
 - Create: `~/Projetos/GesCon/src/cobrancas.prw`
 - Test: `~/Projetos/GesCon/tests/pagamento_test.prw`
 
 **Interfaces:**
-- Consumes: `TCSqlExec`/`TCSqlQuery` (Task 1), `GcSqlLit` (Task 4), tabela `COB`.
+- Consumes: `TCSqlExec`/`TCSqlQuery` (Task 1), `GcSqlLit` (Task 6), tabela `COB`.
 - Produces:
   - `User Function GcCobrancas()` — browse (FWMBrowse sobre `COB`, leitura/consulta).
   - `User Function GcRegistrarPagamento(nRecno As Numeric, dData As Date) As Logical` — marca uma cobrança como paga.
@@ -765,13 +1408,13 @@ git commit -m "cobranca: tela de cobranças + registrar pagamento"
 
 ## Parte F — Ponto de entrada
 
-### Task 10: `gescon.prw` (entrada + navegação)
+### Task 12: `gescon.prw` (entrada + navegação)
 
 **Files:**
 - Create: `~/Projetos/GesCon/gescon.prw`
 
 **Interfaces:**
-- Consumes: `GcCondominos`, `GcUnidades`, `GcDespesas`, `GcCobrancas` (Tasks 5-9).
+- Consumes: `GcCondominos` (Task 7), `GcUnidades` (Task 8), `GcDespesas` (Task 9), `GcCobrancas` (Task 11).
 - Produces: ponto de entrada rodável via `advplc serve gescon.prw`.
 
 - [ ] **Step 1: Escrever `gescon.prw`**
@@ -806,7 +1449,7 @@ git add gescon.prw
 git commit -m "app: ponto de entrada (gescon.prw)"
 ```
 
-### Task 11: README do projeto
+### Task 13: README do projeto
 
 **Files:**
 - Create: `~/Projetos/GesCon/README.md`
@@ -826,7 +1469,8 @@ Ver design completo em
 
 ## Requisitos
 
-- `advplc` v1.22.0+ (natives `TCSqlExec`/`TCSqlQuery`)
+- `advplc` v1.22.0+ (natives `TCSqlExec`/`TCSqlQuery`, persistência real de
+  work-area, classe `TMailMessage`)
 - `sqlite3` (CLI, só para o bootstrap do schema)
 
 ## Rodando
@@ -848,7 +1492,9 @@ advplc run tests/pagamento_test.prw
 
 Cadastros (Unidades, Condôminos, Despesas), Fechamento Mensal (rateio por
 fração ideal), Cobranças + Registrar Pagamento. **Relatórios, mala direta e
-login ficam pro Plano 2** — ver spec para o escopo completo.
+login ficam pro Plano 2** — ver spec para o escopo completo. `TMailMessage`
+(envio real de e-mail) já existe no compilador desde este plano, mas nenhuma
+tela do GesCon a consome ainda.
 ```
 
 - [ ] **Step 2: Commitar**
@@ -865,9 +1511,12 @@ git commit -m "docs: README inicial"
 
 Este plano cobre o **motor financeiro núcleo** — a fatia que já produz um
 sistema funcional e testável de ponta a ponta (cadastro → despesa →
-fechamento → cobrança → pagamento). **Relatórios (balancete,
-inadimplência, extrato por unidade, despesas por categoria), mala direta e
-login** ficam para um Plano 2 separado, depois que este estiver
-implementado e validado — evita um plano único grande demais pra revisar
-com qualidade de uma vez, e cada plano entrega software funcionando por si
-só (ver critério de decomposição do `writing-plans`).
+fechamento → cobrança → pagamento) — mais três capacidades novas no
+compilador AdvPP (`TCSqlExec`/`TCSqlQuery`, persistência real de work-area,
+`TMailMessage`) motivadas por essa necessidade. **Relatórios (balancete,
+inadimplência, extrato por unidade, despesas por categoria), mala direta
+(agora com `TMailMessage` disponível pra envio real) e login** ficam para
+um Plano 2 separado, depois que este estiver implementado e validado —
+evita um plano único grande demais pra revisar com qualidade de uma vez, e
+cada plano entrega software funcionando por si só (ver critério de
+decomposição do `writing-plans`).
