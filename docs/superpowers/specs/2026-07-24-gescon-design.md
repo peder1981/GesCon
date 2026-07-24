@@ -139,3 +139,14 @@ Estratégia de teste dupla, aproveitando que isto é dogfooding do compilador:
   correto que "divisão igual" para uso real.
 - Mala direta gera conteúdo, não envia — SMTP fica para depois.
 - Login único de administrador — sem papéis/permissões nesta fase.
+- Vínculo Unidade→Condômino (`UNI_CONDOMINO`) é o código digitado como
+  texto, sem combo/lookup vinculado — `FWMBrowse` não expõe esse tipo de
+  campo relacionado na v1 desta integração. Aceitável para o volume de
+  dados de um condomínio (dezenas de unidades, não milhares).
+- API de banco descoberta durante o planejamento: a API clássica de
+  work-area do AdvPP (`DbAppend`/`RecLock`/`FieldPut`/`MsUnlock`) não
+  persiste dados de verdade (confirmado por teste direto) — só `FWMBrowse`
+  grava, via código interno acionado por clique na UI. GesCon depende de
+  `TCSqlExec`/`TCSqlQuery`, duas natives novas expostas no AdvPP v1.22.0
+  especificamente para viabilizar o Fechamento Mensal (que precisa gravar
+  a partir de lógica de negócio, não de clique de UI).
