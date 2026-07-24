@@ -21,7 +21,7 @@
     @since 2026-07-24
 */
 User Function GesCon()
-    Local aMenu := {"Unidades", "Condôminos", "Despesas", "Cobranças", "Fechamento Mensal", "Mala Direta", "Relatórios", "Sair"}
+    Local aMenu := {"Unidades", "Condôminos", "Despesas", "Cobranças", "Fechamento Mensal", "Mala Direta", "Relatórios", "Trocar Senha", "Sair"}
     Local nOpcao
     Local cCompetencia
     Local nEnviados

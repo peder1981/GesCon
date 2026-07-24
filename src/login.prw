@@ -74,10 +74,60 @@ User Function GcAutenticar()
 
     Local cSenha := FWGetText("Senha (sem campo mascarado na v1 — fica visível ao digitar):", "")
 
-    Local aConfere := TCSqlQuery("SELECT USR_LOGIN FROM USR WHERE USR_LOGIN = '" + GcSqlLit(cLogin) + ;
-        "' AND USR_SENHA = '" + GcSqlLit(FWHash(cSenha)) + "' AND D_E_L_E_T_ = ' '")
-    If Len(aConfere) == 0
+    If !GcCredenciaisValidas(cLogin, cSenha)
         MsgStop("Login ou senha inválidos.", "GesCon")
         Return .F.
     EndIf
+Return .T.
+
+/*/{Protheus.doc} GcCredenciaisValidas
+    Confere um login/senha contra a tabela USR (senha em hash) sem
+    pedir nada nem mostrar diálogo — usado por GcAutenticar e
+    GcTrocarSenha.
+    @type Function
+    @author GesCon
+    @since 2026-07-24
+    @param cLogin, character
+    @param cSenha, character, senha em texto puro (comparada por hash)
+    @return lOk, logical, .T. se login+senha batem com um usuário ativo
+*/
+User Function GcCredenciaisValidas(cLogin, cSenha)
+    Local aConfere := TCSqlQuery("SELECT USR_LOGIN FROM USR WHERE USR_LOGIN = '" + GcSqlLit(cLogin) + ;
+        "' AND USR_SENHA = '" + GcSqlLit(FWHash(cSenha)) + "' AND D_E_L_E_T_ = ' '")
+Return Len(aConfere) > 0
+
+/*/{Protheus.doc} GcTrocarSenha
+    Troca a senha de um usuário: pede login, senha atual (confere) e
+    a senha nova duas vezes (confirmação).
+    @type Function
+    @author GesCon
+    @since 2026-07-24
+    @return lOk, logical, .T. se a senha foi trocada
+*/
+User Function GcTrocarSenha()
+    Local cLogin := FWGetText("Login:", "")
+    If Empty(cLogin)
+        Return .F.
+    EndIf
+
+    Local cSenhaAtual := FWGetText("Senha atual:", "")
+    If !GcCredenciaisValidas(cLogin, cSenhaAtual)
+        MsgStop("Login ou senha atual inválidos.", "Trocar Senha")
+        Return .F.
+    EndIf
+
+    Local cSenhaNova := FWGetText("Nova senha:", "")
+    If Empty(cSenhaNova)
+        Return .F.
+    EndIf
+
+    Local cConfirma := FWGetText("Confirme a nova senha:", "")
+    If cSenhaNova != cConfirma
+        MsgStop("A confirmação não bate com a nova senha.", "Trocar Senha")
+        Return .F.
+    EndIf
+
+    TCSqlExec("UPDATE USR SET USR_SENHA = '" + GcSqlLit(FWHash(cSenhaNova)) + ;
+        "' WHERE USR_LOGIN = '" + GcSqlLit(cLogin) + "' AND D_E_L_E_T_ = ' '")
+    MsgInfo("Senha alterada com sucesso.", "Trocar Senha")
 Return .T.
