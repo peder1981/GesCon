@@ -39,26 +39,34 @@ ver [`FUNCIONAL.md`](FUNCIONAL.md).
 ```
 GesCon/
 ├── gescon.prw              # ponto de entrada — advplc serve gescon.prw
-├── schema.sql               # DDL das 8 tabelas + metadados SX3 (labels)
+├── schema.sql               # DDL das 11 tabelas + metadados SX3 (labels)
 ├── scripts/
 │   └── bootstrap-db.sh      # aplica schema.sql no banco compartilhado
 ├── src/
 │   ├── db.prw                # GcSqlLit — escape de literal SQL
-│   ├── login.prw             # GcLogin, GcCriarAdmin, GcAutenticar — gate de acesso
+│   ├── login.prw             # GcLogin, GcCriarAdmin, GcAutenticar, GcCredenciaisValidas,
+│   │                         #    GcTrocarSenha — gate de acesso e troca de senha
 │   ├── condominos.prw        # GcCondominos — cadastro (browse sobre CON)
 │   ├── unidades.prw          # GcUnidades — cadastro (browse sobre UNI)
 │   ├── despesas.prw          # GcDespesas — lançamento (browse sobre DES)
-│   ├── fechamento.prw        # GcFecharMes, GcProximoVencimento
+│   ├── fechamento.prw        # GcFecharMes, GcProximoVencimento, GcAtualizarInadimplentes
 │   ├── cobrancas.prw         # GcCobrancas, GcRegistrarPagamento
 │   ├── malas.prw             # GcMalaDireta — mala direta com envio real
-│   └── relatorios.prw        # Balancete/Inadimplência/Extrato/Despesas por categoria
+│   ├── relatorios.prw        # Balancete/Inadimplência/Extrato/Despesas por categoria
+│   ├── usuarios.prw          # GcMenuUsuarios, GcGerarToken, GcRevogarToken, GcCriarUsuario,
+│   │                         #    GcCriarAdminNovo, GcDateToIso, GcGerarTokenId
+│   ├── portal.prw            # GcPortalCondmino, GcAuthPortalToken, GcPortalBrowse,
+│   │                         #    GcPortalCalcCobrancas, GcSairPortal
+│   └── boleto.prw            # GcGeraBoleto, GcFormatLinhaDigitavel, GcGeraCodigoBarras
+│                           #    (Itaú/Bradesco)
 ├── tests/
 │   ├── db_test.prw
 │   ├── login_test.prw
 │   ├── fechamento_test.prw
 │   ├── pagamento_test.prw
 │   ├── malas_test.prw
-│   └── relatorios_test.prw
+│   ├── relatorios_test.prw
+│   └── portal_test.prw       # fixture end-to-end do portal (token+auth+cobranças)
 └── docs/
     ├── ARQUITETURA.md        # este arquivo
     ├── FUNCIONAL.md
@@ -72,7 +80,7 @@ query.
 
 ## Modelo de dados
 
-8 tabelas, todas com a convenção de exclusão lógica estilo Protheus
+11 tabelas, todas com a convenção de exclusão lógica estilo Protheus
 (`R_E_C_N_O_`/`D_E_L_E_T_`/`R_E_C_D_E_L_`) — ver `schema.sql` para o DDL
 completo.
 
@@ -82,17 +90,19 @@ completo.
 | `UNI` | `UNI_CODIGO`, `UNI_BLOCO`, `UNI_FRACAO`, `UNI_CONDOMINO` | Unidade — `UNI_CONDOMINO` é o `CON_CODIGO` do responsável, texto livre |
 | `DES` | `DES_DESCR`, `DES_CATEG`, `DES_VALOR`, `DES_COMPET`, `DES_DTLANC` | Despesa lançada numa competência ("YYYY-MM") |
 | `COB` | `COB_UNIDADE`, `COB_COMPET`, `COB_VALOR`, `COB_VENCTO`, `COB_STATUS`, `COB_DTPAG` | Cobrança — gerada só pelo Fechamento Mensal |
-| `USR` | `USR_LOGIN`, `USR_SENHA` | Usuário administrador único — `USR_SENHA` guarda o hash SHA-256 (`FWHash`), nunca texto puro |
+| `USR` | `USR_LOGIN`, `USR_SENHA`, `USR_PERFIL` | Usuário administrador — `USR_SENHA` guarda hash SHA-256 (`FWHash`), nunca texto puro; `USR_PERFIL` em `'ADMIN'` |
 | `RPT_INADIM` | `RIN_UNIDADE`, `RIN_COMPET`, `RIN_VALOR`, `RIN_VENCTO`, `RIN_ATRASO` | Snapshot do relatório de Inadimplência — recalculado a cada abertura |
 | `RPT_EXTRATO` | `REX_COMPET`, `REX_VALOR`, `REX_VENCTO`, `REX_STATUS`, `REX_DTPAG` | Snapshot do Extrato por Unidade — recalculado a cada abertura |
 | `RPT_DESCAT` | `RDC_CATEG`, `RDC_TOTAL` | Snapshot de Despesas por Categoria — recalculado a cada abertura |
+| `CFG_BOLETO` | `CFG_BANCO`, `CFG_AGENCIA`, `CFG_CONTA`, `CFG_COBRT`, `CFG_CARTEIRA` | Configuração de boleto bancário (código banco, agência, conta, carta/cartão, carteira) |
+| `GCT_TOKEN` | `TOKEN`, `USR_LOGIN`, `CON_CODIGO`, `UNI_CODIGO`, `CRIPTADO`, `VALIDO_ATE`, `USADO` | Token temporário de acesso do condômino ao portal — válido por 48h, marcado como usado na autenticação |
+| `RPT_COND_COBRANCAS` | `RCC_UNIDADE`, `RCC_COMPET`, `RCC_VALOR`, `RCC_VENCTO`, `RCC_STATUS`, `RCC_DTPAG` | Snapshot das cobranças do condômino no portal — gerado a partir de `COB` filtrado pela unidade do token |
 
 Relacionamentos: `UNI.UNI_CONDOMINO → CON.CON_CODIGO` (texto livre, sem
 FK/combo — ver "Limitações conhecidas"). `COB.COB_UNIDADE →
 UNI.UNI_CODIGO`. `DES` não se relaciona com unidade — despesas são do
-condomínio como um todo, rateadas por fração ideal no fechamento. As
-3 tabelas `RPT_*` não têm relacionamento formal — são só a área de
-staging de cada relatório tabular (ver seção "Relatórios" abaixo).
+condomínio como um todo, rateadas por fração ideal no fechamento. `GCT_TOKEN.UNI_CODIGO → UNI.UNI_CODIGO` (vincula token à unidade). `GCT_TOKEN.CON_CODIGO → CON.CON_CODIGO` (vincula token ao condômino). As tabelas `RPT_*` e `RPT_COND_COBRANCAS` não têm relacionamento formal — são só a área de
+staging de cada relatório/tabulação.
 
 A tabela `SX3` (compartilhada com outras ferramentas AdvPP) guarda
 metadados de coluna (título amigável, tipo, tamanho) que o `FWMBrowse`
@@ -112,12 +122,12 @@ ela falhariam.
 
 Solução adotada, consistente com como `GcFecharMes` já grava
 `Cobrança`: cada relatório tabular (Inadimplência, Extrato por
-Unidade, Despesas por Categoria) tem sua própria tabela `RPT_*` de
-"snapshot" — a função recalcula o conteúdo do zero (`DELETE` + `INSERT`)
-toda vez que é aberto, então nunca fica desatualizado, e o
-`FWMBrowse` funciona sem nenhuma mudança no AdvPP. Balancete Mensal é
-a exceção: é um resumo de 3 números (receitas/despesas/saldo), não uma
-lista — mostrado via `MsgInfo`, sem tabela nenhuma.
+Unidade, Despesas por Categoria) e o portal do condômino têm sua própria
+tabela `RPT_*` de "snapshot" — a função recalcula o conteúdo do zero
+(`DELETE` + `INSERT`) toda vez que é aberto, então nunca fica
+desatualizado, e o `FWMBrowse` funciona sem nenhuma mudança no AdvPP.
+Balancete Mensal é a exceção: é um resumo de 3 números (receitas/despesas/saldo),
+não uma lista — mostrado via `MsgInfo`, sem tabela nenhuma.
 
 Cada relatório tabular vem em duas funções — `GcXxxCalc()` (só grava o
 snapshot, testável via `advplc run`) e `GcXxx()` (chama a `Calc` e abre
@@ -137,6 +147,9 @@ gescon.prw ──include──> src/db.prw
            ──include──> src/fechamento.prw  (que também inclui db.prw)
            ──include──> src/malas.prw       (que também inclui db.prw)
            ──include──> src/relatorios.prw  (que também inclui db.prw)
+           ──include──> src/usuarios.prw   (que também inclui db.prw)
+           ──include──> src/portal.prw     (que também inclui db.prw)
+           ──include──> src/boleto.prw     (GcGeraBoleto — Itaú/Bradesco)
 ```
 
 `gescon.prw` inclui todas as telas — é o único arquivo raiz real do
@@ -172,11 +185,14 @@ depois de todos os `#include`s.
 | `GcLogin` | `src/login.prw` | `GcLogin()` | `logical` — `.T.` se autenticado |
 | `GcCriarAdmin` | `src/login.prw` | `GcCriarAdmin()` | `logical` — bootstrap do 1º acesso |
 | `GcAutenticar` | `src/login.prw` | `GcAutenticar()` | `logical` — confere login/senha (hash) |
+| `GcCredenciaisValidas` | `src/login.prw` | `GcCredenciaisValidas(cLogin, cSenha)` | `logical` |
+| `GcTrocarSenha` | `src/login.prw` | `GcTrocarSenha()` | `logical` — `.T.` se trocou |
 | `GcCondominos` | `src/condominos.prw` | `GcCondominos()` | — (abre browse) |
 | `GcUnidades` | `src/unidades.prw` | `GcUnidades()` | — (abre browse) |
 | `GcDespesas` | `src/despesas.prw` | `GcDespesas()` | — (abre browse) |
-| `GcFecharMes` | `src/fechamento.prw` | `GcFecharMes(cCompetencia)` | `logical` — `.T.` se fechou |
+| `GcFecharMes` | `src/fechamento.prw` | `GcFecharMes(cCompetencia, nDiaVenc)` | `logical` — `.T.` se fechou |
 | `GcProximoVencimento` | `src/fechamento.prw` | `GcProximoVencimento(cCompetencia)` | `character` — "YYYY-MM-DD" |
+| `GcAtualizarInadimplentes` | `src/fechamento.prw` | `GcAtualizarInadimplentes()` | — (promove pendentes→atrasados) |
 | `GcCobrancas` | `src/cobrancas.prw` | `GcCobrancas()` | — (abre browse) |
 | `GcRegistrarPagamento` | `src/cobrancas.prw` | `GcRegistrarPagamento(nRecno, dData)` | `logical` |
 | `GcMalaDireta` | `src/malas.prw` | `GcMalaDireta(cCompetencia)` | `numeric` — quantidade enviada |
@@ -185,6 +201,21 @@ depois de todos os `#include`s.
 | `GcExtratoUnidadeCalc` / `GcExtratoUnidade` | `src/relatorios.prw` | `GcExtratoUnidadeCalc(cUnidade)` / `GcExtratoUnidade(cUnidade)` | `numeric` (Calc) / — (abre browse) |
 | `GcDespesasCategoriaCalc` / `GcDespesasCategoria` | `src/relatorios.prw` | `GcDespesasCategoriaCalc(cCompetencia)` / `GcDespesasCategoria(cCompetencia)` | `numeric` (Calc) / — (abre browse) |
 | `GcMenuRelatorios` | `gescon.prw` | `GcMenuRelatorios()` | — (submenu de Relatórios) |
+| `GcMenuUsuarios` | `src/usuarios.prw` | `GcMenuUsuarios()` | — (submenu de usuários: gerar token, revogar, criar) |
+| `GcGerarToken` | `src/usuarios.prw` | `GcGerarToken()` | — (gera token para condômino, lista CON-UNI) |
+| `GcRevogarToken` | `src/usuarios.prw` | `GcRevogarToken()` | — (revoga token ativo por DELETE lógico) |
+| `GcCriarUsuario` | `src/usuarios.prw` | `GcCriarUsuario()` | — (cria novo usuário admin) |
+| `GcCriarAdminNovo` | `src/usuarios.prw` | `GcCriarAdminNovo()` | `logical` |
+| `GcDateToIso` | `src/usuarios.prw` | `GcDateToIso(dData)` | `character` — data em ISO (YYYY-MM-DD) |
+| `GcGerarTokenId` | `src/usuarios.prw` | `GcGerarTokenId()` | `character` — token UUID-like 36 chars |
+| `GcPortalCondmino` | `src/portal.prw` | `GcPortalCondmino()` | `logical` — gateway do portal |
+| `GcAuthPortalToken` | `src/portal.prw` | `GcAuthPortalToken(cToken)` | `logical` — valida e marca token como usado |
+| `GcPortalBrowse` | `src/portal.prw` | `GcPortalBrowse()` | — (abre browse de cobranças da unidade) |
+| `GcPortalCalcCobrancas` | `src/portal.prw` | `GcPortalCalcCobrancas()` | `numeric` — qtd linhas geradas em RPT_COND_COBRANCAS |
+| `GcSairPortal` | `src/portal.prw` | `GcSairPortal()` | — (limpa estado do portal) |
+| `GcGeraBoleto` | `src/boleto.prw` | `GcGeraBoleto(nRecnoCob)` | `logical` — abre diálogo de configuração do boleto |
+| `GcFormatLinhaDigitavel` | `src/boleto.prw` | `GcFormatLinhaDigitavel(cBanco, cAgencia, cConta, cCobrta, cCarteira, nFatorVenc, nValor, cDV)` | `character` — linha digitável formatada |
+| `GcGeraCodigoBarras` | `src/boleto.prw` | `GcGeraCodigoBarras(cBanco, cAgencia, cConta, cCobrta, cCarteira, nFatorVenc, nValor, cDV)` | `character` — 44 digits do código de barras |
 
 ## Acesso a dados
 
@@ -203,6 +234,37 @@ ausência de aspas/caracteres de escape.
 As telas (`GcCondominos`, `GcUnidades`, `GcDespesas`, `GcCobrancas`) não
 usam SQL direto — usam `FWMBrowse`, que grava via código Go interno do
 AdvPP (não pelo `TCSqlExec`/work-area), acionado por clique na UI web.
+
+## Gestão de usuários (Plano 2)
+
+`GcMenuUsuarios()` abre submenu com 3 opções: gerar token, revogar token
+e criar novo admin. `GcCriarUsuario()` → `GcCriarAdminNovo()` insere na
+tabela `USR` com `USR_PERFIL = 'ADMIN'` e hash SHA-256 da senha — mesmo
+padrão do login principal mas via `FWGetText cSenha` normal (sem
+máscara, já que o campo de senha mascarado exige `bIsPassword=.T.`).
+
+## Portal do condômino (Plano 2)
+
+GcPortalCondmino() autentica um token na tabela `GCT_TOKEN`, marca como
+usado (`USADO = 1`) e abre `FWMBrowse` sobre `RPT_COND_COBRANCAS`, que
+é um snapshot recalculado do zero pela função `GcPortalCalcCobrancas()`
+(contém só as cobranças da unidade vinculada ao token). O token é válido
+por 48h e pode ser revogado a qualquer momento pelo admin via
+`GcRevogarToken()` (DELETE lógico em `GCT_TOKEN`).
+
+O fluxo de geração de token (`GcGerarToken()`) lista condôminos com sua
+unidade, o admin seleciona por índice, e o sistema gera um token
+UUID-like via `GcGerarTokenId()` (SHA-256 de timestamp + random AdvPL).
+O token é mostrado ao admin em `MsgInfo` para repassar ao condômino.
+
+## Boleto bancário (Plano 2)
+
+`GcGeraBoleto(nRecnoCob)` abre diálogo para preencher parâmetros do
+boleto (banco, agência, conta, carta/cedente, carteira, fator vencimento,
+valor, DV), depois monta a linha digitável com DV via
+`GcFormatLinhaDigitavel()` e o código de barras em 44 dígitos via
+`GcGeraCodigoBarras()` — suportando bancos Itaú (341/237) e Bradesco
+(237).
 
 ## Decisões e limitações conhecidas
 
@@ -288,6 +350,9 @@ compilador (não só uso). Achados reais durante o desenvolvimento:
 - `FWHash` (v1.23.5) — hash SHA-256 (stdlib do Go), usado pelo login
   pra nunca gravar senha em texto puro; o AdvPP não tinha função de
   hash nenhuma antes disso.
+- `FWGetText` com 3º arg `bIsPassword` (v1.24.0) — campo de senha
+  mascarado em web e desktop, usado pela tela de login e criação de
+  admin.
 
 Ver o `CHANGELOG.md` do [AdvPP](https://github.com/peder1981/AdvPP)
 para o detalhe técnico completo de cada um.
