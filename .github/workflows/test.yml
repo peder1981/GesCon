@@ -1,0 +1,35 @@
+name: Unit Tests
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - '.github/workflows/test.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Build advplc
+        run: |
+          git clone https://github.com/peder1981/AdvPP.git advpp
+          cd advpp
+          go build -o advplc ./cmd/advplc
+          echo "$PWD" >> $GITHUB_PATH
+
+      - name: Run unit tests
+        run: |
+          for test in tests/*_test.prw; do
+            echo "Testing: $(basename $test)"
+            advplc run "$test" || exit 1
+          done
