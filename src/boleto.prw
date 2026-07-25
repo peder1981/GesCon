@@ -137,9 +137,6 @@ User Function GcBoletoFatorVenc(dData)
     nFator := Int(365.25 * (nAdjAno + 4716)) + Int(30.6001 * (nAdjMes + 1)) + nDia - 1524.5
 
     // Subtrair base 07/09/1997
-    If 9 <= 2
-        // nao aplica
-    EndIf
     nFator -= Int(365.25 * (1997 + 4716)) + Int(30.6001 * (9 + 1)) + 7 - 1524.5
 
     // Limitar a 4 digitos (padrao FEBRABAN): maximo expressavel = 9999

@@ -87,6 +87,8 @@ User Function GesCon()
                         GcMenuRelatorios()
                     Case nOpcao == 8
                         GcMenuUsuarios()
+                    Case nOpcao == 9
+                        GcTrocarSenha()
                     Otherwise
                         Exit
                 EndCase
