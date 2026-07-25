@@ -38,7 +38,9 @@ menu. Nenhum reinício de processo, nenhuma troca de porta/aba:
 5. Fechamento Mensal (pede a competência e o dia de vencimento, mostra o resultado)
 6. Mala Direta (pede a competência, mostra quantos e-mails foram enviados)
 7. Relatórios (abre um submenu — ver seção própria abaixo)
-8. Sair
+8. Usuários (gestão de usuários — criar novo admin, gerar/revogar tokens)
+9. Trocar Senha (altera a senha do usuário autenticado)
+10. Sair
 
 ## Telas
 
