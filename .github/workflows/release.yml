@@ -56,9 +56,9 @@ jobs:
           ADVPP_SRC: ${{ github.workspace }}/advpp
         run: |
           if [ "${{ matrix.target }}" = "windows-amd64" ]; then
-            GOOS=windows GOARCH=amd64 ../advpp/advplc build gescon.prw -o ${{ matrix.name }}
+            GOOS=windows GOARCH=amd64 ${{ github.workspace }}/advpp/advplc build gescon.prw -o ${{ matrix.name }}
           else
-            ../advpp/advplc build gescon.prw -o ${{ matrix.name }}
+            ${{ github.workspace }}/advpp/advplc build gescon.prw -o ${{ matrix.name }}
           fi
 
       - name: Verify binary
