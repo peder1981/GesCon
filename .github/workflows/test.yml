@@ -19,17 +19,29 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+          cache: true
 
-      - name: Build advplc
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Build and install advplc
         run: |
-          git clone https://github.com/peder1981/AdvPP.git advpp
-          cd advpp
-          go build -o advplc ./cmd/advplc
-          echo "$PWD" >> $GITHUB_PATH
+          git clone --depth 1 https://github.com/peder1981/AdvPP.git /tmp/advpp
+          cd /tmp/advpp
+          go build -o /tmp/advplc ./cmd/advplc
+          echo "/tmp" >> $GITHUB_PATH
+
+      - name: Verify advplc
+        run: /tmp/advplc version
 
       - name: Run unit tests
         run: |
           for test in tests/*_test.prw; do
-            echo "Testing: $(basename $test)"
-            advplc run "$test" || exit 1
+            echo "=== $(basename $test) ==="
+            /tmp/advplc run "$test" || exit 1
           done
