@@ -15,33 +15,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.24'
-          cache: true
-
-      - name: Cache Go modules
-        uses: actions/cache@v3
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Build and install advplc
+      - name: Download advplc binary
         run: |
-          git clone --depth 1 https://github.com/peder1981/AdvPP.git /tmp/advpp
+          mkdir -p /tmp/advpp
           cd /tmp/advpp
-          go build -o /tmp/advplc ./cmd/advplc
-          echo "/tmp" >> $GITHUB_PATH
+          # Download latest AdvPP release with advplc binary
+          curl -L https://github.com/peder1981/AdvPP/releases/download/v1.24.0/advplc-linux-amd64 \
+            -o advplc 2>/dev/null || \
+            curl -L https://github.com/peder1981/AdvPP/releases/latest/download/advplc-linux-amd64 \
+            -o advplc
+          chmod +x advplc
+          echo "/tmp/advpp" >> $GITHUB_PATH
 
       - name: Verify advplc
-        run: /tmp/advplc version
+        run: advplc version
 
       - name: Run unit tests
         run: |
           for test in tests/*_test.prw; do
             echo "=== $(basename $test) ==="
-            /tmp/advplc run "$test" || exit 1
+            advplc run "$test" || exit 1
           done
