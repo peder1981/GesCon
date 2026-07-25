@@ -2,9 +2,8 @@
 // v1, nunca implementada até agora). Login único de administrador, sem
 // papéis/permissões. Sem tela dedicada de cadastro de usuário na v1: se
 // a tabela USR estiver vazia, o primeiro acesso cria o administrador.
-// Limitação conhecida: FWGetText não tem campo de senha mascarado (não
-// existe essa capacidade no AdvPP hoje) — a senha fica visível ao
-// digitar. Senha nunca é gravada em texto puro — sempre via FWHash
+// Senha mascarada via 3º arg bIsPassword=.T. de FWGetText (AdvPP v1.24.0+).
+// Senha nunca é gravada em texto puro — sempre via FWHash
 // (SHA-256, AdvPP v1.23.5+).
 #include "totvs.ch"
 #include "db.prw"
@@ -49,7 +48,7 @@ User Function GcCriarAdmin()
         Return .F.
     EndIf
 
-    Local cSenha := FWGetText("Escolha uma senha para " + cLogin + " (sem campo mascarado na v1 — fica visível ao digitar):", "")
+    Local cSenha := FWGetText("Escolha uma senha para " + cLogin + ":", "", .T.)
     If Empty(cSenha)
         Return .F.
     EndIf
@@ -72,7 +71,7 @@ User Function GcAutenticar()
         Return .F.
     EndIf
 
-    Local cSenha := FWGetText("Senha (sem campo mascarado na v1 — fica visível ao digitar):", "")
+    Local cSenha := FWGetText("Senha:", "", .T.)
 
     If !GcCredenciaisValidas(cLogin, cSenha)
         MsgStop("Login ou senha inválidos.", "GesCon")
@@ -110,18 +109,18 @@ User Function GcTrocarSenha()
         Return .F.
     EndIf
 
-    Local cSenhaAtual := FWGetText("Senha atual:", "")
+    Local cSenhaAtual := FWGetText("Senha atual:", "", .T.)
     If !GcCredenciaisValidas(cLogin, cSenhaAtual)
         MsgStop("Login ou senha atual inválidos.", "Trocar Senha")
         Return .F.
     EndIf
 
-    Local cSenhaNova := FWGetText("Nova senha:", "")
+    Local cSenhaNova := FWGetText("Nova senha:", "", .T.)
     If Empty(cSenhaNova)
         Return .F.
     EndIf
 
-    Local cConfirma := FWGetText("Confirme a nova senha:", "")
+    Local cConfirma := FWGetText("Confirme a nova senha:", "", .T.)
     If cSenhaNova != cConfirma
         MsgStop("A confirmação não bate com a nova senha.", "Trocar Senha")
         Return .F.

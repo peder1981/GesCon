@@ -20,11 +20,9 @@ ainda), o sistema pede pra escolher login e senha e cria o
 administrador na hora. Nos acessos seguintes, pede login e senha e
 confere contra o que foi cadastrado (até 3 tentativas). A senha nunca
 é gravada em texto puro — sempre em hash SHA-256 (`FWHash`, AdvPP
-v1.23.5+).
-
-**Limitação conhecida**: não existe campo de senha mascarado no AdvPP
-hoje (`FWGetText` é um campo de texto comum) — a senha fica visível
-enquanto é digitada, tanto na criação quanto no login.
+v1.23.5+). O campo de senha é mascarado (3º argumento `bIsPassword=.T.`
+de `FWGetText`, AdvPP v1.24.0+) — os caracteres ficam ocultos ao
+digitar, tanto na criação quanto no login.
 
 ## Menu e navegação
 
@@ -134,15 +132,24 @@ Cada relatório recalcula seu conteúdo do zero toda vez que é aberto —
 sempre reflete os dados mais recentes, não fica desatualizado entre
 uma abertura e outra.
 
-## O que ainda não existe (Plano 2)
+## O que já existe (Plano 2 implementado)
 
-- **Papéis de usuário** — administrador único, sem porteiro nem portal
-  do condômino (login existe, mas sem controle de permissões).
-- **Campo de senha mascarado** — depende de uma capacidade que não
-  existe no AdvPP hoje (ver "Login" acima).
-- **Boleto bancário real** — Cobrança é um registro de débito interno
-  (valor, vencimento, status), não um boleto FEBRABAN com código de
-  barras/linha digitável.
+- **Gestão de usuários** — menu "Usuários" no principal com opções de
+  gerar token temporário, revogar token ativo e criar novo administrador.
+  Tokens são válidos por 48h e ficam marcados como usados ao primeiro login.
+- **Portal do condômino** — acesso read-only via token temporário. O
+  condômino cola o token recebido do admin e consulta apenas suas cobranças.
+- **Senha mascarada** — `FWGetText` com 3º argumento `bIsPassword=.T.`
+  esconde os caracteres digitados (AdvPP v1.24.0+).
+- **Boleto bancário Itaú/Bradesco** — geração de linha digitável e
+  código de barras para cobranças.
+
+## Limitações conhecidas (Plano 3+)
+
+- **Papéis de usuário/permissões finas** — hoje só há dois perfis: admin
+  (acesso total) e condômino (token read-only). Multi-usuário admin ou
+  controle granular de permissões ficam pro próximo ciclo.
+- **Multi-condomínio** — o sistema administra um condomínio por instância.
 
 ## Limitações conhecidas (v1)
 
@@ -160,5 +167,5 @@ uma abertura e outra.
   um relatório (o conteúdo é recalculado do zero na próxima abertura,
   então a edição não sobrevive), mas nada impede clicar. Mesma
   limitação técnica da tela de Cobranças.
-- Multi-condomínio, multi-usuário e boleto bancário real estão fora do
-  escopo desta fase — ver "O que ainda não existe" acima.
+- Multi-condomínio e permissões granulares ficam pro próximo ciclo — ver
+  "Limitações conhecidas (Plano 3+)" acima.
