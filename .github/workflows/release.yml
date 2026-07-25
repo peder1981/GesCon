@@ -1,0 +1,74 @@
+name: Release GesConApp
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-amd64
+            name: GesConApp-linux
+            flags: ''
+          - os: windows-latest
+            target: windows-amd64
+            name: GesConApp-win.exe
+            flags: '-buildmode=exe'
+          - os: macos-13
+            target: darwin-amd64
+            name: GesConApp-darwin
+            flags: ''
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout GesCon
+        uses: actions/checkout@v4
+
+      - name: Checkout AdvPP
+        uses: actions/checkout@v4
+        with:
+          repository: peder1981/AdvPP
+          path: advpp
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Build AdvPP compiler
+        run: |
+          cd advpp
+          go build -o advplc ./cmd/advplc
+          ./advplc version
+
+      - name: Bootstrap database schema
+        run: |
+          mkdir -p ~/.advpp
+          sqlite3 ~/.advpp/ADVPP.db < schema.sql
+        working-directory: .
+
+      - name: Build desktop app
+        env:
+          ADVPP_SRC: ${{ github.workspace }}/advpp
+        run: |
+          if [ "${{ matrix.target }}" = "windows-amd64" ]; then
+            GOOS=windows GOARCH=amd64 ../advpp/advplc build gescon.prw -o ${{ matrix.name }}
+          else
+            ../advpp/advplc build gescon.prw -o ${{ matrix.name }}
+          fi
+
+      - name: Verify binary
+        run: |
+          ls -lh ${{ matrix.name }}
+          file ${{ matrix.name }}
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
