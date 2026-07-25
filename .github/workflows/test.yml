@@ -1,0 +1,36 @@
+name: Unit Tests
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'schema.sql'
+      - '.github/workflows/test.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Build advplc from source
+        timeout-minutes: 30
+        run: |
+          git clone --depth 1 https://github.com/peder1981/AdvPP.git /tmp/advpp
+          cd /tmp/advpp
+          go build -o /tmp/advplc ./cmd/advplc
+
+      - name: Run tests
+        run: |
+          export PATH="/tmp:$PATH"
+          advplc version
+          for test in tests/*_test.prw; do
+            echo "Testing $(basename $test)..."
+            advplc run "$test" || exit 1
+          done
