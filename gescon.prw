@@ -15,10 +15,6 @@
 #include "src/usuarios.prw"
 #include "src/portal.prw"
 
-Private g_cUniPortal   := ""
-Private g_cConPortal   := ""
-Private g_lAutoPortal  := .F.
-
 /*/{Protheus.doc} GesCon
     Ponto de entrada do GesCon — sobe com `advplc serve gescon.prw`,
     mostra um menu navegando entre todas as telas.
@@ -36,6 +32,10 @@ User Function GesCon()
     Local nDiaVenc
     Local nPortal
     Local aPortal
+
+    Private g_cUniPortal   := ""
+    Private g_cConPortal   := ""
+    Private g_lAutoPortal  := .F.
 
     ConOut("GesCon — Sistema de Gestão Condominial")
 

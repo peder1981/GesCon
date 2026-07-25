@@ -1,0 +1,304 @@
+{
+  "metadata": {
+    "project_name": "GesCon",
+    "project_subtitle": "Sistema de Gestão Condominial",
+    "scanned_at": "2026-07-25",
+    "scanner_version": "reversa-scout v1",
+    "primary_language": "AdvPL/TLPP",
+    "language_distribution": {
+      "advpl": 22,
+      "markdown": 7,
+      "sql": 1,
+      "shell": 1,
+      "total": 31
+    }
+  },
+  "technology_stack": {
+    "primary_framework": "AdvPP",
+    "framework_version_min": "v1.23.1",
+    "database": "SQLite (shared ~/.advpp/ADVPP.db)",
+    "ui_modes": [
+      {
+        "name": "Web",
+        "command": "advplc serve gescon.prw",
+        "endpoint": "http://localhost:8080",
+        "renderer": "PO-UI/Angular",
+        "framework": "FWMBrowse"
+      },
+      {
+        "name": "Desktop",
+        "command": "advplc build gescon.prw -o GesConApp",
+        "renderer": "Fyne (native)",
+        "framework": "FWMBrowse",
+        "platforms": ["linux-x64", "windows-x64"]
+      }
+    ],
+    "mail": "TMailMessage (AdvPP stdlib, Go net/smtp)",
+    "authentication": "FWHash (SHA-256)",
+    "build_artifacts": [
+      "GesConApp (linux-x64, 38 MB)",
+      "GesConApp-win.exe (windows-x64, 53 MB)"
+    ]
+  },
+  "entry_points": [
+    {
+      "name": "gescon.prw",
+      "type": "main",
+      "purpose": "Web (advplc serve) and Desktop (advplc build)",
+      "requires_ui": true
+    },
+    {
+      "name": "tests/*_test.prw",
+      "type": "test_suite",
+      "purpose": "Unit tests (advplc run tests/xxx_test.prw)",
+      "requires_ui": false,
+      "count": 9
+    }
+  ],
+  "modules": [
+    {
+      "name": "db",
+      "file": "src/db.prw",
+      "functions": ["GcSqlLit"],
+      "responsibility": "SQL literal escaping (singleton utility)",
+      "dependencies": []
+    },
+    {
+      "name": "login",
+      "file": "src/login.prw",
+      "functions": ["GcLogin", "GcCriarAdmin", "GcAutenticar", "GcCredenciaisValidas", "GcTrocarSenha"],
+      "responsibility": "Authentication gate, admin setup, password hashing (SHA-256)",
+      "dependencies": ["db"]
+    },
+    {
+      "name": "condominos",
+      "file": "src/condominos.prw",
+      "functions": ["GcCondominos"],
+      "responsibility": "Condômino registry (browse, CRUD)",
+      "dependencies": []
+    },
+    {
+      "name": "unidades",
+      "file": "src/unidades.prw",
+      "functions": ["GcUnidades"],
+      "responsibility": "Unit registry (block, apt, fraction ideal)",
+      "dependencies": []
+    },
+    {
+      "name": "despesas",
+      "file": "src/despesas.prw",
+      "functions": ["GcDespesas"],
+      "responsibility": "Expense logging (description, category, amount, month)",
+      "dependencies": []
+    },
+    {
+      "name": "fechamento",
+      "file": "src/fechamento.prw",
+      "functions": ["GcFecharMes", "GcProximoVencimento", "GcAtualizarInadimplentes"],
+      "responsibility": "Month-end close, charging generation, fraction-ideal split",
+      "dependencies": ["db"]
+    },
+    {
+      "name": "cobrancas",
+      "file": "src/cobrancas.prw",
+      "functions": ["GcCobrancas", "GcRegistrarPagamento"],
+      "responsibility": "Charging browse, payment registration",
+      "dependencies": []
+    },
+    {
+      "name": "malas",
+      "file": "src/malas.prw",
+      "functions": ["GcMalaDireta"],
+      "responsibility": "Mail merge with real SMTP sending (env-based config)",
+      "dependencies": ["db"]
+    },
+    {
+      "name": "relatorios",
+      "file": "src/relatorios.prw",
+      "functions": ["GcXxxCalc", "GcXxx (monthly balance, delinquency, extract, expenses by category)"],
+      "responsibility": "Report snapshots (RPT_* tables, recalculated on open)",
+      "dependencies": ["db"]
+    },
+    {
+      "name": "usuarios",
+      "file": "src/usuarios.prw",
+      "functions": ["GcMenuUsuarios", "GcGerarToken", "GcRevogarToken", "GcCriarUsuario", "GcCriarAdminNovo", "GcDateToIso", "GcGerarTokenId"],
+      "responsibility": "Admin menu, token generation/revocation, user CRUD",
+      "dependencies": ["db"]
+    },
+    {
+      "name": "portal",
+      "file": "src/portal.prw",
+      "functions": ["GcPortalCondmino", "GcAuthPortalToken", "GcPortalBrowse", "GcPortalCalcCobrancas", "GcSairPortal"],
+      "responsibility": "Read-only condômino portal (token-based, 48h validity)",
+      "dependencies": ["db"]
+    },
+    {
+      "name": "boleto",
+      "file": "src/boleto.prw",
+      "functions": ["GcGeraBoleto", "GcFormatLinhaDigitavel", "GcGeraCodigoBarras"],
+      "responsibility": "Bank slip generation (Itaú/Bradesco, barcode + line)",
+      "dependencies": []
+    }
+  ],
+  "data_model": {
+    "tables": 11,
+    "tables_list": [
+      "CON (condôminos)",
+      "UNI (units/apartments)",
+      "DES (expenses)",
+      "COB (charges/invoices)",
+      "USR (admin users, pwd hashed)",
+      "RPT_INADIM (delinquency snapshot)",
+      "RPT_EXTRATO (extract snapshot)",
+      "RPT_DESCAT (expenses-by-category snapshot)",
+      "CFG_BOLETO (bank slip config)",
+      "GCT_TOKEN (condômino token, 48h)",
+      "RPT_COND_COBRANCAS (condômino portal charges snapshot)"
+    ],
+    "metadata_table": "SX3 (FWMBrowse column metadata: titles, types, sizes)",
+    "soft_delete_convention": "Protheus-style (D_E_L_E_T_ = ' ', R_E_C_D_E_L_ = timestamp)",
+    "key_decision": "Snapshots (RPT_*) instead of VIEWs — FWMBrowse only supports physical tables with rowid"
+  },
+  "organization_suggestion": {
+    "granularity": "module",
+    "rationale": "Each src/*.prw owns one business domain (login, condominos, unidades, etc.), with single responsibility and clear dependencies via db.prw utility layer.",
+    "signals": [
+      {
+        "type": "module_structure",
+        "evidence": [
+          "src/login.prw (authentication)",
+          "src/condominos.prw (entity: condôminos)",
+          "src/unidades.prw (entity: unidades)",
+          "src/despesas.prw (entity: despesas)",
+          "src/fechamento.prw (process: month-end)",
+          "src/cobrancas.prw (process: charging)",
+          "src/malas.prw (process: mail merge)",
+          "src/relatorios.prw (process: reports)",
+          "src/usuarios.prw (process: user mgmt)",
+          "src/portal.prw (process: condômino access)",
+          "src/boleto.prw (process: boleto gen)"
+        ]
+      },
+      {
+        "type": "dependency_graph",
+        "evidence": [
+          "db.prw is singleton utility (no dependencies)",
+          "login.prw depends on db (hashing, auth checks)",
+          "Other modules depend on db or are standalone",
+          "gescon.prw includes all via #include chain (fan-out, not fan-in)"
+        ]
+      }
+    ]
+  },
+  "testing": {
+    "framework": "AdvPL nativo (advplc run)",
+    "test_files": 9,
+    "test_suite_names": [
+      "db_test.prw",
+      "login_test.prw",
+      "fechamento_test.prw",
+      "pagamento_test.prw",
+      "malas_test.prw",
+      "portal_test.prw",
+      "relatorios_test.prw",
+      "usuarios_test.prw"
+    ],
+    "coverage_estimate": "Core business logic (db, auth, month-close, charging, mail, reports, users, portal, boleto)",
+    "ui_testing": "FWMBrowse browse screens cannot be tested via advplc run (require UI session); requires advplc serve/build + manual or Selenium"
+  },
+  "documentation": {
+    "completeness": "excellent",
+    "artifacts": [
+      {
+        "file": "README.md",
+        "covers": "Getting started, requirements (advplc v1.23.1+, sqlite3), how to run (web, desktop), tests, SMTP env config, scope (v1/v2), known limitations"
+      },
+      {
+        "file": "docs/ARQUITETURA.md",
+        "covers": "Stack, file structure, data model, dependency graph, key decisions (snapshots vs views, soft-delete, tokens), limitations"
+      },
+      {
+        "file": "docs/FUNCIONAL.md",
+        "covers": "User-facing spec: screens, workflows, business rules, entity relationships, data entry rules"
+      },
+      {
+        "file": "docs/superpowers/",
+        "covers": "Design history: specs, implementation plans, execution ledger (transparent process, not just outcome)"
+      }
+    ]
+  },
+  "deployment": {
+    "executables": [
+      {
+        "name": "GesConApp",
+        "platform": "Linux x64",
+        "size_mb": 38,
+        "embedded": "AdvPP bytecode + stdlib + Fyne runtime",
+        "standalone": true,
+        "database": "~/.advpp/ADVPP.db (shared with other AdvPP tools)"
+      },
+      {
+        "name": "GesConApp-win.exe",
+        "platform": "Windows x64",
+        "size_mb": 53,
+        "embedded": "AdvPP bytecode + stdlib + Fyne runtime",
+        "standalone": true,
+        "database": "~/.advpp/ADVPP.db (shared with other AdvPP tools)"
+      }
+    ],
+    "build_command": "advplc build gescon.prw -o <output>",
+    "build_requirement": "ADVPP_SRC=/path/to/AdvPP (env var for Fyne linker)",
+    "web_mode": "advplc serve gescon.prw → http://localhost:8080 (no precompiled artifact, compile-on-demand)",
+    "security": [
+      "Password hashing: SHA-256 (FWHash)",
+      "Token validity: 48 hours (GCT_TOKEN.VALIDO_ATE)",
+      "SMTP config: env-based (GESCON_SMTP_*), no secrets in code",
+      "Safe-by-default: no SMTP sending if GESCON_SMTP_HOST unset"
+    ]
+  },
+  "publication_readiness": {
+    "executable_binary": "ready",
+    "source_code": "ready (git, documentation, tests)",
+    "database": "ready (schema v1, bootstrap script)",
+    "documentation": "ready (functional, technical, design history)",
+    "tests": "ready (9 unit suites)",
+    "security_review": "complete (hashing, tokens, env-based config)",
+    "known_issues": [
+      {
+        "severity": "LOW",
+        "item": "Charges UI allows edit/delete (safety via business logic, not UI constraints)"
+      },
+      {
+        "severity": "LOW",
+        "item": "Report UIs allow include/alter/delete (noop — recalculated on open)"
+      },
+      {
+        "severity": "INFO",
+        "item": "Unit.condômino field is text (not FK) — no combo validation, facilitates testing"
+      }
+    ],
+    "recommendations": [
+      "Add Dockerfile + docker-compose.yml for container distribution (optional)",
+      "Set up GitHub Actions CI/CD for auto-build on releases (optional)",
+      "Tag git release when publishing (v1.0, v1.1, etc.)"
+    ]
+  },
+  "scope_versions": {
+    "v1": [
+      "Login, admin setup",
+      "Unit and condômino registry",
+      "Expense logging",
+      "Month-end close (fraction-ideal rateio)",
+      "Charging and payment registration",
+      "Mail merge (SMTP-based)",
+      "Reports (balance, delinquency, extract, expenses by category)"
+    ],
+    "v2": [
+      "Masked password input (FWGetText bIsPassword)",
+      "Bank slips (Itaú/Bradesco, barcode, line)",
+      "Admin menu (create admin, token gen/revocation)",
+      "Condômino portal (token-based read-only access)"
+    ]
+  }
+}
