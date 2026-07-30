@@ -60,20 +60,20 @@ User Function GcGerarPortalExtratos(cCompetencia as character) as numeric
 
     Try
         // Passo 1: Delete dos extratos antigos para esta competência (snapshot pattern)
-        cSql := "DELETE FROM RPT_PORTAL_EXTRATOS WHERE REX_COMPETENCIA = '" + cCompetencia + "'"
+        cSql := "DELETE FROM RPT_PORTAL_EXTRATOS WHERE REX_COMPETENCIA = '" + GcSqlLit(cCompetencia) + "'"
         FWExecStatement(cSql)
         FWLogMsg("INFO", "Old extracts cleared for competência: " + cCompetencia)
 
         // Passo 2: Consulta COB table para a competência (ativa + soft-delete valid)
         cSql := "SELECT COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, COB_DTPAG "
         cSql += "FROM COB "
-        cSql += "WHERE COB_COMPET = '" + cCompetencia + "' "
+        cSql += "WHERE COB_COMPET = '" + GcSqlLit(cCompetencia) + "' "
         cSql += "AND D_E_L_E_T_ = ' '"
         aCobrancas := FWExecStatement(cSql)
 
         If Len(aCobrancas) = 0
             FWLogMsg("INFO", "No billing records found for competência: " + cCompetencia)
-            End Transaction
+            Rollback()
             lTrans := .F.
             Return 0
         EndIf
@@ -110,15 +110,15 @@ User Function GcGerarPortalExtratos(cCompetencia as character) as numeric
             cSql := "INSERT INTO RPT_PORTAL_EXTRATOS ("
             cSql += "REX_COMPETENCIA, REX_UNIDADE, REX_VALOR, REX_VENCIMENTO, REX_STATUS, REX_DATA_PAGAMENTO, D_E_L_E_T_"
             cSql += ") VALUES ("
-            cSql += "'" + cCompetencia + "', "
-            cSql += "'" + aCobrancas[i]:COB_UNIDADE + "', "
+            cSql += "'" + GcSqlLit(cCompetencia) + "', "
+            cSql += "'" + GcSqlLit(aCobrancas[i]:COB_UNIDADE) + "', "
             cSql += cValToChar(aCobrancas[i]:COB_VALOR) + ", "
-            cSql += "'" + cVencimento + "', "
-            cSql += "'" + cStatus + "', "
+            cSql += "'" + GcSqlLit(cVencimento) + "', "
+            cSql += "'" + GcSqlLit(cStatus) + "', "
             If cDataPagamento = "NULL"
                 cSql += "NULL"
             Else
-                cSql += "'" + cDataPagamento + "'"
+                cSql += "'" + GcSqlLit(cDataPagamento) + "'"
             EndIf
             cSql += ", "
             cSql += "' '"
@@ -213,7 +213,7 @@ User Function GcGerarPortalAgenda(cCompetencia as character) as numeric
 
         If Len(aMeses) = 0
             FWLogMsg("ERROR", "Failed to generate 12-month list from " + cCompetencia)
-            End Transaction
+            Rollback()
             lTrans := .F.
             Return -1
         EndIf
@@ -227,7 +227,7 @@ User Function GcGerarPortalAgenda(cCompetencia as character) as numeric
             // Consulta COB table para este mês (ativa + soft-delete valid)
             cSql := "SELECT COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO "
             cSql += "FROM COB "
-            cSql += "WHERE COB_COMPET = '" + cMesAtual + "' "
+            cSql += "WHERE COB_COMPET = '" + GcSqlLit(cMesAtual) + "' "
             cSql += "AND D_E_L_E_T_ = ' '"
             aCobrancas := FWExecStatement(cSql)
 
@@ -253,9 +253,9 @@ User Function GcGerarPortalAgenda(cCompetencia as character) as numeric
                 cSql := "INSERT INTO RPT_PORTAL_AGENDA ("
                 cSql += "REA_UNIDADE, REA_COMPETENCIA, REA_VENCIMENTO, REA_VALOR, D_E_L_E_T_"
                 cSql += ") VALUES ("
-                cSql += "'" + aCobrancas[j]:COB_UNIDADE + "', "
-                cSql += "'" + cMesAtual + "', "
-                cSql += "'" + cVencimento + "', "
+                cSql += "'" + GcSqlLit(aCobrancas[j]:COB_UNIDADE) + "', "
+                cSql += "'" + GcSqlLit(cMesAtual) + "', "
+                cSql += "'" + GcSqlLit(cVencimento) + "', "
                 cSql += cValToChar(aCobrancas[j]:COB_VALOR) + ", "
                 cSql += "' '"
                 cSql += ")"
