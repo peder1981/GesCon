@@ -134,10 +134,10 @@ User Function GcCriarLancamentoManualDireto(dData, cDescricao, cContaDeb, cConta
         Return .F.
     EndIf
 
-    // Monta SQL de inserção
+    // Monta SQL de inserção (com R_E_C_N_O_ auto-gerado via subquery)
     cSql := "INSERT INTO LANCAMENTOS ("
     cSql += "LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, "
-    cSql += "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_"
+    cSql += "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, R_E_C_N_O_"
     cSql += ") VALUES ("
     cSql += GcSqlLit(DtoS(dData)) + ", "
     cSql += GcSqlLit(cContaDeb) + ", "
@@ -148,10 +148,118 @@ User Function GcCriarLancamentoManualDireto(dData, cDescricao, cContaDeb, cConta
     cSql += GcSqlLit(cExercicio) + ", "
     cSql += "datetime('now'), "
     cSql += GcSqlLit("TEST_USER") + ", "
-    cSql += GcSqlLit(" ")
+    cSql += GcSqlLit(" ") + ", "
+    cSql += "(SELECT COALESCE(MAX(R_E_C_N_O_), 0) + 1 FROM LANCAMENTOS)"
     cSql += ")"
 
     // Executa inserção
+    TCSqlExec(cSql)
+    lRet := .T.
+
+Return lRet
+
+/*/{Protheus.doc} GcEditarLancamentoDescricao
+    Edita a descrição de um lançamento manual, preservando a restrição de
+    partida dupla (contas debitada/creditada não são alteráveis).
+    Validações: entry existe, período não está fechado.
+    @type Function
+    @author GesCon
+    @since 2026-07-30
+    @param nRecno, numeric, número de registro (R_E_C_N_O_)
+    @param cDescricao, character, nova descrição do lançamento
+    @return lRet, logical, .T. se edição bem-sucedida, .F. se validação falhou
+    @example
+        If GcEditarLancamentoDescricao(123, "Descrição atualizada")
+            ConOut("Descrição editada com sucesso")
+        Else
+            ConOut("Falha ao editar descrição")
+        EndIf
+*/
+User Function GcEditarLancamentoDescricao(nRecno, cDescricao)
+    Local lRet := .F.
+    Local aLancamento := {}
+    Local cExercicio := ""
+    Local cSql := ""
+
+    // Valida parâmetros
+    If nRecno <= 0 .Or. Empty(cDescricao)
+        ConOut("ERROR: Invalid parameters for edit")
+        Return .F.
+    EndIf
+
+    // Verifica se lançamento existe
+    aLancamento := TCSqlQuery("SELECT LAN_EXERCICIO FROM LANCAMENTOS WHERE R_E_C_N_O_ = " + cValToChar(nRecno) + " AND D_E_L_E_T_ = ' '")
+    If Len(aLancamento) = 0
+        ConOut("ERROR: Entry not found")
+        Return .F.
+    EndIf
+
+    // Obtém exercício
+    cExercicio := aLancamento[1]:LAN_EXERCICIO
+
+    // Verifica se período está fechado
+    If GcPeriodoFechado(cExercicio)
+        ConOut("ERROR: Period is closed — edit not allowed")
+        Return .F.
+    EndIf
+
+    // Monta SQL de atualização (apenas descrição e timestamp)
+    cSql := "UPDATE LANCAMENTOS SET LAN_DESCR = " + GcSqlLit(cDescricao) + ", LAN_DATA_HORA = datetime('now') WHERE R_E_C_N_O_ = " + cValToChar(nRecno) + " AND D_E_L_E_T_ = ' '"
+
+    // Executa atualização
+    TCSqlExec(cSql)
+    lRet := .T.
+
+Return lRet
+
+/*/{Protheus.doc} GcDeletarLancamento
+    Soft-delete de um lançamento manual, marcando com D_E_L_E_T_ = '*'.
+    Preserva auditoria via R_E_C_D_E_L_ = Seconds().
+    Validações: entry existe, período não está fechado.
+    @type Function
+    @author GesCon
+    @since 2026-07-30
+    @param nRecno, numeric, número de registro (R_E_C_N_O_)
+    @return lRet, logical, .T. se deleção bem-sucedida, .F. se validação falhou
+    @example
+        If GcDeletarLancamento(123)
+            ConOut("Lançamento deletado com sucesso")
+        Else
+            ConOut("Falha ao deletar lançamento")
+        EndIf
+*/
+User Function GcDeletarLancamento(nRecno)
+    Local lRet := .F.
+    Local aLancamento := {}
+    Local cExercicio := ""
+    Local cSql := ""
+
+    // Valida parâmetro
+    If nRecno <= 0
+        ConOut("ERROR: Invalid record number")
+        Return .F.
+    EndIf
+
+    // Verifica se lançamento existe
+    aLancamento := TCSqlQuery("SELECT LAN_EXERCICIO FROM LANCAMENTOS WHERE R_E_C_N_O_ = " + cValToChar(nRecno) + " AND D_E_L_E_T_ = ' '")
+    If Len(aLancamento) = 0
+        ConOut("ERROR: Entry not found")
+        Return .F.
+    EndIf
+
+    // Obtém exercício
+    cExercicio := aLancamento[1]:LAN_EXERCICIO
+
+    // Verifica se período está fechado
+    If GcPeriodoFechado(cExercicio)
+        ConOut("ERROR: Period is closed — deletion not allowed")
+        Return .F.
+    EndIf
+
+    // Monta SQL de soft-delete
+    cSql := "UPDATE LANCAMENTOS SET D_E_L_E_T_ = '*', R_E_C_D_E_L_ = " + cValToChar(Seconds()) + " WHERE R_E_C_N_O_ = " + cValToChar(nRecno)
+
+    // Executa deleção
     TCSqlExec(cSql)
     lRet := .T.
 

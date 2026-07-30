@@ -5,7 +5,8 @@
 
 /*/{Protheus.doc} ContabilTest
     Orquestrador dos testes contábeis.
-    Executa: TesteGcSqlLit, TesteGcExercicioAtivo, TesteGcPeriodoFechado
+    Executa: TesteGcSqlLit, TesteGcExercicioAtivo, TesteGcPeriodoFechado,
+    TesteNovoLancamentoManual, TesteEditarLancamento, TesteDeletarLancamento
     @type Function
     @author GesCon
     @since 2026-07-30
@@ -25,6 +26,12 @@ User Function ContabilTest()
     ConOut("")
 
     TesteNovoLancamentoManual()
+    ConOut("")
+
+    TesteEditarLancamento()
+    ConOut("")
+
+    TesteDeletarLancamento()
     ConOut("")
 
     ConOut("========== FIM DOS TESTES ==========")
@@ -203,6 +210,144 @@ User Function TesteNovoLancamentoManual()
         ConOut("  PASS: Contagem de lançamentos aumentou em 2 (esperado)")
     Else
         ConOut("  FAIL: Contagem de lançamentos aumentou em " + cValToChar(nCount2 - nCount1) + " (esperado 2)")
+    EndIf
+
+Return
+
+/*/{Protheus.doc} TesteEditarLancamento
+    Testa edição de descrição de lançamento manual.
+    Cria um lançamento, edita sua descrição, verifica atualização.
+    Valida preservação da restrição de partida dupla (contas não alteram).
+    @type Function
+    @author GesCon
+    @since 2026-07-30
+*/
+User Function TesteEditarLancamento()
+    Local aLancamento := {}
+    Local nRecno := 0
+    Local lRetCriar := .F.
+    Local lRetEditar := .F.
+    Local cDescricaoNova := "Descrição editada com sucesso"
+    Local aVerificacao := {}
+
+    ConOut("TesteEditarLancamento")
+
+    // Cria um lançamento para editar (usando contas válidas do seed: 5000, 1000)
+    lRetCriar := GcCriarLancamentoManualDireto(Date(), "Descrição original", "5000", "1000", 250.00)
+    If lRetCriar
+        ConOut("  PASS: Lançamento criado para teste de edição")
+    Else
+        ConOut("  FAIL: Não foi possível criar lançamento para edição")
+        Return
+    EndIf
+
+    // Recupera o R_E_C_N_O_ do último lançamento inserido
+    aLancamento := TCSqlQuery("SELECT R_E_C_N_O_ FROM LANCAMENTOS WHERE LAN_DESCR = 'Descrição original' AND D_E_L_E_T_ = ' ' ORDER BY R_E_C_N_O_ DESC LIMIT 1")
+    If Len(aLancamento) > 0
+        nRecno := aLancamento[1]:R_E_C_N_O_
+        ConOut("  Record number: " + cValToChar(nRecno))
+    Else
+        ConOut("  FAIL: Não foi possível recuperar R_E_C_N_O_ do lançamento")
+        Return
+    EndIf
+
+    // Edita a descrição
+    lRetEditar := GcEditarLancamentoDescricao(nRecno, cDescricaoNova)
+    If lRetEditar
+        ConOut("  PASS: Lançamento editado com sucesso")
+    Else
+        ConOut("  FAIL: Falha ao editar lançamento")
+        Return
+    EndIf
+
+    // Verifica se descrição foi atualizada
+    aVerificacao := TCSqlQuery("SELECT LAN_DESCR FROM LANCAMENTOS WHERE R_E_C_N_O_ = " + cValToChar(nRecno) + " AND D_E_L_E_T_ = ' '")
+    If Len(aVerificacao) > 0 .And. aVerificacao[1]:LAN_DESCR = cDescricaoNova
+        ConOut("  PASS: Descrição atualizada corretamente no banco de dados")
+    Else
+        ConOut("  FAIL: Descrição não foi atualizada corretamente")
+    EndIf
+
+    // Verifica que contas não foram alteradas (validação de partida dupla)
+    aVerificacao := TCSqlQuery("SELECT LAN_CONTA_DEB, LAN_CONTA_CRED FROM LANCAMENTOS WHERE R_E_C_N_O_ = " + cValToChar(nRecno) + " AND D_E_L_E_T_ = ' '")
+    If Len(aVerificacao) > 0 .And. aVerificacao[1]:LAN_CONTA_DEB = "5000" .And. aVerificacao[1]:LAN_CONTA_CRED = "1000"
+        ConOut("  PASS: Contas preservadas (partida dupla mantida)")
+    Else
+        ConOut("  FAIL: Contas foram alteradas indevidamente")
+    EndIf
+
+Return
+
+/*/{Protheus.doc} TesteDeletarLancamento
+    Testa soft-delete de lançamento manual.
+    Cria um lançamento, deleta-o, verifica marcação com D_E_L_E_T_ = '*'.
+    Valida que lançamentos deletados não aparecem em consultas normais.
+    @type Function
+    @author GesCon
+    @since 2026-07-30
+*/
+User Function TesteDeletarLancamento()
+    Local aLancamento := {}
+    Local nRecno := 0
+    Local lRetCriar := .F.
+    Local lRetDeletar := .F.
+    Local aVerificacaoAntesDelecao := {}
+    Local aVerificacaoAposDelecao := {}
+    Local aVerificacaoComDelecao := {}
+
+    ConOut("TesteDeletarLancamento")
+
+    // Cria um lançamento para deletar (usando contas válidas do seed: 7000, 1100)
+    lRetCriar := GcCriarLancamentoManualDireto(Date(), "Lançamento a deletar", "7000", "1100", 175.50)
+    If lRetCriar
+        ConOut("  PASS: Lançamento criado para teste de deleção")
+    Else
+        ConOut("  FAIL: Não foi possível criar lançamento para deleção")
+        Return
+    EndIf
+
+    // Recupera o R_E_C_N_O_ do último lançamento inserido
+    aLancamento := TCSqlQuery("SELECT R_E_C_N_O_ FROM LANCAMENTOS WHERE LAN_DESCR = 'Lançamento a deletar' AND D_E_L_E_T_ = ' ' ORDER BY R_E_C_N_O_ DESC LIMIT 1")
+    If Len(aLancamento) > 0
+        nRecno := aLancamento[1]:R_E_C_N_O_
+        ConOut("  Record number: " + cValToChar(nRecno))
+    Else
+        ConOut("  FAIL: Não foi possível recuperar R_E_C_N_O_ do lançamento")
+        Return
+    EndIf
+
+    // Verifica que lançamento existe antes da deleção
+    aVerificacaoAntesDelecao := TCSqlQuery("SELECT R_E_C_N_O_ FROM LANCAMENTOS WHERE R_E_C_N_O_ = " + cValToChar(nRecno) + " AND D_E_L_E_T_ = ' '")
+    If Len(aVerificacaoAntesDelecao) > 0
+        ConOut("  PASS: Lançamento encontrado antes da deleção")
+    Else
+        ConOut("  FAIL: Lançamento não encontrado antes da deleção")
+        Return
+    EndIf
+
+    // Deleta o lançamento
+    lRetDeletar := GcDeletarLancamento(nRecno)
+    If lRetDeletar
+        ConOut("  PASS: Lançamento deletado com sucesso")
+    Else
+        ConOut("  FAIL: Falha ao deletar lançamento")
+        Return
+    EndIf
+
+    // Verifica que lançamento não aparece em consulta normal (D_E_L_E_T_ = ' ')
+    aVerificacaoAposDelecao := TCSqlQuery("SELECT R_E_C_N_O_ FROM LANCAMENTOS WHERE R_E_C_N_O_ = " + cValToChar(nRecno) + " AND D_E_L_E_T_ = ' '")
+    If Len(aVerificacaoAposDelecao) = 0
+        ConOut("  PASS: Lançamento não aparece em consultas normais (soft-delete)")
+    Else
+        ConOut("  FAIL: Lançamento ainda aparece em consultas normais")
+    EndIf
+
+    // Verifica que lançamento está marcado com D_E_L_E_T_ = '*'
+    aVerificacaoComDelecao := TCSqlQuery("SELECT D_E_L_E_T_, R_E_C_D_E_L_ FROM LANCAMENTOS WHERE R_E_C_N_O_ = " + cValToChar(nRecno))
+    If Len(aVerificacaoComDelecao) > 0 .And. aVerificacaoComDelecao[1]:D_E_L_E_T_ = "*" .And. aVerificacaoComDelecao[1]:R_E_C_D_E_L_ > 0
+        ConOut("  PASS: D_E_L_E_T_ = '*' e R_E_C_D_E_L_ preenchido com timestamp")
+    Else
+        ConOut("  FAIL: Marcação de soft-delete não realizada corretamente")
     EndIf
 
 Return
