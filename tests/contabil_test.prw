@@ -24,6 +24,9 @@ User Function ContabilTest()
     TesteGcPeriodoFechado()
     ConOut("")
 
+    TesteNovoLancamentoManual()
+    ConOut("")
+
     ConOut("========== FIM DOS TESTES ==========")
     ConOut("")
 
@@ -134,6 +137,72 @@ User Function TesteGcPeriodoFechado()
         ConOut("  PASS: período inexistente '9999-99' retorna .F.")
     Else
         ConOut("  FAIL: período inexistente esperado .F., obtido .T.")
+    EndIf
+
+Return
+
+/*/{Protheus.doc} TesteNovoLancamentoManual
+    Testa criação de lançamentos manuais em partida dupla.
+    Cria 2 lançamentos, verifica validação de contas diferentes,
+    e conta registros na tabela LANCAMENTOS.
+    @type Function
+    @author GesCon
+    @since 2026-07-30
+*/
+User Function TesteNovoLancamentoManual()
+    Local aContagem1 := {}
+    Local aContagem2 := {}
+    Local nCount1 := 0
+    Local nCount2 := 0
+    Local lRet1 := .F.
+    Local lRet2 := .F.
+    Local lRetInvalid := .F.
+
+    ConOut("TesteNovoLancamentoManual")
+
+    // Conta lançamentos antes
+    aContagem1 := TCSqlQuery("SELECT COUNT(*) as QTD FROM LANCAMENTOS WHERE D_E_L_E_T_ = ' '")
+    If Len(aContagem1) > 0
+        nCount1 := aContagem1[1]:QTD
+        ConOut("  Lançamentos antes: " + cValToChar(nCount1))
+    EndIf
+
+    // Cria primeiro lançamento válido (1000 débito, 1100 crédito, 100.00)
+    lRet1 := GcCriarLancamentoManualDireto(Date(), "Depósito em banco", "1100", "1000", 100.00)
+    If lRet1
+        ConOut("  PASS: Lançamento 1 (1100 deb, 1000 cred, 100.00) criado com sucesso")
+    Else
+        ConOut("  FAIL: Lançamento 1 deveria ter sido criado")
+    EndIf
+
+    // Cria segundo lançamento válido (diferente do primeiro)
+    lRet2 := GcCriarLancamentoManualDireto(Date(), "Transferência", "1000", "2000", 50.00)
+    If lRet2
+        ConOut("  PASS: Lançamento 2 (1000 deb, 2000 cred, 50.00) criado com sucesso")
+    Else
+        ConOut("  FAIL: Lançamento 2 deveria ter sido criado")
+    EndIf
+
+    // Testa validação: contas iguais (deve falhar)
+    lRetInvalid := GcCriarLancamentoManualDireto(Date(), "Lançamento inválido", "1000", "1000", 200.00)
+    If !lRetInvalid
+        ConOut("  PASS: Validação contas diferentes rejeitou corretamente (1000 deb, 1000 cred)")
+    Else
+        ConOut("  FAIL: Validação contas diferentes deveria ter rejeitado")
+    EndIf
+
+    // Conta lançamentos depois
+    aContagem2 := TCSqlQuery("SELECT COUNT(*) as QTD FROM LANCAMENTOS WHERE D_E_L_E_T_ = ' '")
+    If Len(aContagem2) > 0
+        nCount2 := aContagem2[1]:QTD
+        ConOut("  Lançamentos depois: " + cValToChar(nCount2))
+    EndIf
+
+    // Valida contagem (deve ter inserido 2)
+    If (nCount2 - nCount1) = 2
+        ConOut("  PASS: Contagem de lançamentos aumentou em 2 (esperado)")
+    Else
+        ConOut("  FAIL: Contagem de lançamentos aumentou em " + cValToChar(nCount2 - nCount1) + " (esperado 2)")
     EndIf
 
 Return
