@@ -1,6 +1,83 @@
 // src/portal-v2.prw — Portal v2 snapshot generators (billing, notices, schedule)
 #include "totvs.ch"
 #include "contabil.prw"
+#include "portal.prw"
+
+/*/{Protheus.doc} GcPortalCondominoV2
+    Gateway do portal do condomínio v2. Autenticação via token + acesso filtrado
+    a avisos, extratos e agenda da unidade vinculada.
+    Workflow:
+    1. Autentica token via GcAuthPortalToken (reusa logic v1)
+    2. Extrai UNI_CODIGO da resposta do token
+    3. Consulta AVISOS filtrado por unidade
+    4. Consulta RPT_PORTAL_EXTRATOS filtrado por unidade
+    5. Consulta RPT_PORTAL_AGENDA filtrado por unidade
+    6. Retorna .T. se autenticado com sucesso, .F. caso contrário
+    @type User Function
+    @author GesCon
+    @since 2026-07-30
+    @param cToken, character, token UUID 36 chars
+    @return lOk, logical, .T. se autenticado e dados carregados, .F. caso contrário
+    @example
+        If U_GcPortalCondominoV2("550e8400-e29b-41d4-a716-446655440000")
+            ConOut("Autenticado com sucesso, dados carregados")
+        Else
+            ConOut("Falha na autenticação")
+        EndIf
+*/
+User Function GcPortalCondominoV2(cToken as character) as logical
+    Local lAutenticado := .F. as logical
+    Local cUnitCode := "" as character
+    Local aAvisos := {} as array
+    Local aExtratos := {} as array
+    Local aAgenda := {} as array
+    Local cSql := "" as character
+
+    // Validação de parâmetro
+    If Empty(cToken)
+        FWLogMsg("ERROR", "GcPortalCondominoV2: Token é obrigatório")
+        Return .F.
+    EndIf
+
+    // Autentica token (reusa lógica v1 - marca como usado, salva em globals)
+    lAutenticado := GcAuthPortalToken(cToken)
+    If !lAutenticado
+        FWLogMsg("ERROR", "GcPortalCondominoV2: Token inválido, expirado ou já utilizado")
+        Return .F.
+    EndIf
+
+    // Extrai código da unidade das variáveis globais populadas por GcAuthPortalToken
+    cUnitCode := g_cUniPortal
+    If Empty(cUnitCode)
+        FWLogMsg("ERROR", "GcPortalCondominoV2: Código de unidade não encontrado após autenticação")
+        Return .F.
+    EndIf
+
+    FWLogMsg("INFO", "GcPortalCondominoV2: Token autenticado para unidade " + cUnitCode)
+
+    // Consulta AVISOS filtrado por unidade
+    cSql := "SELECT COUNT(*) as CNT FROM AVISOS WHERE AVI_UNIDADE = '" + GcSqlLit(cUnitCode) + "' AND D_E_L_E_T_ = ' '"
+    aAvisos := TCSqlQuery(cSql)
+    If Len(aAvisos) > 0
+        FWLogMsg("INFO", "GcPortalCondominoV2: " + cValToChar(aAvisos[1]:CNT) + " avisos encontrados para unidade " + cUnitCode)
+    EndIf
+
+    // Consulta RPT_PORTAL_EXTRATOS filtrado por unidade
+    cSql := "SELECT COUNT(*) as CNT FROM RPT_PORTAL_EXTRATOS WHERE REX_UNIDADE = '" + GcSqlLit(cUnitCode) + "' AND D_E_L_E_T_ = ' '"
+    aExtratos := TCSqlQuery(cSql)
+    If Len(aExtratos) > 0
+        FWLogMsg("INFO", "GcPortalCondominoV2: " + cValToChar(aExtratos[1]:CNT) + " extratos encontrados para unidade " + cUnitCode)
+    EndIf
+
+    // Consulta RPT_PORTAL_AGENDA filtrado por unidade
+    cSql := "SELECT COUNT(*) as CNT FROM RPT_PORTAL_AGENDA WHERE REA_UNIDADE = '" + GcSqlLit(cUnitCode) + "' AND D_E_L_E_T_ = ' '"
+    aAgenda := TCSqlQuery(cSql)
+    If Len(aAgenda) > 0
+        FWLogMsg("INFO", "GcPortalCondominoV2: " + cValToChar(aAgenda[1]:CNT) + " agendas encontradas para unidade " + cUnitCode)
+    EndIf
+
+    FWLogMsg("INFO", "GcPortalCondominoV2: Autenticação e carregamento de dados completado com sucesso")
+Return .T.
 
 /*/{Protheus.doc} GcGerarPortalExtratos
     Gera snapshot de extratos (cobranças) para um período específico.
@@ -341,3 +418,145 @@ Static Function GcConverterDataString(cDataStr as character) as character
     cRet := SubStr(cDataStr, 1, 4) + "-" + SubStr(cDataStr, 5, 2) + "-" + SubStr(cDataStr, 7, 2)
 
 Return cRet
+
+/*/{Protheus.doc} GcCriarAviso
+    Cria um novo aviso no mural (tabela AVISOS).
+    Workflow:
+    1. Valida parâmetros de entrada (cTitulo e cCorpo obrigatórios)
+    2. Inicia transação para consistência
+    3. Insere novo registro em AVISOS com:
+       - AVI_TITULO = cTitulo (sanitizado)
+       - AVI_CORPO = cCorpo (sanitizado)
+       - AVI_DATA_CRIACAO = datetime('now') (preenchido automaticamente no DB)
+       - AVI_ATIVO = 1 (ativo por padrão)
+       - D_E_L_E_T_ = ' ' (soft-delete válido)
+    4. Confirma transação ao sucesso, faz rollback se erro
+    5. Retorna .T. se sucesso, .F. se erro
+    @type User Function
+    @author GesCon
+    @since 2026-07-30
+    @param cTitulo, character, título do aviso (obrigatório)
+    @param cCorpo, character, corpo/conteúdo do aviso (obrigatório)
+    @return lSucesso, logical, .T. se aviso criado com sucesso, .F. se erro
+    @example
+        If U_GcCriarAviso("Manutenção Programada", "A manutenção ocorrerá no dia 15.")
+            FWLogMsg("INFO", "Aviso criado com sucesso")
+        Else
+            FWLogMsg("ERROR", "Erro ao criar aviso")
+        EndIf
+*/
+User Function GcCriarAviso(cTitulo as character, cCorpo as character) as logical
+    Local cSql := "" as character
+    Local lTrans := .F. as logical
+
+    // Validação de parâmetros
+    If Empty(cTitulo)
+        FWLogMsg("ERROR", "Título é obrigatório para GcCriarAviso")
+        Return .F.
+    EndIf
+
+    If Empty(cCorpo)
+        FWLogMsg("ERROR", "Corpo é obrigatório para GcCriarAviso")
+        Return .F.
+    EndIf
+
+    // Inicia transação para consistência
+    Begin Transaction
+    lTrans := .T.
+
+    Try
+        // Monta SQL de inserção em AVISOS
+        cSql := "INSERT INTO AVISOS ("
+        cSql += "AVI_TITULO, AVI_CORPO, AVI_ATIVO, D_E_L_E_T_"
+        cSql += ") VALUES ("
+        cSql += "'" + GcSqlLit(cTitulo) + "', "
+        cSql += "'" + GcSqlLit(cCorpo) + "', "
+        cSql += "1, "
+        cSql += "' '"
+        cSql += ")"
+
+        // Executa inserção com verificação de erro
+        FWExecStatement(cSql)
+
+        // Commit da transação
+        End Transaction
+        lTrans := .F.
+        FWLogMsg("INFO", "GcCriarAviso completed: Título=" + cTitulo)
+
+    Catch oError
+        FWLogMsg("ERROR", "GcCriarAviso failed: " + oError:Description)
+        If lTrans
+            Rollback()
+        EndIf
+        Return .F.
+    End Try
+
+Return .T.
+
+/*/{Protheus.doc} GcArquivarAviso
+    Arquiva um aviso (marca como inativo) na tabela AVISOS.
+    Workflow:
+    1. Valida parâmetro de entrada (nAvisoId obrigatório)
+    2. Inicia transação para consistência
+    3. Verifica se o aviso existe (AVI_ID = nAvisoId, D_E_L_E_T_ = ' ')
+    4. Se não existe, retorna .F. (aviso não encontrado)
+    5. Se existe, atualiza AVI_ATIVO = 0 para o registro
+    6. Confirma transação ao sucesso, faz rollback se erro
+    7. Retorna .T. se sucesso, .F. se erro
+    @type User Function
+    @author GesCon
+    @since 2026-07-30
+    @param nAvisoId, numeric, ID do aviso a arquivar (obrigatório)
+    @return lSucesso, logical, .T. se aviso arquivado com sucesso, .F. se erro ou não encontrado
+    @example
+        If U_GcArquivarAviso(5)
+            FWLogMsg("INFO", "Aviso 5 arquivado com sucesso")
+        Else
+            FWLogMsg("ERROR", "Aviso 5 não encontrado ou erro ao arquivar")
+        EndIf
+*/
+User Function GcArquivarAviso(nAvisoId as numeric) as logical
+    Local cSql := "" as character
+    Local aResult := {} as array
+    Local lTrans := .F. as logical
+
+    // Validação de parâmetro
+    If nAvisoId <= 0
+        FWLogMsg("ERROR", "ID do aviso inválido para GcArquivarAviso: " + cValToChar(nAvisoId))
+        Return .F.
+    EndIf
+
+    // Inicia transação para consistência
+    Begin Transaction
+    lTrans := .T.
+
+    Try
+        // Passo 1: Verifica se o aviso existe
+        cSql := "SELECT AVI_ID FROM AVISOS WHERE AVI_ID = " + cValToChar(nAvisoId) + " AND D_E_L_E_T_ = ' '"
+        aResult := FWExecStatement(cSql)
+
+        If Len(aResult) = 0
+            FWLogMsg("WARN", "Aviso não encontrado: AVI_ID=" + cValToChar(nAvisoId))
+            Rollback()
+            lTrans := .F.
+            Return .F.
+        EndIf
+
+        // Passo 2: Atualiza AVI_ATIVO = 0
+        cSql := "UPDATE AVISOS SET AVI_ATIVO = 0 WHERE AVI_ID = " + cValToChar(nAvisoId) + " AND D_E_L_E_T_ = ' '"
+        FWExecStatement(cSql)
+
+        // Commit da transação
+        End Transaction
+        lTrans := .F.
+        FWLogMsg("INFO", "GcArquivarAviso completed: AVI_ID=" + cValToChar(nAvisoId))
+
+    Catch oError
+        FWLogMsg("ERROR", "GcArquivarAviso failed: " + oError:Description)
+        If lTrans
+            Rollback()
+        EndIf
+        Return .F.
+    End Try
+
+Return .T.
