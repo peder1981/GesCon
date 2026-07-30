@@ -16,9 +16,10 @@ telas: cadastro de unidades e condôminos, lançamento de despesas,
 Fechamento Mensal com rateio por fração ideal, Cobrança e Registro de
 Pagamento, Mala Direta com envio real de e-mail, Relatórios
 (Balancete Mensal, Inadimplência, Extrato por Unidade, Despesas por
-Categoria), gestão de usuários (criar admin, gerar/revogar token
-temporário), boleto bancário Itaú/Bradesco e portal do condômino
-(acesso read-only via token).
+Categoria), Sistema Contábil em Partida Dupla (com validação de
+integridade, auditoria e fechamento de período), gestão de usuários
+(criar admin, gerar/revogar token temporário), boleto bancário
+Itaú/Bradesco e portal do condômino (acesso read-only via token).
 
 - **[Documentação funcional](docs/FUNCIONAL.md)** — o que o sistema faz,
   telas, regras de negócio, limitações conhecidas.
@@ -72,12 +73,14 @@ senha nunca é gravada em texto puro (hash SHA-256).
 
 ```bash
 advplc run tests/db_test.prw
+advplc run tests/login_test.prw
 advplc run tests/fechamento_test.prw
 advplc run tests/pagamento_test.prw
 advplc run tests/malas_test.prw
 advplc run tests/relatorios_test.prw
-advplc run tests/login_test.prw
 advplc run tests/portal_test.prw
+advplc run tests/contabil_test.prw             # testes unitários do sistema contábil
+advplc run tests/contabil_e2e_test.prw         # teste end-to-end: fluxo completo
 ```
 
 ## Mala direta (envio real de e-mail)
