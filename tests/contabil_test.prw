@@ -38,6 +38,9 @@ User Function ContabilTest()
     TesteCalcularRateioFracao()
     ConOut("")
 
+    TesteLancarDespesaComRateio()
+    ConOut("")
+
     ConOut("========== FIM DOS TESTES ==========")
     ConOut("")
 
@@ -448,6 +451,119 @@ User Function TesteCalcularRateioFracao()
         ConOut("  PASS: T01 + T02 = " + cValToChar(nSomaTestunidades) + " (100% do valor alocado a essas unidades)")
     Else
         ConOut("  FAIL: T01 + T02 esperado " + cValToChar(nEsperadoTestunidades) + ", obtido " + cValToChar(nSomaTestunidades))
+    EndIf
+
+Return
+
+/*/{Protheus.doc} TesteLancarDespesaComRateio
+    Testa criação de lançamento de despesa com rateio automático.
+    Workflow:
+    1. Chama GcLancarDespesaContabil com parâmetros válidos
+    2. Verifica se lançamento principal foi criado (AUTOMATICO_DESPESA)
+    3. Verifica se lançamentos de rateio foram criados (AUTOMATICO_RATEIO)
+    4. Verifica se cobranças foram criadas na tabela COB
+    5. Valida quantidades: 1 principal + N rateio, e N cobranças
+    @type Function
+    @author GesCon
+    @since 2026-07-30
+*/
+User Function TesteLancarDespesaComRateio()
+    Local lRet := .F.
+    Local cDescricao := "Pintura Comum"
+    Local nValor := 1000.00
+    Local nDiaVenc := 15
+    Local aContagemLanAntes := {}
+    Local aContagemLanDepois := {}
+    Local aContagemCobAntes := {}
+    Local aContagemCobDepois := {}
+    Local nLanAntes := 0
+    Local nLanDepois := 0
+    Local nCobAntes := 0
+    Local nCobDepois := 0
+    Local aLanPrincipal := {}
+    Local aLanRateio := {}
+    Local aCobrancas := {}
+    Local nLanPrincipalQtd := 0
+    Local nLanRateioQtd := 0
+    Local nCobQtd := 0
+
+    ConOut("TesteLancarDespesaComRateio")
+
+    // Conta lançamentos antes
+    aContagemLanAntes := TCSqlQuery("SELECT COUNT(*) as QTD FROM LANCAMENTOS WHERE D_E_L_E_T_ = ' '")
+    If Len(aContagemLanAntes) > 0
+        nLanAntes := aContagemLanAntes[1]:QTD
+        ConOut("  Lançamentos antes: " + cValToChar(nLanAntes))
+    EndIf
+
+    // Conta cobranças antes
+    aContagemCobAntes := TCSqlQuery("SELECT COUNT(*) as QTD FROM COB WHERE D_E_L_E_T_ = ' '")
+    If Len(aContagemCobAntes) > 0
+        nCobAntes := aContagemCobAntes[1]:QTD
+        ConOut("  Cobranças antes: " + cValToChar(nCobAntes))
+    EndIf
+
+    // Chama GcLancarDespesaContabil com parâmetros válidos
+    lRet := GcLancarDespesaContabil(Date(), cDescricao, nValor, "FRACAO", nDiaVenc)
+    If lRet
+        ConOut("  PASS: GcLancarDespesaContabil retornou .T.")
+    Else
+        ConOut("  FAIL: GcLancarDespesaContabil deveria ter retornado .T.")
+        Return
+    EndIf
+
+    // Conta lançamentos depois
+    aContagemLanDepois := TCSqlQuery("SELECT COUNT(*) as QTD FROM LANCAMENTOS WHERE D_E_L_E_T_ = ' '")
+    If Len(aContagemLanDepois) > 0
+        nLanDepois := aContagemLanDepois[1]:QTD
+        ConOut("  Lançamentos depois: " + cValToChar(nLanDepois))
+    EndIf
+
+    // Conta cobranças depois
+    aContagemCobDepois := TCSqlQuery("SELECT COUNT(*) as QTD FROM COB WHERE D_E_L_E_T_ = ' '")
+    If Len(aContagemCobDepois) > 0
+        nCobDepois := aContagemCobDepois[1]:QTD
+        ConOut("  Cobranças depois: " + cValToChar(nCobDepois))
+    EndIf
+
+    // Calcula número de rateios criados (inseridos = 1 principal + N rateios)
+    Local nLancamentosInseridos := nLanDepois - nLanAntes
+    Local nCobrancasInseridas := nCobDepois - nCobAntes
+    Local nRateioDeveriaSeriguais := nCobrancasInseridas
+
+    // Verifica lançamento principal (AUTOMATICO_DESPESA) foi criado
+    If nLancamentosInseridos >= 1
+        ConOut("  PASS: Lançamento principal (AUTOMATICO_DESPESA) criado")
+    Else
+        ConOut("  FAIL: Lançamento principal não encontrado")
+    EndIf
+
+    // Verifica lançamentos de rateio (AUTOMATICO_RATEIO) foram criados
+    If nLancamentosInseridos > 1
+        ConOut("  PASS: Lançamentos de rateio (AUTOMATICO_RATEIO) criados: " + cValToChar(nLancamentosInseridos - 1))
+    Else
+        ConOut("  FAIL: Nenhum lançamento de rateio encontrado")
+    EndIf
+
+    // Verifica cobranças (COB)
+    If nCobrancasInseridas > 0
+        ConOut("  PASS: Cobranças criadas: " + cValToChar(nCobrancasInseridas))
+    Else
+        ConOut("  FAIL: Nenhuma cobrança foi criada")
+    EndIf
+
+    // Valida contagem total de lançamentos: deve ser 1 (principal) + N (rateios)
+    If nLancamentosInseridos >= 2
+        ConOut("  PASS: Total de lançamentos " + cValToChar(nLancamentosInseridos) + " >= 2 (1 principal + rateios)")
+    Else
+        ConOut("  FAIL: Total de lançamentos " + cValToChar(nLancamentosInseridos) + " esperado >= 2")
+    EndIf
+
+    // Valida contagem de cobranças = lançamentos de rateio (inseridos - 1 principal)
+    If nCobrancasInseridas = (nLancamentosInseridos - 1)
+        ConOut("  PASS: Cobranças " + cValToChar(nCobrancasInseridas) + " = Lançamentos rateio " + cValToChar(nLancamentosInseridos - 1))
+    Else
+        ConOut("  FAIL: Cobranças " + cValToChar(nCobrancasInseridas) + " != Lançamentos rateio " + cValToChar(nLancamentosInseridos - 1))
     EndIf
 
 Return
