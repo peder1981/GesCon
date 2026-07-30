@@ -195,7 +195,7 @@ User Function GcGerarPortalExtratos(cCompetencia as character) as numeric
             If cDataPagamento = "NULL"
                 cSql += "NULL"
             Else
-                cSql += "'" + GcSqlLit(cDataPagamento) + "'"
+                cSql += GcSqlLit(cDataPagamento)
             EndIf
             cSql += ", "
             cSql += "' '"
