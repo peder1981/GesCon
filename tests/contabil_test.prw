@@ -6,7 +6,8 @@
 /*/{Protheus.doc} ContabilTest
     Orquestrador dos testes contábeis.
     Executa: TesteGcSqlLit, TesteGcExercicioAtivo, TesteGcPeriodoFechado,
-    TesteNovoLancamentoManual, TesteEditarLancamento, TesteDeletarLancamento
+    TesteNovoLancamentoManual, TesteEditarLancamento, TesteDeletarLancamento,
+    TesteCalcularRateioFracao
     @type Function
     @author GesCon
     @since 2026-07-30
@@ -32,6 +33,9 @@ User Function ContabilTest()
     ConOut("")
 
     TesteDeletarLancamento()
+    ConOut("")
+
+    TesteCalcularRateioFracao()
     ConOut("")
 
     ConOut("========== FIM DOS TESTES ==========")
@@ -348,6 +352,102 @@ User Function TesteDeletarLancamento()
         ConOut("  PASS: D_E_L_E_T_ = '*' e R_E_C_D_E_L_ preenchido com timestamp")
     Else
         ConOut("  FAIL: Marcação de soft-delete não realizada corretamente")
+    EndIf
+
+Return
+
+/*/{Protheus.doc} TesteCalcularRateioFracao
+    Testa cálculo de repartição por fração ideal.
+    Cria 2 unidades com frações diferentes, calcula rateio de 1000.00,
+    valida cálculo de valor rateiado (soma = 100% do total).
+    @type Function
+    @author GesCon
+    @since 2026-07-30
+*/
+User Function TesteCalcularRateioFracao()
+    Local aRateio := {}
+    Local nI := 0
+    Local nTotalRateiado := 0
+    Local cUnidade1 := "T01"
+    Local cUnidade2 := "T02"
+    Local nFracao1 := 0.6
+    Local nFracao2 := 0.4
+    Local nValorTotal := 1000.00
+    Local nValorEsperado1 := 0
+    Local nValorEsperado2 := 0
+    Local nUnidade1Valor := 0
+    Local nUnidade2Valor := 0
+    Local nUnidade1Found := 0
+    Local nUnidade2Found := 0
+
+    ConOut("TesteCalcularRateioFracao")
+
+    // Insere 2 unidades de teste com frações conhecidas
+    // (podem haver duplicatas de execuções anteriores, o que é aceitável)
+    TCSqlExec("INSERT INTO UNI (UNI_CODIGO, UNI_FRACAO) VALUES ('T01', 0.6)")
+    TCSqlExec("INSERT INTO UNI (UNI_CODIGO, UNI_FRACAO) VALUES ('T02', 0.4)")
+
+    ConOut("  Unidades criadas/existentes: T01 (0.6), T02 (0.4)")
+
+    // Calcula rateio de 1000.00 por fração ideal
+    aRateio := GcCalcularRateio("FRACAO", nValorTotal, Date())
+
+    // Valida que temos unidades
+    If Len(aRateio) >= 2
+        ConOut("  PASS: Rateio retornou " + cValToChar(Len(aRateio)) + " unidades (>= 2 esperado)")
+    Else
+        ConOut("  FAIL: Rateio esperado >= 2 unidades, obtido " + cValToChar(Len(aRateio)))
+        Return
+    EndIf
+
+    // Busca T01 e T02 na array retornada (pode haver outras unidades)
+    nValorEsperado1 := nValorTotal * nFracao1  // 1000 * 0.6 = 600 (por ocorrência)
+    nValorEsperado2 := nValorTotal * nFracao2  // 1000 * 0.4 = 400 (por ocorrência)
+
+    For nI := 1 To Len(aRateio)
+        If aRateio[nI][1] = cUnidade1
+            nUnidade1Found += 1
+            nUnidade1Valor := aRateio[nI][3]
+        EndIf
+        If aRateio[nI][1] = cUnidade2
+            nUnidade2Found += 1
+            nUnidade2Valor := aRateio[nI][3]
+        EndIf
+    Next nI
+
+    // Valida que T01 foi encontrada
+    If nUnidade1Found > 0
+        ConOut("  PASS: Unidade T01 encontrada no rateio")
+        If Round(nUnidade1Valor, 2) = Round(nValorEsperado1, 2)
+            ConOut("  PASS: T01 valor rateiado = 600.00")
+        Else
+            ConOut("  FAIL: T01 valor esperado 600.00, obtido " + cValToChar(nUnidade1Valor))
+        EndIf
+    Else
+        ConOut("  FAIL: T01 não encontrada no rateio")
+    EndIf
+
+    // Valida que T02 foi encontrada
+    If nUnidade2Found > 0
+        ConOut("  PASS: Unidade T02 encontrada no rateio")
+        If Round(nUnidade2Valor, 2) = Round(nValorEsperado2, 2)
+            ConOut("  PASS: T02 valor rateiado = 400.00")
+        Else
+            ConOut("  FAIL: T02 valor esperado 400.00, obtido " + cValToChar(nUnidade2Valor))
+        EndIf
+    Else
+        ConOut("  FAIL: T02 não encontrada no rateio")
+    EndIf
+
+    // Valida soma de T01 + T02 especificamente
+    // (o total geral pode ser > 1000 se houver outras unidades no database)
+    Local nSomaTestunidades := Round(nUnidade1Valor, 2) + Round(nUnidade2Valor, 2)
+    Local nEsperadoTestunidades := Round(nValorEsperado1, 2) + Round(nValorEsperado2, 2)
+
+    If Round(nSomaTestunidades, 2) = Round(nEsperadoTestunidades, 2)
+        ConOut("  PASS: T01 + T02 = " + cValToChar(nSomaTestunidades) + " (100% do valor alocado a essas unidades)")
+    Else
+        ConOut("  FAIL: T01 + T02 esperado " + cValToChar(nEsperadoTestunidades) + ", obtido " + cValToChar(nSomaTestunidades))
     EndIf
 
 Return

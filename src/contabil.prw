@@ -265,6 +265,66 @@ User Function GcDeletarLancamento(nRecno)
 
 Return lRet
 
+/*/{Protheus.doc} GcCalcularRateio
+    Calcula como repartir um valor entre unidades conforme tipo de repartição.
+    MVP suporta "FRACAO" (ideal fraction) — demais tipos retornam array vazio.
+    @type Function
+    @author GesCon
+    @since 2026-07-30
+    @param cReparticao, character, código do tipo de repartição (ex: "FRACAO")
+    @param nValor, numeric, valor total a repartir
+    @param dData, date, data de referência (para suporte multi-taxa futuro)
+    @return aRateio, array, array de {cUnidade, nFracao, nValorRateiado} ou vazio se erro/tipo não suportado
+    @example
+        aRateio := GcCalcularRateio("FRACAO", 1000.00, Date())
+        If Len(aRateio) > 0
+            ConOut("Unidade " + aRateio[1][1] + " => " + cValToChar(aRateio[1][3]))
+        EndIf
+*/
+User Function GcCalcularRateio(cReparticao, nValor, dData)
+    Local aRateio := {}
+    Local aUnidades := {}
+    Local nI := 0
+    Local cUnidade := ""
+    Local nFracao := 0
+    Local nValorUnit := 0
+
+    // Valida parâmetros
+    If Empty(cReparticao) .Or. nValor <= 0
+        ConOut("ERROR: Invalid parameters for repartition calculation")
+        Return aRateio
+    EndIf
+
+    // MVP: apenas tipo FRACAO (ideal fraction)
+    If cReparticao = "FRACAO"
+        // Query: unidades ativas com suas frações
+        aUnidades := TCSqlQuery("SELECT UNI_CODIGO, UNI_FRACAO FROM UNI WHERE D_E_L_E_T_ = ' ' ORDER BY UNI_CODIGO")
+
+        If Len(aUnidades) = 0
+            ConOut("ERROR: No units found for repartition")
+            Return aRateio
+        EndIf
+
+        // Calcula valor rateado para cada unidade
+        For nI := 1 To Len(aUnidades)
+            cUnidade := aUnidades[nI]:UNI_CODIGO
+            nFracao := aUnidades[nI]:UNI_FRACAO
+            nValorUnit := nValor * nFracao
+
+            // Adiciona à array: {unidade, fração, valor_rateiado}
+            AAdd(aRateio, {cUnidade, nFracao, nValorUnit})
+        Next nI
+
+        ConOut("Repartition calculated: " + cValToChar(Len(aRateio)) + " units")
+
+    Else
+        // Tipos não suportados no MVP
+        ConOut("ERROR: Repartition type '" + cReparticao + "' not supported yet")
+        Return aRateio
+    EndIf
+
+Return aRateio
+
 /*/{Protheus.doc} GcNovoLancamento
     Ponto de entrada UI para criação manual de lançamentos.
     Placeholder para MVP — será expandido em fases posteriores com
