@@ -14,6 +14,8 @@
 #include "src/relatorios.prw"
 #include "src/usuarios.prw"
 #include "src/portal.prw"
+#include "src/contabil.prw"
+#include "src/auditoria.prw"
 
 /*/{Protheus.doc} GesCon
     Ponto de entrada do GesCon — sobe com `advplc serve gescon.prw`,
@@ -23,7 +25,7 @@
     @since 2026-07-24
 */
 User Function GesCon()
-    Local aMenu := {"Unidades", "Condôminos", "Despesas", "Cobranças", "Fechamento Mensal", "Mala Direta", "Relatórios", "Usuários", "Trocar Senha", "Sair"}
+    Local aMenu := {"Unidades", "Condôminos", "Despesas", "Cobranças", "Fechamento Mensal", "Mala Direta", "Relatórios", "Contabilidade", "Usuários", "Trocar Senha", "Sair"}
     Local nOpcao
     Local nEscolha
     Local cCompetencia
@@ -86,8 +88,10 @@ User Function GesCon()
                     Case nOpcao == 7
                         GcMenuRelatorios()
                     Case nOpcao == 8
-                        GcMenuUsuarios()
+                        GcMenuContabilidade()
                     Case nOpcao == 9
+                        GcMenuUsuarios()
+                    Case nOpcao == 10
                         GcTrocarSenha()
                     Otherwise
                         Exit
@@ -143,5 +147,68 @@ User Function GcMenuRelatorios()
         Case nOpcao == 4
             cCompetencia := FWGetText("Despesas por categoria de qual competência? (vazio = todas)", "")
             GcDespesasCategoria(cCompetencia)
+    EndCase
+Return
+
+/*/{Protheus.doc} GcMenuContabilidade
+    Submenu de contabilidade — acesso a funções de validação, balancete,
+    auditoria e fechamento de período.
+    @type Function
+    @author GesCon
+    @since 2026-07-30
+*/
+User Function GcMenuContabilidade()
+    Local aMenu := {"Validar Integridade", "Gerar Balancete", "Auditar Período", "Fechar Período", "Voltar"}
+    Local nOpcao := FWMenuSelect(aMenu, "Contabilidade")
+    Local cExercicio
+    Local lRet
+    Local nSaldo
+    Local nAnomalias
+
+    Do Case
+        Case nOpcao == 1
+            cExercicio := GcExercicioAtivo()
+            If Empty(cExercicio)
+                MsgAlert("Nenhum exercício ativo.", "Contabilidade")
+            Else
+                lRet := GcValidarIntegridade(cExercicio)
+                If lRet
+                    MsgInfo("Exercício " + cExercicio + " em equilíbrio (débitos == créditos).", "Validação de Integridade")
+                Else
+                    MsgAlert("Exercício " + cExercicio + " apresenta desequilíbrio contábil.", "Validação de Integridade")
+                EndIf
+            EndIf
+        Case nOpcao == 2
+            cExercicio := GcExercicioAtivo()
+            If Empty(cExercicio)
+                MsgAlert("Nenhum exercício ativo.", "Contabilidade")
+            Else
+                nSaldo := GcGerarBalancetePeriodo(cExercicio)
+                MsgInfo("Balancete de " + cExercicio + " gerado (saldo=" + cValToChar(nSaldo) + ").", "Gerar Balancete")
+            EndIf
+        Case nOpcao == 3
+            cExercicio := GcExercicioAtivo()
+            If Empty(cExercicio)
+                MsgAlert("Nenhum exercício ativo.", "Contabilidade")
+            Else
+                nAnomalias := GcAuditoriaFecharPeriodo(cExercicio)
+                If nAnomalias = 0
+                    MsgInfo("Auditoria de " + cExercicio + " OK (0 anomalias críticas).", "Auditoria")
+                Else
+                    MsgAlert("Auditoria detectou " + cValToChar(nAnomalias) + " anomalias críticas no exercício " + cExercicio + ".", "Auditoria")
+                EndIf
+            EndIf
+        Case nOpcao == 4
+            cExercicio := GcExercicioAtivo()
+            If Empty(cExercicio)
+                MsgAlert("Nenhum exercício ativo.", "Contabilidade")
+            Else
+                lRet := GcFecharPeriodo(cExercicio)
+                If lRet
+                    MsgInfo("Período " + cExercicio + " fechado com sucesso.", "Fechamento")
+                Else
+                    MsgAlert("Não foi possível fechar período " + cExercicio + ".", "Fechamento")
+                EndIf
+            EndIf
     EndCase
 Return
