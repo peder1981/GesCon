@@ -35,48 +35,48 @@ User Function GcPortalCondominoV2(cToken as character) as logical
 
     // Validação de parâmetro
     If Empty(cToken)
-        FWLogMsg("ERROR", "GcPortalCondominoV2: Token é obrigatório")
+        ConOut("[ERROR] " + "GcPortalCondominoV2: Token é obrigatório")
         Return .F.
     EndIf
 
     // Autentica token (reusa lógica v1 - marca como usado, salva em globals)
     lAutenticado := GcAuthPortalToken(cToken)
     If !lAutenticado
-        FWLogMsg("ERROR", "GcPortalCondominoV2: Token inválido, expirado ou já utilizado")
+        ConOut("[ERROR] " + "GcPortalCondominoV2: Token inválido, expirado ou já utilizado")
         Return .F.
     EndIf
 
     // Extrai código da unidade das variáveis globais populadas por GcAuthPortalToken
     cUnitCode := g_cUniPortal
     If Empty(cUnitCode)
-        FWLogMsg("ERROR", "GcPortalCondominoV2: Código de unidade não encontrado após autenticação")
+        ConOut("[ERROR] " + "GcPortalCondominoV2: Código de unidade não encontrado após autenticação")
         Return .F.
     EndIf
 
-    FWLogMsg("INFO", "GcPortalCondominoV2: Token autenticado para unidade " + cUnitCode)
+    ConOut("GcPortalCondominoV2: Token autenticado para unidade " + cUnitCode)
 
-    // Consulta AVISOS filtrado por unidade
-    cSql := "SELECT COUNT(*) as CNT FROM AVISOS WHERE AVI_UNIDADE = '" + GcSqlLit(cUnitCode) + "' AND D_E_L_E_T_ = ' '"
+    // Consulta AVISOS (global, não filtrado por unidade)
+    cSql := "SELECT COUNT(*) as CNT FROM AVISOS WHERE AVI_ATIVO = 1 AND D_E_L_E_T_ = ' '"
     aAvisos := TCSqlQuery(cSql)
     If Len(aAvisos) > 0
-        FWLogMsg("INFO", "GcPortalCondominoV2: " + cValToChar(aAvisos[1]:CNT) + " avisos encontrados para unidade " + cUnitCode)
+        ConOut("GcPortalCondominoV2: " + cValToChar(aAvisos[1]:CNT) + " avisos encontrados para unidade " + cUnitCode)
     EndIf
 
     // Consulta RPT_PORTAL_EXTRATOS filtrado por unidade
     cSql := "SELECT COUNT(*) as CNT FROM RPT_PORTAL_EXTRATOS WHERE REX_UNIDADE = '" + GcSqlLit(cUnitCode) + "' AND D_E_L_E_T_ = ' '"
     aExtratos := TCSqlQuery(cSql)
     If Len(aExtratos) > 0
-        FWLogMsg("INFO", "GcPortalCondominoV2: " + cValToChar(aExtratos[1]:CNT) + " extratos encontrados para unidade " + cUnitCode)
+        ConOut("GcPortalCondominoV2: " + cValToChar(aExtratos[1]:CNT) + " extratos encontrados para unidade " + cUnitCode)
     EndIf
 
     // Consulta RPT_PORTAL_AGENDA filtrado por unidade
     cSql := "SELECT COUNT(*) as CNT FROM RPT_PORTAL_AGENDA WHERE REA_UNIDADE = '" + GcSqlLit(cUnitCode) + "' AND D_E_L_E_T_ = ' '"
     aAgenda := TCSqlQuery(cSql)
     If Len(aAgenda) > 0
-        FWLogMsg("INFO", "GcPortalCondominoV2: " + cValToChar(aAgenda[1]:CNT) + " agendas encontradas para unidade " + cUnitCode)
+        ConOut("GcPortalCondominoV2: " + cValToChar(aAgenda[1]:CNT) + " agendas encontradas para unidade " + cUnitCode)
     EndIf
 
-    FWLogMsg("INFO", "GcPortalCondominoV2: Autenticação e carregamento de dados completado com sucesso")
+    ConOut("GcPortalCondominoV2: Autenticação e carregamento de dados completado com sucesso")
 Return .T.
 
 /*/{Protheus.doc} GcGerarPortalExtratos
@@ -104,9 +104,9 @@ Return .T.
     @example
         nTotal := U_GcGerarPortalExtratos("2025-01")
         If nTotal >= 0
-            FWLogMsg("INFO", "Snapshot gerado: " + cValToChar(nTotal) + " extratos")
+            ConOut("Snapshot gerado: " + cValToChar(nTotal) + " extratos")
         Else
-            FWLogMsg("ERROR", "Erro ao gerar snapshot")
+            ConOut("[ERROR] " + "Erro ao gerar snapshot")
         EndIf
 */
 User Function GcGerarPortalExtratos(cCompetencia as character) as numeric
@@ -121,13 +121,13 @@ User Function GcGerarPortalExtratos(cCompetencia as character) as numeric
 
     // Validação de parâmetro
     If Empty(cCompetencia)
-        FWLogMsg("ERROR", "Competência é obrigatória para GcGerarPortalExtratos")
+        ConOut("[ERROR] " + "Competência é obrigatória para GcGerarPortalExtratos")
         Return -1
     EndIf
 
     // Valida formato de competência (YYYY-MM)
     If Len(AllTrim(cCompetencia)) <> 7 .Or. SubStr(cCompetencia, 5, 1) <> "-"
-        FWLogMsg("ERROR", "Formato de competência inválido: " + cCompetencia + " (esperado YYYY-MM)")
+        ConOut("[ERROR] " + "Formato de competência inválido: " + cCompetencia + " (esperado YYYY-MM)")
         Return -1
     EndIf
 
@@ -138,30 +138,30 @@ User Function GcGerarPortalExtratos(cCompetencia as character) as numeric
     Try
         // Passo 1: Delete dos extratos antigos para esta competência (snapshot pattern)
         cSql := "DELETE FROM RPT_PORTAL_EXTRATOS WHERE REX_COMPETENCIA = '" + GcSqlLit(cCompetencia) + "'"
-        FWExecStatement(cSql)
-        FWLogMsg("INFO", "Old extracts cleared for competência: " + cCompetencia)
+        TCSqlExec(cSql)
+        ConOut("Old extracts cleared for competência: " + cCompetencia)
 
         // Passo 2: Consulta COB table para a competência (ativa + soft-delete valid)
         cSql := "SELECT COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, COB_DTPAG "
         cSql += "FROM COB "
         cSql += "WHERE COB_COMPET = '" + GcSqlLit(cCompetencia) + "' "
         cSql += "AND D_E_L_E_T_ = ' '"
-        aCobrancas := FWExecStatement(cSql)
+        aCobrancas := TCSqlQuery(cSql)
 
         If Len(aCobrancas) = 0
-            FWLogMsg("INFO", "No billing records found for competência: " + cCompetencia)
+            ConOut("No billing records found for competência: " + cCompetencia)
             Rollback()
             lTrans := .F.
             Return 0
         EndIf
 
-        FWLogMsg("INFO", "Found " + cValToChar(Len(aCobrancas)) + " billing records for competência: " + cCompetencia)
+        ConOut("Found " + cValToChar(Len(aCobrancas)) + " billing records for competência: " + cCompetencia)
 
         // Passo 3: Itera sobre cada cobrança e insere em RPT_PORTAL_EXTRATOS
         For i := 1 To Len(aCobrancas)
             // Valida vencimento (YYYYMMDD string -> converte para DATE)
             If Empty(aCobrancas[i]:COB_VENCTO)
-                FWLogMsg("WARN", "Skipping record with empty vencimento for unit " + aCobrancas[i]:COB_UNIDADE)
+                ConOut("[WARN] Skipping record with empty vencimento for unit " + aCobrancas[i]:COB_UNIDADE)
                 Loop
             EndIf
 
@@ -202,19 +202,19 @@ User Function GcGerarPortalExtratos(cCompetencia as character) as numeric
             cSql += ")"
 
             // Executa inserção com verificação de erro
-            FWExecStatement(cSql)
+            TCSqlExec(cSql)
             nCount := nCount + 1
 
-            FWLogMsg("INFO", "Inserted extract: Unit=" + aCobrancas[i]:COB_UNIDADE + ", Value=" + cValToChar(aCobrancas[i]:COB_VALOR) + ", Status=" + cStatus)
+            ConOut("Inserted extract: Unit=" + aCobrancas[i]:COB_UNIDADE + ", Value=" + cValToChar(aCobrancas[i]:COB_VALOR) + ", Status=" + cStatus)
         Next i
 
         // Commit da transação
         End Transaction
         lTrans := .F.
-        FWLogMsg("INFO", "GcGerarPortalExtratos completed: " + cValToChar(nCount) + " records inserted")
+        ConOut("GcGerarPortalExtratos completed: " + cValToChar(nCount) + " records inserted")
 
     Catch oError
-        FWLogMsg("ERROR", "GcGerarPortalExtratos failed: " + oError:Description)
+        ConOut("[ERROR] " + "GcGerarPortalExtratos failed: " + oError:Description)
         If lTrans
             Rollback()
         EndIf
@@ -247,9 +247,9 @@ Return nCount
     @example
         nTotal := U_GcGerarPortalAgenda("2025-01")
         If nTotal >= 0
-            FWLogMsg("INFO", "Agenda gerada: " + cValToChar(nTotal) + " vencimentos")
+            ConOut("Agenda gerada: " + cValToChar(nTotal) + " vencimentos")
         Else
-            FWLogMsg("ERROR", "Erro ao gerar agenda")
+            ConOut("[ERROR] " + "Erro ao gerar agenda")
         EndIf
 */
 User Function GcGerarPortalAgenda(cCompetencia as character) as numeric
@@ -265,13 +265,13 @@ User Function GcGerarPortalAgenda(cCompetencia as character) as numeric
 
     // Validação de parâmetro
     If Empty(cCompetencia)
-        FWLogMsg("ERROR", "Competência é obrigatória para GcGerarPortalAgenda")
+        ConOut("[ERROR] " + "Competência é obrigatória para GcGerarPortalAgenda")
         Return -1
     EndIf
 
     // Valida formato de competência (YYYY-MM)
     If Len(AllTrim(cCompetencia)) <> 7 .Or. SubStr(cCompetencia, 5, 1) <> "-"
-        FWLogMsg("ERROR", "Formato de competência inválido: " + cCompetencia + " (esperado YYYY-MM)")
+        ConOut("[ERROR] " + "Formato de competência inválido: " + cCompetencia + " (esperado YYYY-MM)")
         Return -1
     EndIf
 
@@ -282,20 +282,20 @@ User Function GcGerarPortalAgenda(cCompetencia as character) as numeric
     Try
         // Passo 1: Delete da agenda antiga (snapshot pattern - delete 100%, sem filtro)
         cSql := "DELETE FROM RPT_PORTAL_AGENDA"
-        FWExecStatement(cSql)
-        FWLogMsg("INFO", "Old agenda cleared")
+        TCSqlExec(cSql)
+        ConOut("Old agenda cleared")
 
         // Passo 2: Gera lista de próximas 12 competências starting from cCompetencia
         aMeses := GcGerarProximos12Meses(cCompetencia)
 
         If Len(aMeses) = 0
-            FWLogMsg("ERROR", "Failed to generate 12-month list from " + cCompetencia)
+            ConOut("[ERROR] " + "Failed to generate 12-month list from " + cCompetencia)
             Rollback()
             lTrans := .F.
             Return -1
         EndIf
 
-        FWLogMsg("INFO", "Generated 12-month range starting from " + cCompetencia)
+        ConOut("Generated 12-month range starting from " + cCompetencia)
 
         // Passo 3: Itera sobre cada mês e consulta COB records
         For i := 1 To Len(aMeses)
@@ -306,20 +306,20 @@ User Function GcGerarPortalAgenda(cCompetencia as character) as numeric
             cSql += "FROM COB "
             cSql += "WHERE COB_COMPET = '" + GcSqlLit(cMesAtual) + "' "
             cSql += "AND D_E_L_E_T_ = ' '"
-            aCobrancas := FWExecStatement(cSql)
+            aCobrancas := TCSqlQuery(cSql)
 
             If Len(aCobrancas) = 0
-                FWLogMsg("INFO", "No billing records found for competência: " + cMesAtual)
+                ConOut("No billing records found for competência: " + cMesAtual)
                 Loop
             EndIf
 
-            FWLogMsg("INFO", "Found " + cValToChar(Len(aCobrancas)) + " billing records for competência: " + cMesAtual)
+            ConOut("Found " + cValToChar(Len(aCobrancas)) + " billing records for competência: " + cMesAtual)
 
             // Passo 4: Itera sobre cada cobrança e insere em RPT_PORTAL_AGENDA
             For j := 1 To Len(aCobrancas)
                 // Valida vencimento (YYYYMMDD string -> converte para DATE)
                 If Empty(aCobrancas[j]:COB_VENCTO)
-                    FWLogMsg("WARN", "Skipping record with empty vencimento for unit " + aCobrancas[j]:COB_UNIDADE + ", competência " + cMesAtual)
+                    ConOut("[WARN] Skipping record with empty vencimento for unit " + aCobrancas[j]:COB_UNIDADE + ", competência " + cMesAtual)
                     Loop
                 EndIf
 
@@ -338,20 +338,20 @@ User Function GcGerarPortalAgenda(cCompetencia as character) as numeric
                 cSql += ")"
 
                 // Executa inserção com verificação de erro
-                FWExecStatement(cSql)
+                TCSqlExec(cSql)
                 nCount := nCount + 1
 
-                FWLogMsg("INFO", "Inserted agenda: Unit=" + aCobrancas[j]:COB_UNIDADE + ", Competencia=" + cMesAtual + ", Value=" + cValToChar(aCobrancas[j]:COB_VALOR))
+                ConOut("Inserted agenda: Unit=" + aCobrancas[j]:COB_UNIDADE + ", Competencia=" + cMesAtual + ", Value=" + cValToChar(aCobrancas[j]:COB_VALOR))
             Next j
         Next i
 
         // Commit da transação
         End Transaction
         lTrans := .F.
-        FWLogMsg("INFO", "GcGerarPortalAgenda completed: " + cValToChar(nCount) + " records inserted")
+        ConOut("GcGerarPortalAgenda completed: " + cValToChar(nCount) + " records inserted")
 
     Catch oError
-        FWLogMsg("ERROR", "GcGerarPortalAgenda failed: " + oError:Description)
+        ConOut("[ERROR] " + "GcGerarPortalAgenda failed: " + oError:Description)
         If lTrans
             Rollback()
         EndIf
@@ -453,9 +453,9 @@ Return cRet
     @return lSucesso, logical, .T. se aviso criado com sucesso, .F. se erro
     @example
         If U_GcCriarAviso("Manutenção Programada", "A manutenção ocorrerá no dia 15.")
-            FWLogMsg("INFO", "Aviso criado com sucesso")
+            ConOut("Aviso criado com sucesso")
         Else
-            FWLogMsg("ERROR", "Erro ao criar aviso")
+            ConOut("[ERROR] " + "Erro ao criar aviso")
         EndIf
 */
 User Function GcCriarAviso(cTitulo as character, cCorpo as character) as logical
@@ -464,12 +464,12 @@ User Function GcCriarAviso(cTitulo as character, cCorpo as character) as logical
 
     // Validação de parâmetros
     If Empty(cTitulo)
-        FWLogMsg("ERROR", "Título é obrigatório para GcCriarAviso")
+        ConOut("[ERROR] " + "Título é obrigatório para GcCriarAviso")
         Return .F.
     EndIf
 
     If Empty(cCorpo)
-        FWLogMsg("ERROR", "Corpo é obrigatório para GcCriarAviso")
+        ConOut("[ERROR] " + "Corpo é obrigatório para GcCriarAviso")
         Return .F.
     EndIf
 
@@ -489,15 +489,15 @@ User Function GcCriarAviso(cTitulo as character, cCorpo as character) as logical
         cSql += ")"
 
         // Executa inserção com verificação de erro
-        FWExecStatement(cSql)
+        TCSqlExec(cSql)
 
         // Commit da transação
         End Transaction
         lTrans := .F.
-        FWLogMsg("INFO", "GcCriarAviso completed: Título=" + cTitulo)
+        ConOut("GcCriarAviso completed: Título=" + cTitulo)
 
     Catch oError
-        FWLogMsg("ERROR", "GcCriarAviso failed: " + oError:Description)
+        ConOut("[ERROR] " + "GcCriarAviso failed: " + oError:Description)
         If lTrans
             Rollback()
         EndIf
@@ -523,9 +523,9 @@ Return .T.
     @return lSucesso, logical, .T. se aviso arquivado com sucesso, .F. se erro ou não encontrado
     @example
         If U_GcArquivarAviso(5)
-            FWLogMsg("INFO", "Aviso 5 arquivado com sucesso")
+            ConOut("Aviso 5 arquivado com sucesso")
         Else
-            FWLogMsg("ERROR", "Aviso 5 não encontrado ou erro ao arquivar")
+            ConOut("[ERROR] " + "Aviso 5 não encontrado ou erro ao arquivar")
         EndIf
 */
 User Function GcArquivarAviso(nAvisoId as numeric) as logical
@@ -535,7 +535,7 @@ User Function GcArquivarAviso(nAvisoId as numeric) as logical
 
     // Validação de parâmetro
     If nAvisoId <= 0
-        FWLogMsg("ERROR", "ID do aviso inválido para GcArquivarAviso: " + cValToChar(nAvisoId))
+        ConOut("[ERROR] " + "ID do aviso inválido para GcArquivarAviso: " + cValToChar(nAvisoId))
         Return .F.
     EndIf
 
@@ -546,10 +546,10 @@ User Function GcArquivarAviso(nAvisoId as numeric) as logical
     Try
         // Passo 1: Verifica se o aviso existe
         cSql := "SELECT AVI_ID FROM AVISOS WHERE AVI_ID = " + cValToChar(nAvisoId) + " AND D_E_L_E_T_ = ' '"
-        aResult := FWExecStatement(cSql)
+        aResult := TCSqlQuery(cSql)
 
         If Len(aResult) = 0
-            FWLogMsg("WARN", "Aviso não encontrado: AVI_ID=" + cValToChar(nAvisoId))
+            ConOut("[WARN] Aviso não encontrado: AVI_ID=" + cValToChar(nAvisoId))
             Rollback()
             lTrans := .F.
             Return .F.
@@ -557,15 +557,15 @@ User Function GcArquivarAviso(nAvisoId as numeric) as logical
 
         // Passo 2: Atualiza AVI_ATIVO = 0
         cSql := "UPDATE AVISOS SET AVI_ATIVO = 0 WHERE AVI_ID = " + cValToChar(nAvisoId) + " AND D_E_L_E_T_ = ' '"
-        FWExecStatement(cSql)
+        TCSqlExec(cSql)
 
         // Commit da transação
         End Transaction
         lTrans := .F.
-        FWLogMsg("INFO", "GcArquivarAviso completed: AVI_ID=" + cValToChar(nAvisoId))
+        ConOut("GcArquivarAviso completed: AVI_ID=" + cValToChar(nAvisoId))
 
     Catch oError
-        FWLogMsg("ERROR", "GcArquivarAviso failed: " + oError:Description)
+        ConOut("[ERROR] " + "GcArquivarAviso failed: " + oError:Description)
         If lTrans
             Rollback()
         EndIf
