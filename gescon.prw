@@ -14,6 +14,7 @@
 #include "src/relatorios.prw"
 #include "src/usuarios.prw"
 #include "src/portal.prw"
+#include "src/portal-v2.prw"
 #include "src/contabil.prw"
 #include "src/auditoria.prw"
 
