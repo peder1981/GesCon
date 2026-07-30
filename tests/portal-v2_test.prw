@@ -35,6 +35,9 @@ User Function PortalV2Test()
     TestGcGerarPortalAgenda()
     ConOut("")
 
+    TestPeriodClosureGeneratesSnapshots()
+    ConOut("")
+
     ConOut("========== FIM DOS TESTES DO PORTAL V2 ==========")
     ConOut("")
 
@@ -341,4 +344,195 @@ User Function TestGcGerarPortalAgenda()
     EndIf
 
     FWLogMsg("INFO", "[PASS] TestGcGerarPortalAgenda completed successfully")
+Return .T.
+
+/*/{Protheus.doc} TestPeriodClosureGeneratesSnapshots
+    Testa a integração de snapshots do Portal v2 com o fechamento de período:
+    1. Cria um exercício de teste (2025-01)
+    2. Insere registros de teste na tabela LANCAMENTOS
+    3. Insere registros de teste na tabela COB
+    4. Chama GcFecharPeriodo("2025-01")
+    5. Verifica se os snapshots foram criados em RPT_PORTAL_EXTRATOS e RPT_PORTAL_AGENDA
+*/
+User Function TestPeriodClosureGeneratesSnapshots()
+    Local cCompet := "2025-01" as character
+    Local cProxCompet := "2025-02" as character
+    Local cSql := "" as character
+    Local aResult := {} as array
+    Local nExtratoCount := 0 as numeric
+    Local nAgendaCount := 0 as numeric
+    Local lTodoOk := .T. as logical
+
+    FWLogMsg("INFO", "Test: Period closure with Portal v2 snapshots for " + cCompet)
+
+    // Step 1: Limpa dados de testes anteriores
+    cSql := "DELETE FROM RPT_PORTAL_EXTRATOS WHERE REX_COMPETENCIA IN ('" + cCompet + "', '" + cProxCompet + "')"
+    FWExecStatement(cSql)
+    cSql := "DELETE FROM RPT_PORTAL_AGENDA WHERE REA_COMPETENCIA IN ('" + cCompet + "', '" + cProxCompet + "')"
+    FWExecStatement(cSql)
+    cSql := "DELETE FROM RPT_BALANCETE WHERE RPT_EXERCICIO IN ('" + cCompet + "', '" + cProxCompet + "')"
+    FWExecStatement(cSql)
+    cSql := "DELETE FROM COB WHERE COB_COMPET = '" + cCompet + "'"
+    FWExecStatement(cSql)
+    cSql := "DELETE FROM LANCAMENTOS WHERE LAN_EXERCICIO = '" + cCompet + "'"
+    FWExecStatement(cSql)
+    cSql := "DELETE FROM EXERCICIO WHERE EXE_CODIGO IN ('" + cCompet + "', '" + cProxCompet + "')"
+    FWExecStatement(cSql)
+
+    // Step 2: Cria exercício de teste
+    cSql := "INSERT INTO EXERCICIO (EXE_CODIGO, EXE_ATIVO, EXE_FECHADO, EXE_INICIO, EXE_FIM, D_E_L_E_T_) VALUES ("
+    cSql += "'" + cCompet + "', "
+    cSql += "1, "
+    cSql += "0, "
+    cSql += "'20250101', "
+    cSql += "'20250131', "
+    cSql += "' ')"
+    FWExecStatement(cSql)
+    FWLogMsg("INFO", "Exercise " + cCompet + " created")
+
+    // Step 3: Insere lançamentos contábeis de teste (para validar integridade)
+    // Lançamento 1: Débito 1100 / Crédito 3000 (Receita)
+    cSql := "INSERT INTO LANCAMENTOS ("
+    cSql += "LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, "
+    cSql += "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, R_E_C_N_O_"
+    cSql += ") VALUES ("
+    cSql += "'20250115', "
+    cSql += "'1100', "
+    cSql += "'3000', "
+    cSql += "1000.00, "
+    cSql += "'Receita Condominial', "
+    cSql += "'MANUAL', "
+    cSql += "'" + cCompet + "', "
+    cSql += "datetime('now'), "
+    cSql += "'TEST_USER', "
+    cSql += "' ', "
+    cSql += "1)"
+    FWExecStatement(cSql)
+
+    // Lançamento 2: Débito 4000 / Crédito 1100 (Despesa / Caixa)
+    cSql := "INSERT INTO LANCAMENTOS ("
+    cSql += "LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, "
+    cSql += "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, R_E_C_N_O_"
+    cSql += ") VALUES ("
+    cSql += "'20250115', "
+    cSql += "'4000', "
+    cSql += "'1100', "
+    cSql += "1000.00, "
+    cSql += "'Despesa Comum', "
+    cSql += "'MANUAL', "
+    cSql += "'" + cCompet + "', "
+    cSql += "datetime('now'), "
+    cSql += "'TEST_USER', "
+    cSql += "' ', "
+    cSql += "2)"
+    FWExecStatement(cSql)
+
+    FWLogMsg("INFO", "Test entries created: 2 double-entry records for accounting integrity")
+
+    // Step 4: Insere registros COB de teste para gerar snapshots
+    cSql := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_) VALUES ("
+    cSql += "'101', '"
+    cSql += cCompet + "', "
+    cSql += "500.00, "
+    cSql += "'20250220', "
+    cSql += "'PENDENTE', "
+    cSql += "' ')"
+    FWExecStatement(cSql)
+
+    cSql := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_) VALUES ("
+    cSql += "'102', '"
+    cSql += cCompet + "', "
+    cSql += "750.00, "
+    cSql += "'20250220', "
+    cSql += "'PENDENTE', "
+    cSql += "' ')"
+    FWExecStatement(cSql)
+
+    FWLogMsg("INFO", "Test billing records created: 2 COB entries for " + cCompet)
+
+    // Step 5: Verifica que os snapshots NÃO existem antes do fechamento
+    cSql := "SELECT COUNT(*) as CNT FROM RPT_PORTAL_EXTRATOS WHERE REX_COMPETENCIA = '" + cCompet + "' AND D_E_L_E_T_ = ' '"
+    aResult := FWExecStatement(cSql)
+    If Len(aResult) > 0 .And. aResult[1]:CNT = 0
+        FWLogMsg("INFO", "Pre-closure check: RPT_PORTAL_EXTRATOS is empty (as expected)")
+    Else
+        FWLogMsg("WARN", "Pre-closure check: RPT_PORTAL_EXTRATOS already has records")
+    EndIf
+
+    // Step 6: Chama GcFecharPeriodo() que deve gerar os snapshots
+    If U_GcFecharPeriodo(cCompet)
+        FWLogMsg("INFO", "Period " + cCompet + " closed successfully")
+    Else
+        FWLogMsg("ERROR", "[FAIL] Period closure failed for " + cCompet)
+        Return .F.
+    EndIf
+
+    // Step 7: Verifica se o exercício foi marcado como fechado
+    cSql := "SELECT EXE_FECHADO FROM EXERCICIO WHERE EXE_CODIGO = '" + cCompet + "' AND D_E_L_E_T_ = ' '"
+    aResult := FWExecStatement(cSql)
+    If Len(aResult) > 0 .And. aResult[1]:EXE_FECHADO = 1
+        FWLogMsg("INFO", "[PASS] Exercise marked as closed")
+    Else
+        FWLogMsg("ERROR", "[FAIL] Exercise not marked as closed")
+        Return .F.
+    EndIf
+
+    // Step 8: Verifica se o próximo exercício foi criado
+    cSql := "SELECT EXE_ATIVO FROM EXERCICIO WHERE EXE_CODIGO = '" + cProxCompet + "' AND D_E_L_E_T_ = ' '"
+    aResult := FWExecStatement(cSql)
+    If Len(aResult) > 0 .And. aResult[1]:EXE_ATIVO = 1
+        FWLogMsg("INFO", "[PASS] Next exercise created and set as active")
+    Else
+        FWLogMsg("ERROR", "[FAIL] Next exercise not created or not active")
+        Return .F.
+    EndIf
+
+    // Step 9: Verifica se os snapshots foram criados em RPT_PORTAL_EXTRATOS
+    cSql := "SELECT COUNT(*) as CNT FROM RPT_PORTAL_EXTRATOS WHERE REX_COMPETENCIA = '" + cCompet + "' AND D_E_L_E_T_ = ' '"
+    aResult := FWExecStatement(cSql)
+    If Len(aResult) > 0
+        nExtratoCount := aResult[1]:CNT
+        If nExtratoCount >= 2
+            FWLogMsg("INFO", "[PASS] Portal v2 extracts snapshot created: " + cValToChar(nExtratoCount) + " records")
+        Else
+            FWLogMsg("ERROR", "[FAIL] Expected at least 2 extract records, got " + cValToChar(nExtratoCount))
+            Return .F.
+        EndIf
+    Else
+        FWLogMsg("ERROR", "[FAIL] Unable to query RPT_PORTAL_EXTRATOS")
+        Return .F.
+    EndIf
+
+    // Step 10: Verifica se os snapshots foram criados em RPT_PORTAL_AGENDA
+    cSql := "SELECT COUNT(*) as CNT FROM RPT_PORTAL_AGENDA WHERE REA_COMPETENCIA = '" + cCompet + "' AND D_E_L_E_T_ = ' '"
+    aResult := FWExecStatement(cSql)
+    If Len(aResult) > 0
+        nAgendaCount := aResult[1]:CNT
+        If nAgendaCount >= 2
+            FWLogMsg("INFO", "[PASS] Portal v2 agenda snapshot created: " + cValToChar(nAgendaCount) + " records")
+        Else
+            FWLogMsg("ERROR", "[FAIL] Expected at least 2 agenda records, got " + cValToChar(nAgendaCount))
+            Return .F.
+        EndIf
+    Else
+        FWLogMsg("ERROR", "[FAIL] Unable to query RPT_PORTAL_AGENDA")
+        Return .F.
+    EndIf
+
+    // Step 11: Verifica dados específicos dos snapshots
+    cSql := "SELECT REX_UNIDADE, REX_VALOR FROM RPT_PORTAL_EXTRATOS WHERE REX_COMPETENCIA = '" + cCompet + "' AND REX_UNIDADE = '101' AND D_E_L_E_T_ = ' '"
+    aResult := FWExecStatement(cSql)
+    If Len(aResult) > 0
+        If aResult[1]:REX_VALOR = 500.00
+            FWLogMsg("INFO", "[PASS] Extract snapshot data correct for Unit 101: value=500.00")
+        Else
+            FWLogMsg("ERROR", "[FAIL] Extract snapshot data incorrect for Unit 101: value=" + cValToChar(aResult[1]:REX_VALOR))
+            Return .F.
+        EndIf
+    Else
+        FWLogMsg("ERROR", "[FAIL] Unit 101 not found in extract snapshot")
+        Return .F.
+    EndIf
+
+    FWLogMsg("INFO", "[PASS] TestPeriodClosureGeneratesSnapshots completed successfully - snapshots created after period closure")
 Return .T.

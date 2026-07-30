@@ -677,6 +677,13 @@ User Function GcFecharPeriodo(cExercicio)
     Local nSaldo := GcGerarBalancetePeriodo(cExercicio)
     ConOut("Balance sheet generated for " + cExercicio + " (saldo=" + cValToChar(nSaldo) + ")")
 
+    // Gera snapshots do Portal v2: extratos e agenda
+    Local nExtratosCount := U_GcGerarPortalExtratos(cExercicio)
+    ConOut("Portal v2 extracts snapshot generated: " + cValToChar(nExtratosCount) + " records")
+
+    Local nAgendaCount := U_GcGerarPortalAgenda(cExercicio)
+    ConOut("Portal v2 agenda snapshot generated: " + cValToChar(nAgendaCount) + " records")
+
     lRet := .T.
 
 Return lRet
