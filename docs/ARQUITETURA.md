@@ -57,8 +57,12 @@ GesCon/
 │   │                         #    GcCriarAdminNovo, GcDateToIso, GcGerarTokenId
 │   ├── portal.prw            # GcPortalCondmino, GcAuthPortalToken, GcPortalBrowse,
 │   │                         #    GcPortalCalcCobrancas, GcSairPortal
-│   └── boleto.prw            # GcGeraBoleto, GcFormatLinhaDigitavel, GcGeraCodigoBarras
-│                           #    (Itaú/Bradesco)
+│   ├── boleto.prw            # GcGeraBoleto, GcFormatLinhaDigitavel, GcGeraCodigoBarras
+│   │                         #    (Itaú/Bradesco)
+│   ├── contabil.prw          # GcValidarIntegridade, GcFecharPeriodo, GcGerarBalancetePeriodo
+│   │                         #    Sistema contábil em partida dupla
+│   └── auditoria.prw         # GcRegistrarAnomalia, GcAuditoriaFecharPeriodo
+│                           #    Auditoria e detecção de anomalias
 ├── tests/
 │   ├── db_test.prw
 │   ├── login_test.prw
@@ -66,7 +70,9 @@ GesCon/
 │   ├── pagamento_test.prw
 │   ├── malas_test.prw
 │   ├── relatorios_test.prw
-│   └── portal_test.prw       # fixture end-to-end do portal (token+auth+cobranças)
+│   ├── portal_test.prw       # fixture end-to-end do portal (token+auth+cobranças)
+│   ├── contabil_test.prw     # testes unitários do sistema contábil
+│   └── contabil_e2e_test.prw # teste end-to-end: fluxo completo (lançamentos → fechamento)
 └── docs/
     ├── ARQUITETURA.md        # este arquivo
     ├── FUNCIONAL.md
@@ -80,9 +86,9 @@ query.
 
 ## Modelo de dados
 
-11 tabelas, todas com a convenção de exclusão lógica estilo Protheus
-(`R_E_C_N_O_`/`D_E_L_E_T_`/`R_E_C_D_E_L_`) — ver `schema.sql` para o DDL
-completo.
+18 tabelas (11 operacionais + 7 contábeis), todas com a convenção de
+exclusão lógica estilo Protheus (`R_E_C_N_O_`/`D_E_L_E_T_`/`R_E_C_D_E_L_`) —
+ver `schema.sql` para o DDL completo.
 
 | Tabela | Campos de negócio | Papel |
 |---|---|---|
@@ -97,6 +103,18 @@ completo.
 | `CFG_BOLETO` | `CFG_BANCO`, `CFG_AGENCIA`, `CFG_CONTA`, `CFG_COBRT`, `CFG_CARTEIRA` | Configuração de boleto bancário (código banco, agência, conta, carta/cartão, carteira) |
 | `GCT_TOKEN` | `TOKEN`, `USR_LOGIN`, `CON_CODIGO`, `UNI_CODIGO`, `CRIPTADO`, `VALIDO_ATE`, `USADO` | Token temporário de acesso do condômino ao portal — válido por 48h, marcado como usado na autenticação |
 | `RPT_COND_COBRANCAS` | `RCC_UNIDADE`, `RCC_COMPET`, `RCC_VALOR`, `RCC_VENCTO`, `RCC_STATUS`, `RCC_DTPAG` | Snapshot das cobranças do condômino no portal — gerado a partir de `COB` filtrado pela unidade do token |
+
+**Tabelas do Sistema Contábil (Partida Dupla):**
+
+| Tabela | Campos de negócio | Papel |
+|---|---|---|
+| `PLANO_CONTAS` | `PLA_CODIGO`, `PLA_NOME`, `PLA_TIPO`, `PLA_ATIVO` | Plano de contas: ativo, passivo, receita, despesa (20 contas seed) |
+| `EXERCICIO` | `EXE_CODIGO`, `EXE_INICIO`, `EXE_FIM`, `EXE_ATIVO`, `EXE_FECHADO` | Período contábil (mês) — formato "YYYY-MM", um ativo por vez |
+| `LANCAMENTOS` | `LAN_DATA`, `LAN_CONTA_DEB`, `LAN_CONTA_CRED`, `LAN_VALOR`, `LAN_TIPO`, `LAN_EXERCICIO` | Lançamentos contábeis: manual, automatico_despesa, automatico_rateio |
+| `RATEIO_DETALHE` | `RAT_LANCAMENTO`, `RAT_UNIDADE`, `RAT_VALOR`, `RAT_PERCENTUAL` | Detalhes de rateio por unidade (FK → LANCAMENTOS) |
+| `REPARTICAO` | `REP_CODIGO`, `REP_NOME`, `REP_ATIVO` | Tipos de repartição: FRACAO, METRAGEM, FIXO |
+| `AUDITORIA` | `AUD_TIPO`, `AUD_DESCRICAO`, `AUD_SEVERIDADE`, `AUD_EXERCICIO` | Trilha de auditoria: desequilibrio, lan_orfao, cob_orfao (severidades: CRITICA, AVISO, INFO) |
+| `RPT_BALANCETE` | `RPT_EXERCICIO`, `RPT_RECEITAS`, `RPT_DESPESAS`, `RPT_SALDO`, `RPT_DATA_GERACAO` | Snapshot do balancete: saldo = receitas - despesas, gerado ao fechar período |
 
 Relacionamentos: `UNI.UNI_CONDOMINO → CON.CON_CODIGO` (texto livre, sem
 FK/combo — ver "Limitações conhecidas"). `COB.COB_UNIDADE →
@@ -216,6 +234,19 @@ depois de todos os `#include`s.
 | `GcGeraBoleto` | `src/boleto.prw` | `GcGeraBoleto(nRecnoCob)` | `logical` — abre diálogo de configuração do boleto |
 | `GcFormatLinhaDigitavel` | `src/boleto.prw` | `GcFormatLinhaDigitavel(cBanco, cAgencia, cConta, cCobrta, cCarteira, nFatorVenc, nValor, cDV)` | `character` — linha digitável formatada |
 | `GcGeraCodigoBarras` | `src/boleto.prw` | `GcGeraCodigoBarras(cBanco, cAgencia, cConta, cCobrta, cCarteira, nFatorVenc, nValor, cDV)` | `character` — 44 digits do código de barras |
+| `GcExercicioAtivo` | `src/contabil.prw` | `GcExercicioAtivo()` | `character` — código do exercício ativo ou vazio |
+| `GcPeriodoFechado` | `src/contabil.prw` | `GcPeriodoFechado(cExercicio)` | `logical` — `.T.` se período está fechado |
+| `GcValidarIntegridade` | `src/contabil.prw` | `GcValidarIntegridade(cExercicio)` | `logical` — `.T.` se débitos == créditos (tol. 0.01) |
+| `GcFecharPeriodo` | `src/contabil.prw` | `GcFecharPeriodo(cExercicio)` | `logical` — fecha período, cria próximo, gera balancete |
+| `GcGerarBalancetePeriodo` | `src/contabil.prw` | `GcGerarBalancetePeriodo(cExercicio)` | `numeric` — saldo (receitas - despesas) |
+| `GcCriarLancamentoManualDireto` | `src/contabil.prw` | `GcCriarLancamentoManualDireto(dData, cDescricao, cContaDeb, cContaCred, nValor)` | `logical` — cria lançamento manual |
+| `GcEditarLancamentoDescricao` | `src/contabil.prw` | `GcEditarLancamentoDescricao(nRecno, cDescricao)` | `logical` — edita descrição (preserva contas) |
+| `GcDeletarLancamento` | `src/contabil.prw` | `GcDeletarLancamento(nRecno)` | `logical` — soft-delete de lançamento |
+| `GcCalcularRateio` | `src/contabil.prw` | `GcCalcularRateio(cReparticao, nValor, dData)` | `array` — {unidade, fração, valor} para cada unidade |
+| `GcLancarDespesaContabil` | `src/contabil.prw` | `GcLancarDespesaContabil(dData, cDescricao, nValor, cReparticao, nDiaVenc)` | `logical` — cria despesa com rateio automático |
+| `GcRegistrarAnomalia` | `src/auditoria.prw` | `GcRegistrarAnomalia(cTipo, cDescricao, cSeveridade, [cExercicio], [nRecnoLan], [nRecnoCob])` | `logical` — registra anomalia em AUDITORIA |
+| `GcAuditoriaFecharPeriodo` | `src/auditoria.prw` | `GcAuditoriaFecharPeriodo(cExercicio)` | `numeric` — quantidade de anomalias críticas detectadas |
+| `GcMenuContabilidade` | `gescon.prw` | `GcMenuContabilidade()` | — (submenu de contabilidade: validar, auditar, fechar) |
 
 ## Acesso a dados
 
