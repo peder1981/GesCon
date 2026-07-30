@@ -408,6 +408,19 @@ Static Function GcGerarProximos12Meses(cCompetencia as character) as array
 
 Return aMeses
 
+/*/{Protheus.doc} GcConverterDataString
+    Converte data de string formato YYYYMMDD para formato ISO 8601 (YYYY-MM-DD).
+    Utilizada internamente por GcGerarPortalExtratos e GcGerarPortalAgenda
+    para normalizar datas do formato da tabela COB.
+    @type Static Function
+    @author GesCon
+    @since 2026-07-30
+    @param cDataStr, character, data no formato YYYYMMDD (ex: "20250215")
+    @return cRet, character, data no formato YYYY-MM-DD (ex: "2025-02-15"), ou "" se inválida
+    @example
+        cRet := GcConverterDataString("20250215")  // retorna "2025-02-15"
+        cRet := GcConverterDataString("20250")     // retorna "" (inválida)
+*/
 Static Function GcConverterDataString(cDataStr as character) as character
     Local cRet := "" as character
 
