@@ -32,6 +32,9 @@ User Function PortalV2Test()
     TestGcGerarPortalExtratos()
     ConOut("")
 
+    TestGcGerarPortalAgenda()
+    ConOut("")
+
     ConOut("========== FIM DOS TESTES DO PORTAL V2 ==========")
     ConOut("")
 
@@ -224,4 +227,118 @@ User Function TestGcGerarPortalExtratos()
     EndIf
 
     FWLogMsg("INFO", "[PASS] TestGcGerarPortalExtratos completed successfully")
+Return .T.
+
+/*/{Protheus.doc} TestGcGerarPortalAgenda
+    Testa a função GcGerarPortalAgenda:
+    1. Insere registros COB de teste para 3 meses consecutivos
+    2. Chama GcGerarPortalAgenda("2025-01") para gerar agenda dos próximos 12 meses
+    3. Verifica se REA records foram criados com dados corretos
+*/
+User Function TestGcGerarPortalAgenda()
+    Local cCompet := "2025-01" as character
+    Local cSql := "" as character
+    Local nCount := 0 as numeric
+    Local aResult := {} as array
+    Local lTodoOk := .T. as logical
+    Local i := 0 as numeric
+    Local aMeses := {} as array
+    Local cMesAtual := "" as character
+
+    FWLogMsg("INFO", "Test: GcGerarPortalAgenda(" + cCompet + ")")
+
+    // Step 1: Limpa eventuais dados de testes anteriores
+    cSql := "DELETE FROM RPT_PORTAL_AGENDA WHERE REA_UNIDADE IN ('101', '102', '103')"
+    FWExecStatement(cSql)
+
+    // Gera os 3 primeiros meses (2025-01, 2025-02, 2025-03)
+    aMeses := {}
+    aMeses[1] := "2025-01"
+    aMeses[2] := "2025-02"
+    aMeses[3] := "2025-03"
+
+    For i := 1 To Len(aMeses)
+        cMesAtual := aMeses[i]
+
+        // Limpa dados anteriores para este mês
+        cSql := "DELETE FROM COB WHERE COB_COMPET = '" + cMesAtual + "' AND COB_UNIDADE IN ('101', '102', '103')"
+        FWExecStatement(cSql)
+
+        // Insere COB records de teste
+        // Mês 1: 3 registros (unidades 101, 102, 103)
+        cSql := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_) VALUES ("
+        cSql += "'101', "
+        cSql += "'" + cMesAtual + "', "
+        cSql += "1000.00, "
+        cSql += "'20250215', "  // Usar data consistente para os testes (mês 2)
+        cSql += "'PENDENTE', "
+        cSql += "' ')"
+        FWExecStatement(cSql)
+
+        cSql := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_) VALUES ("
+        cSql += "'102', "
+        cSql += "'" + cMesAtual + "', "
+        cSql += "1500.00, "
+        cSql += "'20250215', "
+        cSql += "'PENDENTE', "
+        cSql += "' ')"
+        FWExecStatement(cSql)
+
+        cSql := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_) VALUES ("
+        cSql += "'103', "
+        cSql += "'" + cMesAtual + "', "
+        cSql += "2000.00, "
+        cSql += "'20250215', "
+        cSql += "'PENDENTE', "
+        cSql += "' ')"
+        FWExecStatement(cSql)
+    Next i
+
+    // Step 3: Chama função
+    nCount := U_GcGerarPortalAgenda(cCompet)
+    FWLogMsg("INFO", "GcGerarPortalAgenda returned: " + cValToChar(nCount))
+
+    // Step 4: Valida resultado (espera 12 meses * 3 unidades = 36 registros)
+    // Se apenas inseriu para os 3 primeiros meses: 3 meses * 3 unidades = 9 registros
+    If nCount < 9
+        FWLogMsg("ERROR", "[FAIL] Expected at least 9 records (3 months x 3 units), got " + cValToChar(nCount))
+        Return .F.
+    EndIf
+
+    // Step 5: Verifica registros inseridos para o primeiro mês
+    cSql := "SELECT COUNT(*) as CNT FROM RPT_PORTAL_AGENDA WHERE REA_COMPETENCIA = '2025-01' AND D_E_L_E_T_ = ' '"
+    aResult := FWExecStatement(cSql)
+    If Len(aResult) > 0 .And. aResult[1]:CNT >= 3
+        FWLogMsg("INFO", "[PASS] At least 3 records inserted into RPT_PORTAL_AGENDA for 2025-01")
+    Else
+        FWLogMsg("ERROR", "[FAIL] Expected at least 3 records for 2025-01 in RPT_PORTAL_AGENDA")
+        Return .F.
+    EndIf
+
+    // Step 6: Verifica dados específicos (Unidade 101, mês 2025-01)
+    cSql := "SELECT REA_VALOR, REA_COMPETENCIA FROM RPT_PORTAL_AGENDA WHERE REA_COMPETENCIA = '2025-01' AND REA_UNIDADE = '101' AND D_E_L_E_T_ = ' '"
+    aResult := FWExecStatement(cSql)
+    If Len(aResult) > 0
+        If aResult[1]:REA_VALOR = 1000.00 .And. aResult[1]:REA_COMPETENCIA = "2025-01"
+            FWLogMsg("INFO", "[PASS] Unit 101 data correct: value=1000.00, competencia=2025-01")
+        Else
+            FWLogMsg("ERROR", "[FAIL] Unit 101 data incorrect: value=" + cValToChar(aResult[1]:REA_VALOR) + ", competencia=" + aResult[1]:REA_COMPETENCIA)
+            Return .F.
+        EndIf
+    Else
+        FWLogMsg("ERROR", "[FAIL] Unit 101 record not found for 2025-01")
+        Return .F.
+    EndIf
+
+    // Step 7: Verifica que foram criados registros para meses subsequentes (2025-02)
+    cSql := "SELECT COUNT(*) as CNT FROM RPT_PORTAL_AGENDA WHERE REA_COMPETENCIA = '2025-02' AND D_E_L_E_T_ = ' '"
+    aResult := FWExecStatement(cSql)
+    If Len(aResult) > 0 .And. aResult[1]:CNT >= 3
+        FWLogMsg("INFO", "[PASS] Records created for 2025-02: " + cValToChar(aResult[1]:CNT) + " records")
+    Else
+        FWLogMsg("ERROR", "[FAIL] Expected at least 3 records for 2025-02")
+        Return .F.
+    EndIf
+
+    FWLogMsg("INFO", "[PASS] TestGcGerarPortalAgenda completed successfully")
 Return .T.
