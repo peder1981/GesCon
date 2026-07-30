@@ -383,3 +383,61 @@ INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL
 ('RPT_BALANCETE', 3, 'RPT_DESPESAS',       'N', 14, 2, 'Despesas'),
 ('RPT_BALANCETE', 4, 'RPT_SALDO',          'N', 14, 2, 'Saldo'),
 ('RPT_BALANCETE', 5, 'RPT_DATA_GERACAO',   'C', 19, 0, 'Data Geração');
+
+-- Seed data for accounting system
+INSERT OR IGNORE INTO PLANO_CONTAS (PLA_CODIGO, PLA_NOME, PLA_TIPO, PLA_ATIVO)
+VALUES
+  ('1000', 'Caixa',                    'ATIVO',     1),
+  ('1100', 'Banco',                    'ATIVO',     1),
+  ('2000', 'Contas a Pagar',           'PASSIVO',   1),
+  ('2100', 'Débitos Anteriores',       'PASSIVO',   1),
+  ('3000', 'Receita Condominial',      'RECEITA',   1),
+  ('3100', 'Multas e Juros',           'RECEITA',   1),
+  ('4000', 'Despesa Comum',            'DESPESA',   1),
+  ('4100', 'Despesa Extraordinária',   'DESPESA',   1),
+  ('4200', 'Água/Luz/Condomínio',      'DESPESA',   1),
+  ('4300', 'Limpeza',                  'DESPESA',   1),
+  ('4400', 'Segurança',                'DESPESA',   1),
+  ('4500', 'Manutenção',               'DESPESA',   1),
+  ('4600', 'Seguros',                  'DESPESA',   1),
+  ('4700', 'Impostos e Taxas',         'DESPESA',   1),
+  ('4800', 'Depreciação',              'DESPESA',   1),
+  ('4900', 'Ajustes e Créditos',       'DESPESA',   1),
+  ('5000', 'Contas a Receber',         'ATIVO',     1),
+  ('6000', 'Capital/Patrimônio',       'PASSIVO',   1),
+  ('6100', 'Lucros Acumulados',        'PASSIVO',   1),
+  ('7000', 'Outras Contas',            'ATIVO',     1);
+
+INSERT OR IGNORE INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO)
+VALUES
+  ('2025-01', '2025-01-01', '2025-01-31', 1, 0);
+
+INSERT OR IGNORE INTO REPARTICAO (REP_CODIGO, REP_NOME, REP_ATIVO)
+VALUES
+  ('FRACAO', 'Fração Ideal', 1),
+  ('METRAGEM', 'Por Metragem', 1),
+  ('FIXO', 'Valor Fixo', 1);
+
+-- Seed units for testing
+INSERT OR IGNORE INTO UNI (UNI_CODIGO, UNI_BLOCO, UNI_FRACAO)
+VALUES
+  ('101', 'A', 0.05),
+  ('102', 'A', 0.05),
+  ('103', 'B', 0.05),
+  ('104', 'B', 0.05),
+  ('105', 'C', 0.05),
+  ('106', 'C', 0.05),
+  ('107', 'D', 0.05),
+  ('108', 'D', 0.05),
+  ('109', 'E', 0.05),
+  ('110', 'E', 0.05),
+  ('111', 'F', 0.05),
+  ('112', 'F', 0.05),
+  ('113', 'G', 0.05),
+  ('114', 'G', 0.05),
+  ('115', 'H', 0.05),
+  ('116', 'H', 0.05),
+  ('117', 'I', 0.05),
+  ('118', 'I', 0.05),
+  ('119', 'J', 0.05),
+  ('120', 'J', 0.05);
