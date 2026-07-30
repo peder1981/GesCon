@@ -83,3 +83,92 @@ User Function GcPeriodoFechado(cExercicio)
     EndIf
 
 Return lFechado
+
+/*/{Protheus.doc} GcCriarLancamentoManualDireto
+    Cria um lançamento manual em partida dupla com validações de exercício,
+    período, contas diferentes e valor positivo.
+    Usada por testes e scripts de lançamento automático (bypass UI).
+    @type Function
+    @author GesCon
+    @since 2026-07-30
+    @param dData, date, data do lançamento
+    @param cDescricao, character, descrição do lançamento (ex: "Depósito em banco")
+    @param cContaDeb, character, código da conta debitada (ex: "1100")
+    @param cContaCred, character, código da conta creditada (ex: "1000")
+    @param nValor, numeric, valor do lançamento (deve ser > 0)
+    @return lRet, logical, .T. se inserção bem-sucedida, .F. se validação falhou
+    @example
+        If GcCriarLancamentoManualDireto(Date(), "Transferência", "1100", "1000", 1000)
+            ConOut("Lançamento criado com sucesso")
+        Else
+            ConOut("Falha ao criar lançamento")
+        EndIf
+*/
+User Function GcCriarLancamentoManualDireto(dData, cDescricao, cContaDeb, cContaCred, nValor)
+    Local lRet := .F.
+    Local cExercicio := ""
+    Local cSql := ""
+
+    // Obtém exercício ativo
+    cExercicio := GcExercicioAtivo()
+    If Empty(cExercicio)
+        ConOut("ERROR: No active exercise")
+        Return .F.
+    EndIf
+
+    // Verifica se período está fechado
+    If GcPeriodoFechado(cExercicio)
+        ConOut("ERROR: Period is closed")
+        Return .F.
+    EndIf
+
+    // Valida contas diferentes
+    If cContaDeb = cContaCred
+        ConOut("ERROR: Debit and credit accounts must be different")
+        Return .F.
+    EndIf
+
+    // Valida valor positivo
+    If nValor <= 0
+        ConOut("ERROR: Value must be greater than zero")
+        Return .F.
+    EndIf
+
+    // Monta SQL de inserção
+    cSql := "INSERT INTO LANCAMENTOS ("
+    cSql += "LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, "
+    cSql += "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_"
+    cSql += ") VALUES ("
+    cSql += GcSqlLit(DtoS(dData)) + ", "
+    cSql += GcSqlLit(cContaDeb) + ", "
+    cSql += GcSqlLit(cContaCred) + ", "
+    cSql += cValToChar(nValor) + ", "
+    cSql += GcSqlLit(cDescricao) + ", "
+    cSql += GcSqlLit("MANUAL") + ", "
+    cSql += GcSqlLit(cExercicio) + ", "
+    cSql += "datetime('now'), "
+    cSql += GcSqlLit("TEST_USER") + ", "
+    cSql += GcSqlLit(" ")
+    cSql += ")"
+
+    // Executa inserção
+    TCSqlExec(cSql)
+    lRet := .T.
+
+Return lRet
+
+/*/{Protheus.doc} GcNovoLancamento
+    Ponto de entrada UI para criação manual de lançamentos.
+    Placeholder para MVP — será expandido em fases posteriores com
+    FWGetText (entrada de dados) e integração a FWMBrowse (visualização).
+    @type Function
+    @author GesCon
+    @since 2026-07-30
+    @return lRet, logical, .F. (por enquanto placeholder)
+    @example
+        GcNovoLancamento()  // abre tela de entrada manual
+*/
+User Function GcNovoLancamento()
+    // TODO: Expandir em fase posterior com UI (FWGetText, FWMBrowse, dialogs)
+    // Por enquanto retorna .F. como placeholder
+Return .F.
