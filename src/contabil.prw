@@ -325,6 +325,175 @@ User Function GcCalcularRateio(cReparticao, nValor, dData)
 
 Return aRateio
 
+/*/{Protheus.doc} GcLancarDespesaContabil
+    Cria lançamento de despesa com rateio automático em partida dupla.
+    Workflow:
+    1. Obtém exercício ativo
+    2. Verifica se período está aberto
+    3. Calcula rateio conforme tipo de repartição
+    4. Cria lançamento principal: Débito Despesa Comum (4000) / Crédito Caixa (1000)
+    5. Para cada unidade do rateio:
+       - Cria lançamento de rateio: Débito Contas a Receber (5000) / Crédito Receita (3000)
+       - Insere cobrança na tabela COB com vencimento calculado
+    6. Retorna .T. se sucesso, .F. se validação falhou
+    @type Function
+    @author GesCon
+    @since 2026-07-30
+    @param dData, date, data do lançamento (ex: 2025-01-20)
+    @param cDescricao, character, descrição da despesa (ex: "Pintura Comum")
+    @param nValor, numeric, valor total da despesa (ex: 1000.00)
+    @param cReparticao, character, tipo de repartição (ex: "FRACAO")
+    @param nDiaVenc, numeric, dia do mês para vencimento (ex: 15)
+    @return lRet, logical, .T. se criação bem-sucedida, .F. se validação falhou
+    @example
+        If GcLancarDespesaContabil(Date(), "Pintura Comum", 1000.00, "FRACAO", 15)
+            ConOut("Despesa lançada com sucesso")
+        Else
+            ConOut("Falha ao lançar despesa")
+        EndIf
+*/
+User Function GcLancarDespesaContabil(dData, cDescricao, nValor, cReparticao, nDiaVenc)
+    Local lRet := .F.
+    Local cExercicio := ""
+    Local aRateio := {}
+    Local nI := 0
+    Local cUnidade := ""
+    Local nFracao := 0
+    Local nValorUnit := 0
+    Local cSql := ""
+    Local nLanIdPrincipal := 0
+    Local nRecno := 0
+    Local dVencimento := Date()
+    Local cVencimento := ""
+    Local aVerificacao := {}
+
+    // Validação de parâmetros
+    If Empty(cDescricao) .Or. nValor <= 0 .Or. nDiaVenc <= 0 .Or. nDiaVenc > 31
+        ConOut("ERROR: Invalid parameters for expense entry")
+        Return .F.
+    EndIf
+
+    // Obtém exercício ativo
+    cExercicio := GcExercicioAtivo()
+    If Empty(cExercicio)
+        ConOut("ERROR: No active exercise")
+        Return .F.
+    EndIf
+
+    // Verifica se período está fechado
+    If GcPeriodoFechado(cExercicio)
+        ConOut("ERROR: Period is closed")
+        Return .F.
+    EndIf
+
+    // Calcula rateio
+    aRateio := GcCalcularRateio(cReparticao, nValor, dData)
+    If Len(aRateio) = 0
+        ConOut("ERROR: Repartition calculation failed")
+        Return .F.
+    EndIf
+
+    // Cria lançamento principal: Débito 4000 (Despesa Comum) / Crédito 1000 (Caixa)
+    cSql := "INSERT INTO LANCAMENTOS ("
+    cSql += "LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, "
+    cSql += "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, R_E_C_N_O_"
+    cSql += ") VALUES ("
+    cSql += GcSqlLit(DtoS(dData)) + ", "
+    cSql += GcSqlLit("4000") + ", "
+    cSql += GcSqlLit("1000") + ", "
+    cSql += cValToChar(nValor) + ", "
+    cSql += GcSqlLit(cDescricao) + ", "
+    cSql += GcSqlLit("AUTOMATICO_DESPESA") + ", "
+    cSql += GcSqlLit(cExercicio) + ", "
+    cSql += "datetime('now'), "
+    cSql += GcSqlLit("TEST_USER") + ", "
+    cSql += GcSqlLit(" ") + ", "
+    cSql += "(SELECT COALESCE(MAX(R_E_C_N_O_), 0) + 1 FROM LANCAMENTOS)"
+    cSql += ")"
+
+    // Executa inserção do lançamento principal
+    TCSqlExec(cSql)
+
+    // Recupera o LAN_ID do lançamento principal (ID auto-gerado)
+    aVerificacao := TCSqlQuery("SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_DESCR = " + GcSqlLit(cDescricao) + " AND LAN_TIPO = 'AUTOMATICO_DESPESA' AND D_E_L_E_T_ = ' ' ORDER BY LAN_ID DESC LIMIT 1")
+    If Len(aVerificacao) > 0
+        nLanIdPrincipal := aVerificacao[1]:LAN_ID
+        ConOut("Main entry created: LAN_ID = " + cValToChar(nLanIdPrincipal))
+    Else
+        ConOut("ERROR: Failed to retrieve main entry ID")
+        Return .F.
+    EndIf
+
+    // Itera sobre cada unidade do rateio
+    For nI := 1 To Len(aRateio)
+        cUnidade := aRateio[nI][1]
+        nFracao := aRateio[nI][2]
+        nValorUnit := aRateio[nI][3]
+
+        // Cria lançamento de rateio: Débito 5000 (Contas a Receber) / Crédito 3000 (Receita Condominial)
+        cSql := "INSERT INTO LANCAMENTOS ("
+        cSql += "LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, "
+        cSql += "LAN_TIPO, LAN_REFERENCIA, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, R_E_C_N_O_"
+        cSql += ") VALUES ("
+        cSql += GcSqlLit(DtoS(dData)) + ", "
+        cSql += GcSqlLit("5000") + ", "
+        cSql += GcSqlLit("3000") + ", "
+        cSql += cValToChar(nValorUnit) + ", "
+        cSql += GcSqlLit(cDescricao + " - Unidade " + cUnidade) + ", "
+        cSql += GcSqlLit("AUTOMATICO_RATEIO") + ", "
+        cSql += cValToChar(nLanIdPrincipal) + ", "
+        cSql += GcSqlLit(cExercicio) + ", "
+        cSql += "datetime('now'), "
+        cSql += GcSqlLit("TEST_USER") + ", "
+        cSql += GcSqlLit(" ") + ", "
+        cSql += "(SELECT COALESCE(MAX(R_E_C_N_O_), 0) + 1 FROM LANCAMENTOS)"
+        cSql += ")"
+
+        // Executa inserção do lançamento de rateio
+        TCSqlExec(cSql)
+
+        // Calcula vencimento: primeiro dia do próximo mês + nDiaVenc - 1
+        // Exemplo: Se dData = 2025-01-20 e nDiaVenc = 15, resultado é 2025-02-15
+        // Conversão para string: extrai ano-mês, incrementa mês, combina com dia desejado
+        Local cDataStr := DtoS(dData)  // formato: YYYYMMDD (ex: 20250120)
+        Local nMes := Val(SubStr(cDataStr, 5, 2))
+        Local nAno := Val(SubStr(cDataStr, 1, 4))
+
+        // Calcula próximo mês
+        If nMes = 12
+            nAno := nAno + 1
+            nMes := 1
+        Else
+            nMes := nMes + 1
+        EndIf
+
+        // Monta string de data para vencimento (YYYYMMDD)
+        cVencimento := cValToChar(nAno) + PadL(cValToChar(nMes), 2, "0") + PadL(cValToChar(nDiaVenc), 2, "0")
+
+        // Insere cobrança na tabela COB
+        cSql := "INSERT INTO COB ("
+        cSql += "COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_, R_E_C_D_E_L_"
+        cSql += ") VALUES ("
+        cSql += GcSqlLit(cUnidade) + ", "
+        cSql += GcSqlLit(cExercicio) + ", "
+        cSql += cValToChar(nValorUnit) + ", "
+        cSql += GcSqlLit(cVencimento) + ", "
+        cSql += GcSqlLit("PENDENTE") + ", "
+        cSql += GcSqlLit(" ") + ", "
+        cSql += "0"
+        cSql += ")"
+
+        // Executa inserção da cobrança
+        TCSqlExec(cSql)
+
+        ConOut("Repartition entry created: Unit " + cUnidade + ", Value " + cValToChar(nValorUnit) + ", Due " + cVencimento)
+    Next nI
+
+    ConOut("Expense entry created successfully: " + cDescricao + " (" + cValToChar(nValor) + ")")
+    lRet := .T.
+
+Return lRet
+
 /*/{Protheus.doc} GcNovoLancamento
     Ponto de entrada UI para criação manual de lançamentos.
     Placeholder para MVP — será expandido em fases posteriores com
