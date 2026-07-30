@@ -47,6 +47,9 @@ User Function PortalV2Test()
     TestGcArquivarAviso()
     ConOut("")
 
+    TestE2EPortalFlow()
+    ConOut("")
+
     ConOut("========== FIM DOS TESTES DO PORTAL V2 ==========")
     ConOut("")
 
