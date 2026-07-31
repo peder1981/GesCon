@@ -1,4 +1,4 @@
-// tests/auditoria_test.prw  Testes das tabelas de auditoria e anomalias
+// tests/auditoria_test.prw— Testes das tabelas de auditoria e anomalias
 // Verifica criao e existncia das tabelas ANOMALIA_LOG, ALERTA e DASHBOARD_CACHE
 #include "totvs.ch"
 #include "../src/db.prw"
