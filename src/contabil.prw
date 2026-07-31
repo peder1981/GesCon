@@ -1,6 +1,37 @@
 // src/contabil.prw — utilidades do sistema contábil em partida dupla
 // Acesso a exercícios, períodos, validações de lançamentos
 #include "totvs.ch"
+#include "db.prw"
+#include "portal-v2.prw"
+
+/*/{Protheus.doc} GcSqlLit
+    Escapa aspas simples e envolve com quotes — todo valor de texto interpolado
+    numa query via TCSqlExec/TCSqlQuery precisa passar por aqui para evitar
+    SQL injection e quebra de literais.
+    @type Function
+    @author GesCon
+    @since 2026-07-30
+    @param cValor, character, valor a escapar (aceita Nil)
+    @return cRet, character, valor com aspas simples duplicadas e envolvido com quotes
+    @example
+        cSql := "INSERT INTO EXERCICIO (EXE_CODIGO, EXE_NOME) VALUES (" + GcSqlLit("2025-01") + ", " + GcSqlLit("João's Company") + ")"
+*/
+User Function GcSqlLit(cValor)
+    Local cRet := ""
+
+    If cValor == Nil
+        cRet := ""
+    Else
+        cRet := cValor
+    EndIf
+
+    // Escapa aspas simples duplicando-as
+    cRet := StrTran(cRet, "'", "''")
+
+    // Envolve com aspas simples
+    cRet := "'" + cRet + "'"
+
+Return cRet
 
 /*/{Protheus.doc} GcExercicioAtivo
     Retorna o código do exercício ativo (data em formato 'YYYY-MM').

@@ -3,6 +3,94 @@
 #include "contabil.prw"
 #include "portal.prw"
 
+        aMeses := GcGerarProximos12Meses("2025-01")
+        // retorna {"2025-01", "2025-02", ..., "2025-12"}
+*/
+Static Function GcGerarProximos12Meses(cCompetencia as character) as array
+    Local aMeses := {} as array
+    Local cAno := "" as character
+    Local nMes := 0 as numeric
+    Local i := 0 as numeric
+    Local cNovoAno := "" as character
+    Local nNovoMes := 0 as numeric
+
+    // Extrai ano e mês
+    cAno := SubStr(cCompetencia, 1, 4)
+    nMes := Val(SubStr(cCompetencia, 6, 2))
+
+    // Valida entrada
+    If nMes < 1 .Or. nMes > 12
+        Return {}
+    EndIf
+
+    // Gera 12 meses
+    For i := 1 To 12
+        // Calcula novo mês e ano
+        nNovoMes := nMes + (i - 1)
+        cNovoAno := cAno
+
+        // Ajusta para anos seguintes se necessário
+        While nNovoMes > 12
+            nNovoMes := nNovoMes - 12
+            cNovoAno := cValToChar(Val(cNovoAno) + 1)
+        End While
+
+        // Formata e adiciona ao array
+        AAdd(aMeses, cNovoAno + "-" + PadL(cValToChar(nNovoMes), 2, "0"))
+    Next i
+
+Return aMeses
+
+/*/{Protheus.doc} GcConverterDataString
+    Converte data de string formato YYYYMMDD para formato ISO 8601 (YYYY-MM-DD).
+    Utilizada internamente por GcGerarPortalExtratos e GcGerarPortalAgenda
+    para normalizar datas do formato da tabela COB.
+    @type Static Function
+    @author GesCon
+    @since 2026-07-30
+    @param cDataStr, character, data no formato YYYYMMDD (ex: "20250215")
+    @return cRet, character, data no formato YYYY-MM-DD (ex: "2025-02-15"), ou "" se inválida
+    @example
+        cRet := GcConverterDataString("20250215")  // retorna "2025-02-15"
+        cRet := GcConverterDataString("20250")     // retorna "" (inválida)
+*/
+Static Function GcConverterDataString(cDataStr as character) as character
+    Local cRet := "" as character
+
+    If Empty(cDataStr) .Or. Len(AllTrim(cDataStr)) <> 8
+        Return ""
+    EndIf
+
+    cRet := SubStr(cDataStr, 1, 4) + "-" + SubStr(cDataStr, 5, 2) + "-" + SubStr(cDataStr, 7, 2)
+
+Return cRet
+
+/*/{Protheus.doc} GcCriarAviso
+    Cria um novo aviso no mural (tabela AVISOS).
+    Workflow:
+    1. Valida parâmetros de entrada (cTitulo e cCorpo obrigatórios)
+    2. Inicia transação para consistência
+    3. Insere novo registro em AVISOS com:
+       - AVI_TITULO = cTitulo (sanitizado)
+       - AVI_CORPO = cCorpo (sanitizado)
+       - AVI_DATA_CRIACAO = datetime('now') (preenchido automaticamente no DB)
+       - AVI_ATIVO = 1 (ativo por padrão)
+       - D_E_L_E_T_ = ' ' (soft-delete válido)
+    4. Confirma transação ao sucesso, faz rollback se erro
+    5. Retorna .T. se sucesso, .F. se erro
+    @type User Function
+    @author GesCon
+    @since 2026-07-30
+    @param cTitulo, character, título do aviso (obrigatório)
+    @param cCorpo, character, corpo/conteúdo do aviso (obrigatório)
+    @return lSucesso, logical, .T. se aviso criado com sucesso, .F. se erro
+    @example
+        If U_GcCriarAviso("Manutenção Programada", "A manutenção ocorrerá no dia 15.")
+            ConOut("Aviso criado com sucesso")
+        Else
+            ConOut("[ERROR] " + "Erro ao criar aviso")
+        EndIf
+*/
 /*/{Protheus.doc} GcPortalCondominoV2
     Gateway do portal do condomínio v2. Autenticação via token + acesso filtrado
     a avisos, extratos e agenda da unidade vinculada.
@@ -372,91 +460,6 @@ Return nCount
     @example
         aMeses := GcGerarProximos12Meses("2025-01")
         // retorna {"2025-01", "2025-02", ..., "2025-12"}
-*/
-Static Function GcGerarProximos12Meses(cCompetencia as character) as array
-    Local aMeses := {} as array
-    Local cAno := "" as character
-    Local nMes := 0 as numeric
-    Local i := 0 as numeric
-    Local cNovoAno := "" as character
-    Local nNovoMes := 0 as numeric
-
-    // Extrai ano e mês
-    cAno := SubStr(cCompetencia, 1, 4)
-    nMes := Val(SubStr(cCompetencia, 6, 2))
-
-    // Valida entrada
-    If nMes < 1 .Or. nMes > 12
-        Return {}
-    EndIf
-
-    // Gera 12 meses
-    For i := 1 To 12
-        // Calcula novo mês e ano
-        nNovoMes := nMes + (i - 1)
-        cNovoAno := cAno
-
-        // Ajusta para anos seguintes se necessário
-        While nNovoMes > 12
-            nNovoMes := nNovoMes - 12
-            cNovoAno := cValToChar(Val(cNovoAno) + 1)
-        End While
-
-        // Formata e adiciona ao array
-        AAdd(aMeses, cNovoAno + "-" + PadL(cValToChar(nNovoMes), 2, "0"))
-    Next i
-
-Return aMeses
-
-/*/{Protheus.doc} GcConverterDataString
-    Converte data de string formato YYYYMMDD para formato ISO 8601 (YYYY-MM-DD).
-    Utilizada internamente por GcGerarPortalExtratos e GcGerarPortalAgenda
-    para normalizar datas do formato da tabela COB.
-    @type Static Function
-    @author GesCon
-    @since 2026-07-30
-    @param cDataStr, character, data no formato YYYYMMDD (ex: "20250215")
-    @return cRet, character, data no formato YYYY-MM-DD (ex: "2025-02-15"), ou "" se inválida
-    @example
-        cRet := GcConverterDataString("20250215")  // retorna "2025-02-15"
-        cRet := GcConverterDataString("20250")     // retorna "" (inválida)
-*/
-Static Function GcConverterDataString(cDataStr as character) as character
-    Local cRet := "" as character
-
-    If Empty(cDataStr) .Or. Len(AllTrim(cDataStr)) <> 8
-        Return ""
-    EndIf
-
-    cRet := SubStr(cDataStr, 1, 4) + "-" + SubStr(cDataStr, 5, 2) + "-" + SubStr(cDataStr, 7, 2)
-
-Return cRet
-
-/*/{Protheus.doc} GcCriarAviso
-    Cria um novo aviso no mural (tabela AVISOS).
-    Workflow:
-    1. Valida parâmetros de entrada (cTitulo e cCorpo obrigatórios)
-    2. Inicia transação para consistência
-    3. Insere novo registro em AVISOS com:
-       - AVI_TITULO = cTitulo (sanitizado)
-       - AVI_CORPO = cCorpo (sanitizado)
-       - AVI_DATA_CRIACAO = datetime('now') (preenchido automaticamente no DB)
-       - AVI_ATIVO = 1 (ativo por padrão)
-       - D_E_L_E_T_ = ' ' (soft-delete válido)
-    4. Confirma transação ao sucesso, faz rollback se erro
-    5. Retorna .T. se sucesso, .F. se erro
-    @type User Function
-    @author GesCon
-    @since 2026-07-30
-    @param cTitulo, character, título do aviso (obrigatório)
-    @param cCorpo, character, corpo/conteúdo do aviso (obrigatório)
-    @return lSucesso, logical, .T. se aviso criado com sucesso, .F. se erro
-    @example
-        If U_GcCriarAviso("Manutenção Programada", "A manutenção ocorrerá no dia 15.")
-            ConOut("Aviso criado com sucesso")
-        Else
-            ConOut("[ERROR] " + "Erro ao criar aviso")
-        EndIf
 */
 User Function GcCriarAviso(cTitulo as character, cCorpo as character) as logical
     Local cSql := "" as character
