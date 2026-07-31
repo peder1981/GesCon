@@ -17,6 +17,9 @@
 #include "src/portal-v2.prw"
 #include "src/contabil.prw"
 #include "src/auditoria.prw"
+#include "src/auditoria-validacoes.prw"
+#include "src/auth-primitives.prw"
+#include "src/boleto.prw"
 
 /*/{Protheus.doc} GesCon
     Ponto de entrada do GesCon — sobe com `advplc serve gescon.prw`,
