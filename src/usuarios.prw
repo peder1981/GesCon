@@ -70,11 +70,11 @@ User Function GcGerarToken()
     // Calcula validade +48h � armazena em ISO format (YYYY-MM-DD HH:MM:SS)
     // para compara��o nativa com SQLite datetime('now')
     Local dValidade := Date() + 2
-    Local cValidadeIso := GcDateToIso(dValidade) + " " + Left(TimeToString(), 8)
+    Local cValidadeIso := GcDateToIso(dValidade) + " " + Left(Time(), 8)
 
     // Grava CRIPTADO (data de cria��o) em ISO tamb�m
     Local cLoginAtual := GetEnv("USER")
-    Local cCriadoIso  := GcDateToIso(Date()) + " " + Left(TimeToString(), 8)
+    Local cCriadoIso  := GcDateToIso(Date()) + " " + Left(Time(), 8)
 
     TCSqlExec("INSERT INTO GCT_TOKEN (TOKEN, USR_LOGIN, CON_CODIGO, UNI_CODIGO, CRIPTADO, VALIDO_ATE, USADO) " + ;
         "VALUES ('" + GcSqlLit(cToken) + "', '" + GcSqlLit(cLoginAtual) + "', '" + GcSqlLit(cConCod) + "', " + ;
@@ -195,7 +195,7 @@ Return SubStr(cDtos, 1, 4) + "-" + SubStr(cDtos, 5, 2) + "-" + SubStr(cDtos, 7, 
     @return cTokenId, character, 36 chars no formato xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 */
 User Function GcGerarTokenId()
-    Local cSeed := DTOC(Date()) + TimeToString() + Str(FWRandom(), 8)
+    Local cSeed := DTOC(Date()) + Time() + Str(Random(999999999), 9)
     Local cHash := FWHash(cSeed)
     // Usa os primeiros 32 chars hex + formata��o UUID-like = 36
     Local cToken := Left(cHash, 8) + "-" + SubStr(cHash, 9, 4) + "-" + SubStr(cHash, 13, 4) + "-" + SubStr(cHash, 17, 4) + "-" + SubStr(cHash, 21, 12)

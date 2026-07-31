@@ -261,7 +261,7 @@ User Function PortalTest()
     If Len(aTokenCheck) > 0 .And. Val(aTokenCheck[1]:QTD) == 0
         TCSqlExec("INSERT INTO GCT_TOKEN (TOKEN, USR_LOGIN, CON_CODIGO, UNI_CODIGO, CRIPTADO, VALIDO_ATE, USADO) " + ;
             "VALUES ('" + GcSqlLit(cTokenTest) + "', 'e2eadmin', 'CE2E99', 'E2E99', '" + ;
-            GcSqlLit(DtoC(Date()) + " " + Left(TimeToString(), 8)) + "', '" + GcSqlLit(cValidade) + "', 0)")
+            GcSqlLit(DtoC(Date()) + " " + Left(Time(), 8)) + "', '" + GcSqlLit(cValidade) + "', 0)")
     EndIf
 
     aTokenCheck := TCSqlQuery("SELECT COUNT(*) AS QTD FROM GCT_TOKEN WHERE TOKEN = '" + GcSqlLit(Left(cTokenTest, 40)) + "' AND USADO = 0 AND D_E_L_E_T_ = ' '")
