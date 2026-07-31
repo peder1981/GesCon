@@ -6,6 +6,7 @@
 #include "../src/usuarios.prw"
 #include "../src/auth-primitives.prw"
 #include "../src/auditoria-rest.prw"
+#include "../src/auditoria-validacoes.prw"
 
 /*/{Protheus.doc} RunAuditoriaTests
     Driver de execucao: `advplc run tests/auditoria_test.prw` so executa a
@@ -64,6 +65,24 @@ User Function RunAuditoriaTests()
         lOk := .F.
     EndIf
     If !TestAuditoriaAlertasRestEndpoint()
+        lOk := .F.
+    EndIf
+    If !TestGcValidarDesequilibrioContabil()
+        lOk := .F.
+    EndIf
+    If !TestGcValidarLancamentosOrfaos()
+        lOk := .F.
+    EndIf
+    If !TestGcValidarCobrancasOrfaos()
+        lOk := .F.
+    EndIf
+    If !TestGcValidarRateioValido()
+        lOk := .F.
+    EndIf
+    If !TestGcValidarTimingLancamentos()
+        lOk := .F.
+    EndIf
+    If !TestGcValidarAlteracoesEmPeriodoFechado()
         lOk := .F.
     EndIf
 
@@ -786,4 +805,412 @@ User Function TestAuditoriaAlertasRestEndpoint()
 
     // Teardown
     TCSqlExec("DELETE FROM ALERTA WHERE ALT_MENSAGEM = '" + cMsgNaoLido + "' OR ALT_MENSAGEM = '" + cMsgLido + "'")
+Return lOk
+
+/*/{Protheus.doc} TestGcValidarDesequilibrioContabil
+    Verifica GcValidarDesequilibrioContabil (Task 5): um lancamento
+    AUTOMATICO_RATEIO cuja soma de RATEIO_DETALHE nao fecha com LAN_VALOR
+    deve ser detectado (retorna .T., grava 1 linha em ANOMALIA_LOG com
+    ANL_TIPO = DESEQUILIBRIO_CONTABIL); um periodo sem lancamentos retorna
+    .F. e nao grava nada. Cria e limpa dados de teste em EXERCICIO,
+    LANCAMENTOS e RATEIO_DETALHE.
+    @type User Function
+    @author Claude
+    @since 2026-07-31
+    @return lOk, logical, .T. se todos os casos passaram
+*/
+User Function TestGcValidarDesequilibrioContabil()
+    Local cPeriodo as character
+    Local cPeriodoLimpo as character
+    Local cDescr as character
+    Local nLanId as numeric
+    Local aLan as array
+    Local aAnomalia as array
+    Local lOk as logical
+
+    lOk := .T.
+    cPeriodo := "9995-01"
+    cPeriodoLimpo := "9995-91"
+    cDescr := "test5-desequilibrio"
+
+    // Setup
+    TCSqlExec("DELETE FROM ANOMALIA_LOG WHERE ANL_PERIODO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
+    TCSqlExec("DELETE FROM RATEIO_DETALHE WHERE RAT_LANCAMENTO IN (SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "')")
+    TCSqlExec("DELETE FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "'")
+    TCSqlExec("DELETE FROM EXERCICIO WHERE EXE_CODIGO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
+    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) " + ;
+        "VALUES ('" + cPeriodo + "', '9995-01-01', '9995-01-31', 0, 0, ' ')")
+    TCSqlExec("INSERT INTO LANCAMENTOS (LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, " + ;
+        "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_) VALUES (" + ;
+        "'99950101', '4000', '1000', 100.00, '" + cDescr + "', 'AUTOMATICO_RATEIO', '" + cPeriodo + "', datetime('now'), 'TEST5', ' ')")
+
+    aLan := TCSqlQuery("SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "' ORDER BY LAN_ID DESC LIMIT 1")
+    nLanId := Val(aLan[1]:LAN_ID)
+
+    // RATEIO_DETALHE soma apenas 80.00, mas LAN_VALOR = 100.00 -> desequilibrio
+    TCSqlExec("INSERT INTO RATEIO_DETALHE (RAT_LANCAMENTO, RAT_UNIDADE, RAT_VALOR, RAT_PERCENTUAL, D_E_L_E_T_) " + ;
+        "VALUES (" + AllTrim(Str(nLanId, 10, 0)) + ", '101', 80.00, 80.00, ' ')")
+
+    // Caso 1: periodo com lancamento desbalanceado
+    If !GcValidarDesequilibrioContabil(cPeriodo)
+        ConOut("[FAIL] TestGcValidarDesequilibrioContabil: deveria retornar .T. para lancamento desbalanceado")
+        lOk := .F.
+    Else
+        aAnomalia := TCSqlQuery("SELECT ANL_ID FROM ANOMALIA_LOG WHERE ANL_PERIODO = '" + cPeriodo + "' AND ANL_TIPO = 'DESEQUILIBRIO_CONTABIL' AND D_E_L_E_T_ = ' '")
+        If Len(aAnomalia) == 0
+            ConOut("[FAIL] TestGcValidarDesequilibrioContabil: retornou .T. mas nao gravou em ANOMALIA_LOG")
+            lOk := .F.
+        Else
+            ConOut("[PASS] TestGcValidarDesequilibrioContabil: desequilibrio detectado e gravado em ANOMALIA_LOG")
+        EndIf
+    EndIf
+
+    // Caso 2: periodo limpo (sem lancamentos)
+    If GcValidarDesequilibrioContabil(cPeriodoLimpo)
+        ConOut("[FAIL] TestGcValidarDesequilibrioContabil: periodo limpo deveria retornar .F.")
+        lOk := .F.
+    Else
+        ConOut("[PASS] TestGcValidarDesequilibrioContabil: periodo limpo OK (.F.)")
+    EndIf
+
+    // Teardown
+    TCSqlExec("DELETE FROM ANOMALIA_LOG WHERE ANL_PERIODO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
+    TCSqlExec("DELETE FROM RATEIO_DETALHE WHERE RAT_LANCAMENTO IN (SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "')")
+    TCSqlExec("DELETE FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "'")
+    TCSqlExec("DELETE FROM EXERCICIO WHERE EXE_CODIGO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
+Return lOk
+
+/*/{Protheus.doc} TestGcValidarLancamentosOrfaos
+    Verifica GcValidarLancamentosOrfaos (Task 5): um lancamento
+    AUTOMATICO_RATEIO sem cobranca (COB) correspondente por
+    competencia+valor deve ser detectado (retorna .T., grava 1 linha em
+    ANOMALIA_LOG com ANL_TIPO = LAN_ORFAO); periodo sem lancamentos orfaos
+    retorna .F. Cria e limpa dados de teste em LANCAMENTOS.
+    @type User Function
+    @author Claude
+    @since 2026-07-31
+    @return lOk, logical, .T. se todos os casos passaram
+*/
+User Function TestGcValidarLancamentosOrfaos()
+    Local cPeriodo as character
+    Local cPeriodoLimpo as character
+    Local cDescr as character
+    Local aAnomalia as array
+    Local lOk as logical
+
+    lOk := .T.
+    cPeriodo := "9995-02"
+    cPeriodoLimpo := "9995-92"
+    cDescr := "test5-lanorfao"
+
+    // Setup
+    TCSqlExec("DELETE FROM ANOMALIA_LOG WHERE ANL_PERIODO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
+    TCSqlExec("DELETE FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "'")
+    TCSqlExec("DELETE FROM EXERCICIO WHERE EXE_CODIGO = '" + cPeriodo + "'")
+    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) " + ;
+        "VALUES ('" + cPeriodo + "', '9995-02-01', '9995-02-28', 0, 0, ' ')")
+    TCSqlExec("INSERT INTO LANCAMENTOS (LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, " + ;
+        "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_) VALUES (" + ;
+        "'99950201', '4000', '1000', 50.00, '" + cDescr + "', 'AUTOMATICO_RATEIO', '" + cPeriodo + "', datetime('now'), 'TEST5', ' ')")
+
+    // Caso 1: lancamento sem cobranca correspondente (50.00 em '9995-02', nenhuma COB casa)
+    If !GcValidarLancamentosOrfaos(cPeriodo)
+        ConOut("[FAIL] TestGcValidarLancamentosOrfaos: deveria retornar .T. para lancamento orfao")
+        lOk := .F.
+    Else
+        aAnomalia := TCSqlQuery("SELECT ANL_ID FROM ANOMALIA_LOG WHERE ANL_PERIODO = '" + cPeriodo + "' AND ANL_TIPO = 'LAN_ORFAO' AND D_E_L_E_T_ = ' '")
+        If Len(aAnomalia) == 0
+            ConOut("[FAIL] TestGcValidarLancamentosOrfaos: retornou .T. mas nao gravou em ANOMALIA_LOG")
+            lOk := .F.
+        Else
+            ConOut("[PASS] TestGcValidarLancamentosOrfaos: lancamento orfao detectado e gravado em ANOMALIA_LOG")
+        EndIf
+    EndIf
+
+    // Caso 2: periodo limpo (sem lancamentos)
+    If GcValidarLancamentosOrfaos(cPeriodoLimpo)
+        ConOut("[FAIL] TestGcValidarLancamentosOrfaos: periodo limpo deveria retornar .F.")
+        lOk := .F.
+    Else
+        ConOut("[PASS] TestGcValidarLancamentosOrfaos: periodo limpo OK (.F.)")
+    EndIf
+
+    // Teardown
+    TCSqlExec("DELETE FROM ANOMALIA_LOG WHERE ANL_PERIODO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
+    TCSqlExec("DELETE FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "'")
+    TCSqlExec("DELETE FROM EXERCICIO WHERE EXE_CODIGO = '" + cPeriodo + "'")
+Return lOk
+
+/*/{Protheus.doc} TestGcValidarCobrancasOrfaos
+    Verifica GcValidarCobrancasOrfaos (Task 5): uma cobranca (COB) sem
+    lancamento AUTOMATICO_RATEIO correspondente por competencia+valor deve
+    ser detectada (retorna .T., grava 1 linha em ANOMALIA_LOG com ANL_TIPO
+    = COB_ORFAO); periodo sem cobrancas orfas retorna .F. Cria e limpa
+    dados de teste em COB.
+    @type User Function
+    @author Claude
+    @since 2026-07-31
+    @return lOk, logical, .T. se todos os casos passaram
+*/
+User Function TestGcValidarCobrancasOrfaos()
+    Local cPeriodo as character
+    Local cPeriodoLimpo as character
+    Local aAnomalia as array
+    Local lOk as logical
+
+    lOk := .T.
+    cPeriodo := "9995-03"
+    cPeriodoLimpo := "9995-93"
+
+    // Setup
+    TCSqlExec("DELETE FROM ANOMALIA_LOG WHERE ANL_PERIODO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
+    TCSqlExec("DELETE FROM COB WHERE COB_COMPET IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "') AND COB_UNIDADE = 'TEST5'")
+    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_) " + ;
+        "VALUES ('TEST5', '" + cPeriodo + "', 60.00, '" + cPeriodo + "-10', 'pendente', ' ')")
+
+    // Caso 1: cobranca sem lancamento correspondente
+    If !GcValidarCobrancasOrfaos(cPeriodo)
+        ConOut("[FAIL] TestGcValidarCobrancasOrfaos: deveria retornar .T. para cobranca orfa")
+        lOk := .F.
+    Else
+        aAnomalia := TCSqlQuery("SELECT ANL_ID FROM ANOMALIA_LOG WHERE ANL_PERIODO = '" + cPeriodo + "' AND ANL_TIPO = 'COB_ORFAO' AND D_E_L_E_T_ = ' '")
+        If Len(aAnomalia) == 0
+            ConOut("[FAIL] TestGcValidarCobrancasOrfaos: retornou .T. mas nao gravou em ANOMALIA_LOG")
+            lOk := .F.
+        Else
+            ConOut("[PASS] TestGcValidarCobrancasOrfaos: cobranca orfa detectada e gravada em ANOMALIA_LOG")
+        EndIf
+    EndIf
+
+    // Caso 2: periodo limpo (sem cobrancas)
+    If GcValidarCobrancasOrfaos(cPeriodoLimpo)
+        ConOut("[FAIL] TestGcValidarCobrancasOrfaos: periodo limpo deveria retornar .F.")
+        lOk := .F.
+    Else
+        ConOut("[PASS] TestGcValidarCobrancasOrfaos: periodo limpo OK (.F.)")
+    EndIf
+
+    // Teardown
+    TCSqlExec("DELETE FROM ANOMALIA_LOG WHERE ANL_PERIODO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
+    TCSqlExec("DELETE FROM COB WHERE COB_COMPET IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "') AND COB_UNIDADE = 'TEST5'")
+Return lOk
+
+/*/{Protheus.doc} TestGcValidarRateioValido
+    Verifica GcValidarRateioValido (Task 5): um lancamento AUTOMATICO_RATEIO
+    cuja soma de RAT_PERCENTUAL em RATEIO_DETALHE nao fecha em 100% deve
+    ser detectado (retorna .T., grava 1 linha em ANOMALIA_LOG com ANL_TIPO
+    = RATEIO_INVALIDO); um lancamento cujo rateio fecha em 100% nao e
+    sinalizado (.F.). Cria e limpa dados de teste em LANCAMENTOS e
+    RATEIO_DETALHE.
+    @type User Function
+    @author Claude
+    @since 2026-07-31
+    @return lOk, logical, .T. se todos os casos passaram
+*/
+User Function TestGcValidarRateioValido()
+    Local cPeriodo as character
+    Local cPeriodoLimpo as character
+    Local cDescr as character
+    Local cDescrLimpo as character
+    Local nLanId as numeric
+    Local aLan as array
+    Local aAnomalia as array
+    Local lOk as logical
+
+    lOk := .T.
+    cPeriodo := "9995-04"
+    cPeriodoLimpo := "9995-94"
+    cDescr := "test5-rateiopct"
+    cDescrLimpo := "test5-rateiopct-ok"
+
+    // Setup
+    TCSqlExec("DELETE FROM ANOMALIA_LOG WHERE ANL_PERIODO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
+    TCSqlExec("DELETE FROM RATEIO_DETALHE WHERE RAT_LANCAMENTO IN (SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_DESCR IN ('" + cDescr + "', '" + cDescrLimpo + "'))")
+    TCSqlExec("DELETE FROM LANCAMENTOS WHERE LAN_DESCR IN ('" + cDescr + "', '" + cDescrLimpo + "')")
+    TCSqlExec("DELETE FROM EXERCICIO WHERE EXE_CODIGO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
+    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) " + ;
+        "VALUES ('" + cPeriodo + "', '9995-04-01', '9995-04-30', 0, 0, ' ')")
+    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) " + ;
+        "VALUES ('" + cPeriodoLimpo + "', '9995-94-01', '9995-94-30', 0, 0, ' ')")
+
+    // Caso 1: rateio percentual desbalanceado (soma 80%, nao 100%)
+    TCSqlExec("INSERT INTO LANCAMENTOS (LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, " + ;
+        "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_) VALUES (" + ;
+        "'99950401', '4000', '1000', 100.00, '" + cDescr + "', 'AUTOMATICO_RATEIO', '" + cPeriodo + "', datetime('now'), 'TEST5', ' ')")
+    aLan := TCSqlQuery("SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "' ORDER BY LAN_ID DESC LIMIT 1")
+    nLanId := Val(aLan[1]:LAN_ID)
+    TCSqlExec("INSERT INTO RATEIO_DETALHE (RAT_LANCAMENTO, RAT_UNIDADE, RAT_VALOR, RAT_PERCENTUAL, D_E_L_E_T_) " + ;
+        "VALUES (" + AllTrim(Str(nLanId, 10, 0)) + ", '101', 40.00, 40.00, ' ')")
+    TCSqlExec("INSERT INTO RATEIO_DETALHE (RAT_LANCAMENTO, RAT_UNIDADE, RAT_VALOR, RAT_PERCENTUAL, D_E_L_E_T_) " + ;
+        "VALUES (" + AllTrim(Str(nLanId, 10, 0)) + ", '102', 40.00, 40.00, ' ')")
+
+    If !GcValidarRateioValido(cPeriodo)
+        ConOut("[FAIL] TestGcValidarRateioValido: deveria retornar .T. para rateio percentual invalido")
+        lOk := .F.
+    Else
+        aAnomalia := TCSqlQuery("SELECT ANL_ID FROM ANOMALIA_LOG WHERE ANL_PERIODO = '" + cPeriodo + "' AND ANL_TIPO = 'RATEIO_INVALIDO' AND D_E_L_E_T_ = ' '")
+        If Len(aAnomalia) == 0
+            ConOut("[FAIL] TestGcValidarRateioValido: retornou .T. mas nao gravou em ANOMALIA_LOG")
+            lOk := .F.
+        Else
+            ConOut("[PASS] TestGcValidarRateioValido: rateio invalido detectado e gravado em ANOMALIA_LOG")
+        EndIf
+    EndIf
+
+    // Caso 2: rateio percentual valido (soma 100%) nao deve ser sinalizado
+    TCSqlExec("INSERT INTO LANCAMENTOS (LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, " + ;
+        "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_) VALUES (" + ;
+        "'99950401', '4000', '1000', 100.00, '" + cDescrLimpo + "', 'AUTOMATICO_RATEIO', '" + cPeriodoLimpo + "', datetime('now'), 'TEST5', ' ')")
+    aLan := TCSqlQuery("SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescrLimpo + "' ORDER BY LAN_ID DESC LIMIT 1")
+    nLanId := Val(aLan[1]:LAN_ID)
+    TCSqlExec("INSERT INTO RATEIO_DETALHE (RAT_LANCAMENTO, RAT_UNIDADE, RAT_VALOR, RAT_PERCENTUAL, D_E_L_E_T_) " + ;
+        "VALUES (" + AllTrim(Str(nLanId, 10, 0)) + ", '101', 50.00, 50.00, ' ')")
+    TCSqlExec("INSERT INTO RATEIO_DETALHE (RAT_LANCAMENTO, RAT_UNIDADE, RAT_VALOR, RAT_PERCENTUAL, D_E_L_E_T_) " + ;
+        "VALUES (" + AllTrim(Str(nLanId, 10, 0)) + ", '102', 50.00, 50.00, ' ')")
+
+    If GcValidarRateioValido(cPeriodoLimpo)
+        ConOut("[FAIL] TestGcValidarRateioValido: rateio valido (100%) nao deveria ser sinalizado")
+        lOk := .F.
+    Else
+        ConOut("[PASS] TestGcValidarRateioValido: rateio valido OK (.F.)")
+    EndIf
+
+    // Teardown
+    TCSqlExec("DELETE FROM ANOMALIA_LOG WHERE ANL_PERIODO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
+    TCSqlExec("DELETE FROM RATEIO_DETALHE WHERE RAT_LANCAMENTO IN (SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_DESCR IN ('" + cDescr + "', '" + cDescrLimpo + "'))")
+    TCSqlExec("DELETE FROM LANCAMENTOS WHERE LAN_DESCR IN ('" + cDescr + "', '" + cDescrLimpo + "')")
+    TCSqlExec("DELETE FROM EXERCICIO WHERE EXE_CODIGO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
+Return lOk
+
+/*/{Protheus.doc} TestGcValidarTimingLancamentos
+    Verifica GcValidarTimingLancamentos (Task 5): um lancamento cuja
+    LAN_DATA e posterior ao COB_VENCTO da cobranca correspondente (casada
+    por competencia+valor) deve ser detectado (retorna .T., grava 1 linha
+    em ANOMALIA_LOG com ANL_TIPO = TIMING_ANOMALIA); periodo sem anomalia
+    de timing retorna .F. Cria e limpa dados de teste em COB e LANCAMENTOS.
+    @type User Function
+    @author Claude
+    @since 2026-07-31
+    @return lOk, logical, .T. se todos os casos passaram
+*/
+User Function TestGcValidarTimingLancamentos()
+    Local cPeriodo as character
+    Local cPeriodoLimpo as character
+    Local cDescr as character
+    Local aAnomalia as array
+    Local lOk as logical
+
+    lOk := .T.
+    cPeriodo := "9995-05"
+    cPeriodoLimpo := "9995-95"
+    cDescr := "test5-timing"
+
+    // Setup
+    TCSqlExec("DELETE FROM ANOMALIA_LOG WHERE ANL_PERIODO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
+    TCSqlExec("DELETE FROM COB WHERE COB_COMPET IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "') AND COB_UNIDADE = 'TEST5'")
+    TCSqlExec("DELETE FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "'")
+    TCSqlExec("DELETE FROM EXERCICIO WHERE EXE_CODIGO = '" + cPeriodo + "'")
+    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) " + ;
+        "VALUES ('" + cPeriodo + "', '9995-05-01', '9995-05-31', 0, 0, ' ')")
+
+    // Vencimento em 9995-05-10, lancamento em 9995-05-15 (posterior -> anomalia)
+    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_) " + ;
+        "VALUES ('TEST5', '" + cPeriodo + "', 70.00, '" + cPeriodo + "-10', 'pendente', ' ')")
+    TCSqlExec("INSERT INTO LANCAMENTOS (LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, " + ;
+        "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_) VALUES (" + ;
+        "'99950515', '4000', '1000', 70.00, '" + cDescr + "', 'AUTOMATICO_RATEIO', '" + cPeriodo + "', datetime('now'), 'TEST5', ' ')")
+
+    // Caso 1: lancamento posterior ao vencimento da cobranca
+    If !GcValidarTimingLancamentos(cPeriodo)
+        ConOut("[FAIL] TestGcValidarTimingLancamentos: deveria retornar .T. para lancamento posterior ao vencimento")
+        lOk := .F.
+    Else
+        aAnomalia := TCSqlQuery("SELECT ANL_ID FROM ANOMALIA_LOG WHERE ANL_PERIODO = '" + cPeriodo + "' AND ANL_TIPO = 'TIMING_ANOMALIA' AND D_E_L_E_T_ = ' '")
+        If Len(aAnomalia) == 0
+            ConOut("[FAIL] TestGcValidarTimingLancamentos: retornou .T. mas nao gravou em ANOMALIA_LOG")
+            lOk := .F.
+        Else
+            ConOut("[PASS] TestGcValidarTimingLancamentos: timing anomalo detectado e gravado em ANOMALIA_LOG")
+        EndIf
+    EndIf
+
+    // Caso 2: periodo limpo (sem cobrancas/lancamentos)
+    If GcValidarTimingLancamentos(cPeriodoLimpo)
+        ConOut("[FAIL] TestGcValidarTimingLancamentos: periodo limpo deveria retornar .F.")
+        lOk := .F.
+    Else
+        ConOut("[PASS] TestGcValidarTimingLancamentos: periodo limpo OK (.F.)")
+    EndIf
+
+    // Teardown
+    TCSqlExec("DELETE FROM ANOMALIA_LOG WHERE ANL_PERIODO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
+    TCSqlExec("DELETE FROM COB WHERE COB_COMPET IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "') AND COB_UNIDADE = 'TEST5'")
+    TCSqlExec("DELETE FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "'")
+    TCSqlExec("DELETE FROM EXERCICIO WHERE EXE_CODIGO = '" + cPeriodo + "'")
+Return lOk
+
+/*/{Protheus.doc} TestGcValidarAlteracoesEmPeriodoFechado
+    Verifica GcValidarAlteracoesEmPeriodoFechado (Task 5): um lancamento
+    soft-deletado (D_E_L_E_T_ <> ' ') cujo exercicio esta fechado
+    (EXE_FECHADO = 1) deve ser detectado (retorna .T., grava 1 linha em
+    ANOMALIA_LOG com ANL_TIPO = USUARIO_ANOMALIA); um periodo fechado sem
+    lancamentos removidos retorna .F. Cria e limpa dados de teste em
+    EXERCICIO e LANCAMENTOS.
+    @type User Function
+    @author Claude
+    @since 2026-07-31
+    @return lOk, logical, .T. se todos os casos passaram
+*/
+User Function TestGcValidarAlteracoesEmPeriodoFechado()
+    Local cPeriodo as character
+    Local cPeriodoLimpo as character
+    Local cDescr as character
+    Local aAnomalia as array
+    Local lOk as logical
+
+    lOk := .T.
+    cPeriodo := "9995-06"
+    cPeriodoLimpo := "9995-96"
+    cDescr := "test5-fechado"
+
+    // Setup
+    TCSqlExec("DELETE FROM ANOMALIA_LOG WHERE ANL_PERIODO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
+    TCSqlExec("DELETE FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "'")
+    TCSqlExec("DELETE FROM EXERCICIO WHERE EXE_CODIGO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
+    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) " + ;
+        "VALUES ('" + cPeriodo + "', '9995-06-01', '9995-06-30', 0, 1, ' ')")
+    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) " + ;
+        "VALUES ('" + cPeriodoLimpo + "', '9995-96-01', '9995-96-28', 0, 1, ' ')")
+
+    // Lancamento soft-deletado em periodo fechado
+    TCSqlExec("INSERT INTO LANCAMENTOS (LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, " + ;
+        "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_) VALUES (" + ;
+        "'99950601', '4000', '1000', 90.00, '" + cDescr + "', 'MANUAL', '" + cPeriodo + "', datetime('now'), 'TEST5', '*')")
+
+    // Caso 1: lancamento removido apos fechamento do periodo
+    If !GcValidarAlteracoesEmPeriodoFechado(cPeriodo)
+        ConOut("[FAIL] TestGcValidarAlteracoesEmPeriodoFechado: deveria retornar .T. para alteracao em periodo fechado")
+        lOk := .F.
+    Else
+        aAnomalia := TCSqlQuery("SELECT ANL_ID FROM ANOMALIA_LOG WHERE ANL_PERIODO = '" + cPeriodo + "' AND ANL_TIPO = 'USUARIO_ANOMALIA' AND D_E_L_E_T_ = ' '")
+        If Len(aAnomalia) == 0
+            ConOut("[FAIL] TestGcValidarAlteracoesEmPeriodoFechado: retornou .T. mas nao gravou em ANOMALIA_LOG")
+            lOk := .F.
+        Else
+            ConOut("[PASS] TestGcValidarAlteracoesEmPeriodoFechado: alteracao em periodo fechado detectada e gravada em ANOMALIA_LOG")
+        EndIf
+    EndIf
+
+    // Caso 2: periodo fechado sem lancamentos removidos
+    If GcValidarAlteracoesEmPeriodoFechado(cPeriodoLimpo)
+        ConOut("[FAIL] TestGcValidarAlteracoesEmPeriodoFechado: periodo fechado sem remocoes deveria retornar .F.")
+        lOk := .F.
+    Else
+        ConOut("[PASS] TestGcValidarAlteracoesEmPeriodoFechado: periodo limpo OK (.F.)")
+    EndIf
+
+    // Teardown
+    TCSqlExec("DELETE FROM ANOMALIA_LOG WHERE ANL_PERIODO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
+    TCSqlExec("DELETE FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "'")
+    TCSqlExec("DELETE FROM EXERCICIO WHERE EXE_CODIGO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
 Return lOk
