@@ -48,6 +48,15 @@ User Function RunAuditoriaTests()
     If !TestAuthLogoutRestEndpoint()
         lOk := .F.
     EndIf
+    If !TestAuditoriaAnomaliaRestEndpoint()
+        lOk := .F.
+    EndIf
+    If !TestAuditoriaDashboardRestEndpoint()
+        lOk := .F.
+    EndIf
+    If !TestAuditoriaAlertasRestEndpoint()
+        lOk := .F.
+    EndIf
 
     If lOk
         ConOut("=== RunAuditoriaTests: TODAS AS SUITES PASSARAM ===")
@@ -443,4 +452,159 @@ User Function TestGcInvalidarToken()
 
     // Teardown (hard delete, ignora D_E_L_E_T_)
     TCSqlExec("DELETE FROM GCT_TOKEN WHERE TOKEN = '" + cToken + "'")
+Return lOk
+
+/*/{Protheus.doc} TestAuditoriaAnomaliaRestEndpoint
+    Verifica GcAuditoriaAnomaliaRestEndpoint (Task 4): consulta por
+    periodo retorna todas as anomalias daquele periodo (varios tipos);
+    consulta por periodo + tipo filtra apenas o tipo pedido; periodo sem
+    anomalias retorna array vazio "[]". Checa o JSON de retorno via
+    operador `$` (contains) pois JsonObject():parse() nao esta
+    implementado no advplc v2.0.3. Cria e limpa dados de teste em
+    ANOMALIA_LOG.
+    @type User Function
+    @author Claude
+    @since 2026-07-31
+    @return lOk, logical, .T. se todos os casos passaram
+*/
+User Function TestAuditoriaAnomaliaRestEndpoint()
+    Local cPeriodo as character
+    Local cJson as character
+    Local lOk as logical
+
+    lOk := .T.
+    cPeriodo := "9999-01"
+
+    // Setup
+    TCSqlExec("DELETE FROM ANOMALIA_LOG WHERE ANL_PERIODO = '" + cPeriodo + "'")
+    TCSqlExec("INSERT INTO ANOMALIA_LOG (ANL_TIPO, ANL_PERIODO, ANL_UNIDADE, ANL_VALOR, ANL_DESCRICAO, ANL_CRIADO_EM, ANL_STATUS) " + ;
+        "VALUES ('DESEQUILIBRIO', '" + cPeriodo + "', 'T99', 123.45, 'teste desequilibrio', '2026-07-31 10:00:00', 'ABERTO')")
+    TCSqlExec("INSERT INTO ANOMALIA_LOG (ANL_TIPO, ANL_PERIODO, ANL_UNIDADE, ANL_VALOR, ANL_DESCRICAO, ANL_CRIADO_EM, ANL_STATUS) " + ;
+        "VALUES ('LAN_ORFAO', '" + cPeriodo + "', 'T98', 67.89, 'teste lancamento orfao', '2026-07-31 11:00:00', 'ABERTO')")
+
+    // Caso 1: sem filtro de tipo, retorna as 2 anomalias do periodo
+    cJson := GcAuditoriaAnomaliaRestEndpoint(cPeriodo, "")
+    If !('"tipo": "DESEQUILIBRIO"' $ cJson) .Or. !('"tipo": "LAN_ORFAO"' $ cJson)
+        ConOut("[FAIL] TestAuditoriaAnomaliaRestEndpoint: sem filtro deveria retornar as 2 anomalias. JSON=" + cJson)
+        lOk := .F.
+    Else
+        ConOut("[PASS] TestAuditoriaAnomaliaRestEndpoint: sem filtro OK (2 anomalias do periodo)")
+    EndIf
+
+    // Caso 2: com filtro de tipo, retorna apenas o tipo pedido
+    cJson := GcAuditoriaAnomaliaRestEndpoint(cPeriodo, "DESEQUILIBRIO")
+    If !('"tipo": "DESEQUILIBRIO"' $ cJson) .Or. ('"tipo": "LAN_ORFAO"' $ cJson)
+        ConOut("[FAIL] TestAuditoriaAnomaliaRestEndpoint: filtro por tipo nao isolou DESEQUILIBRIO. JSON=" + cJson)
+        lOk := .F.
+    Else
+        ConOut("[PASS] TestAuditoriaAnomaliaRestEndpoint: filtro por tipo OK (apenas DESEQUILIBRIO)")
+    EndIf
+
+    // Caso 3: periodo sem anomalias retorna array vazio
+    cJson := GcAuditoriaAnomaliaRestEndpoint("9999-02", "")
+    If AllTrim(cJson) <> "[]"
+        ConOut("[FAIL] TestAuditoriaAnomaliaRestEndpoint: periodo sem dados deveria retornar []. JSON=" + cJson)
+        lOk := .F.
+    Else
+        ConOut("[PASS] TestAuditoriaAnomaliaRestEndpoint: periodo sem dados OK ([])")
+    EndIf
+
+    // Teardown
+    TCSqlExec("DELETE FROM ANOMALIA_LOG WHERE ANL_PERIODO = '" + cPeriodo + "'")
+Return lOk
+
+/*/{Protheus.doc} TestAuditoriaDashboardRestEndpoint
+    Verifica GcAuditoriaDashboardRestEndpoint (Task 4): periodo com
+    registro em DASHBOARD_CACHE retorna os contadores gravados; periodo
+    sem cache retorna todos os contadores zerados. Checa o JSON de
+    retorno via operador `$` (contains) pois JsonObject():parse() nao
+    esta implementado no advplc v2.0.3. Cria e limpa dados de teste em
+    DASHBOARD_CACHE.
+    @type User Function
+    @author Claude
+    @since 2026-07-31
+    @return lOk, logical, .T. se todos os casos passaram
+*/
+User Function TestAuditoriaDashboardRestEndpoint()
+    Local cPeriodo as character
+    Local cJson as character
+    Local lOk as logical
+
+    lOk := .T.
+    cPeriodo := "9999-03"
+
+    // Setup
+    TCSqlExec("DELETE FROM DASHBOARD_CACHE WHERE DSH_PERIODO = '" + cPeriodo + "'")
+    TCSqlExec("INSERT INTO DASHBOARD_CACHE (DSH_DATA, DSH_PERIODO, DSH_ANOMALIAS_TOTAL, DSH_DESEQUILIBRIO_COUNT, " + ;
+        "DSH_LAN_ORFAO_COUNT, DSH_COB_ORFAO_COUNT, DSH_RATEIO_INVALID_COUNT, DSH_TIMING_COUNT, DSH_USUARIO_COUNT, " + ;
+        "DSH_JSON, DSH_ATUALIZADO_EM) VALUES ('2026-07-31', '" + cPeriodo + "', 6, 2, 1, 1, 1, 1, 0, '{}', '2026-07-31 12:00:00')")
+
+    // Caso 1: periodo com cache retorna contadores gravados
+    cJson := GcAuditoriaDashboardRestEndpoint(cPeriodo)
+    If !('"total": 6' $ cJson) .Or. !('"desequilibrio": 2' $ cJson) .Or. !('"lancamento_orfao": 1' $ cJson)
+        ConOut("[FAIL] TestAuditoriaDashboardRestEndpoint: cache existente nao retornou contadores corretos. JSON=" + cJson)
+        lOk := .F.
+    Else
+        ConOut("[PASS] TestAuditoriaDashboardRestEndpoint: cache existente OK (contadores corretos)")
+    EndIf
+
+    // Caso 2: periodo sem cache retorna tudo zerado
+    cJson := GcAuditoriaDashboardRestEndpoint("9999-04")
+    If !('"total": 0' $ cJson) .Or. !('"desequilibrio": 0' $ cJson)
+        ConOut("[FAIL] TestAuditoriaDashboardRestEndpoint: periodo sem cache deveria retornar zeros. JSON=" + cJson)
+        lOk := .F.
+    Else
+        ConOut("[PASS] TestAuditoriaDashboardRestEndpoint: periodo sem cache OK (zeros)")
+    EndIf
+
+    // Teardown
+    TCSqlExec("DELETE FROM DASHBOARD_CACHE WHERE DSH_PERIODO = '" + cPeriodo + "'")
+Return lOk
+
+/*/{Protheus.doc} TestAuditoriaAlertasRestEndpoint
+    Verifica GcAuditoriaAlertasRestEndpoint (Task 4): retorna alertas com
+    ALT_VISTO = 0 (nao lidos), e nao retorna alertas com ALT_VISTO = 1
+    (ja vistos). Checa o JSON de retorno via operador `$` (contains) pois
+    JsonObject():parse() nao esta implementado no advplc v2.0.3. Cria e
+    limpa dados de teste em ALERTA.
+    @type User Function
+    @author Claude
+    @since 2026-07-31
+    @return lOk, logical, .T. se todos os casos passaram
+*/
+User Function TestAuditoriaAlertasRestEndpoint()
+    Local cJson as character
+    Local lOk as logical
+    Local cMsgNaoLido as character
+    Local cMsgLido as character
+
+    lOk := .T.
+    cMsgNaoLido := "teste alerta nao lido 9999"
+    cMsgLido := "teste alerta ja lido 9999"
+
+    // Setup
+    TCSqlExec("DELETE FROM ALERTA WHERE ALT_MENSAGEM = '" + cMsgNaoLido + "' OR ALT_MENSAGEM = '" + cMsgLido + "'")
+    TCSqlExec("INSERT INTO ALERTA (ALT_TIPO, ALT_MENSAGEM, ALT_CRIADO_EM, ALT_VISTO) " + ;
+        "VALUES ('CRITICO', '" + cMsgNaoLido + "', '2026-07-31 13:00:00', 0)")
+    TCSqlExec("INSERT INTO ALERTA (ALT_TIPO, ALT_MENSAGEM, ALT_CRIADO_EM, ALT_VISTO) " + ;
+        "VALUES ('CRITICO', '" + cMsgLido + "', '2026-07-31 13:30:00', 1)")
+
+    cJson := GcAuditoriaAlertasRestEndpoint()
+
+    If !(cMsgNaoLido $ cJson)
+        ConOut("[FAIL] TestAuditoriaAlertasRestEndpoint: alerta nao lido deveria aparecer no retorno. JSON=" + cJson)
+        lOk := .F.
+    Else
+        ConOut("[PASS] TestAuditoriaAlertasRestEndpoint: alerta nao lido presente no retorno")
+    EndIf
+
+    If cMsgLido $ cJson
+        ConOut("[FAIL] TestAuditoriaAlertasRestEndpoint: alerta ja lido nao deveria aparecer no retorno. JSON=" + cJson)
+        lOk := .F.
+    Else
+        ConOut("[PASS] TestAuditoriaAlertasRestEndpoint: alerta ja lido corretamente ausente do retorno")
+    EndIf
+
+    // Teardown
+    TCSqlExec("DELETE FROM ALERTA WHERE ALT_MENSAGEM = '" + cMsgNaoLido + "' OR ALT_MENSAGEM = '" + cMsgLido + "'")
 Return lOk
