@@ -48,6 +48,15 @@ User Function RunAuditoriaTests()
     If !TestAuthLogoutRestEndpoint()
         lOk := .F.
     EndIf
+    If !TestPortalExtratosRestEndpoint()
+        lOk := .F.
+    EndIf
+    If !TestPortalAgendaRestEndpoint()
+        lOk := .F.
+    EndIf
+    If !TestPortalAvisosRestEndpoint()
+        lOk := .F.
+    EndIf
     If !TestAuditoriaAnomaliaRestEndpoint()
         lOk := .F.
     EndIf
@@ -268,6 +277,176 @@ User Function TestAuthLogoutRestEndpoint()
 
     // Teardown
     TCSqlExec("DELETE FROM GCT_TOKEN WHERE TOKEN = '" + cToken + "'")
+Return lOk
+
+/*/{Protheus.doc} TestPortalExtratosRestEndpoint
+    Verifica GcPortalExtratosRestEndpoint (Task 3): consulta RPT_PORTAL_EXTRATOS
+    filtrada por unidade retorna os extratos daquela unidade ordenados por
+    competencia DESC (mais recente primeiro); unidade sem extratos retorna
+    array vazio "[]". Checa o JSON de retorno (montado manualmente, ver
+    GcJsonEscape em src/auditoria-rest.prw, pois JsonObject():toJson() neste
+    advplc v2.0.3 nao serializa arrays) via operador `$` (contains) e via
+    posicao (At()) para validar a ordenacao. Cria e limpa dados de teste em
+    RPT_PORTAL_EXTRATOS.
+    @type User Function
+    @author Claude
+    @since 2026-07-31
+    @return lOk, logical, .T. se todos os casos passaram
+*/
+User Function TestPortalExtratosRestEndpoint()
+    Local cUnidade as character
+    Local cJson as character
+    Local lOk as logical
+    Local nPosJan as numeric
+    Local nPosFev as numeric
+
+    lOk := .T.
+    // Unidade precisa existir em UNI (REX_UNIDADE tem FOREIGN KEY para UNI.UNI_CODIGO)
+    cUnidade := "101"
+
+    // Setup: competencias fora do range usado por outros testes (2025-*) para nao colidir
+    TCSqlExec("DELETE FROM RPT_PORTAL_EXTRATOS WHERE REX_UNIDADE = '" + cUnidade + "' AND REX_COMPETENCIA IN ('9997-01', '9997-02')")
+    TCSqlExec("INSERT INTO RPT_PORTAL_EXTRATOS (REX_COMPETENCIA, REX_UNIDADE, REX_VALOR, REX_VENCIMENTO, REX_STATUS, D_E_L_E_T_) " + ;
+        "VALUES ('9997-01', '" + cUnidade + "', 1000.00, '2025-01-10', 'PAGO', ' ')")
+    TCSqlExec("INSERT INTO RPT_PORTAL_EXTRATOS (REX_COMPETENCIA, REX_UNIDADE, REX_VALOR, REX_VENCIMENTO, REX_STATUS, D_E_L_E_T_) " + ;
+        "VALUES ('9997-02', '" + cUnidade + "', 500.00, '2025-02-10', 'PENDENTE', ' ')")
+
+    // Caso 1: unidade com extratos retorna as 2 competencias, mais recente primeiro (DESC)
+    cJson := GcPortalExtratosRestEndpoint(cUnidade)
+    If !('"competencia": "9997-01"' $ cJson) .Or. !('"status": "PAGO"' $ cJson) .Or. ;
+       !('"competencia": "9997-02"' $ cJson) .Or. !('"status": "PENDENTE"' $ cJson)
+        ConOut("[FAIL] TestPortalExtratosRestEndpoint: extratos da unidade nao retornaram as 2 competencias esperadas. JSON=" + cJson)
+        lOk := .F.
+    Else
+        nPosJan := At('"competencia": "9997-01"', cJson)
+        nPosFev := At('"competencia": "9997-02"', cJson)
+        If nPosFev >= nPosJan
+            ConOut("[FAIL] TestPortalExtratosRestEndpoint: ordenacao incorreta, esperado 9997-02 antes de 9997-01 (DESC). JSON=" + cJson)
+            lOk := .F.
+        Else
+            ConOut("[PASS] TestPortalExtratosRestEndpoint: extratos da unidade OK (2 competencias, ordenacao DESC)")
+        EndIf
+    EndIf
+
+    // Caso 2: unidade sem extratos retorna array vazio
+    cJson := GcPortalExtratosRestEndpoint("test3-uni-inexistente")
+    If AllTrim(cJson) <> "[]"
+        ConOut("[FAIL] TestPortalExtratosRestEndpoint: unidade sem extratos deveria retornar []. JSON=" + cJson)
+        lOk := .F.
+    Else
+        ConOut("[PASS] TestPortalExtratosRestEndpoint: unidade sem extratos OK ([])")
+    EndIf
+
+    // Teardown
+    TCSqlExec("DELETE FROM RPT_PORTAL_EXTRATOS WHERE REX_UNIDADE = '" + cUnidade + "' AND REX_COMPETENCIA IN ('9997-01', '9997-02')")
+Return lOk
+
+/*/{Protheus.doc} TestPortalAgendaRestEndpoint
+    Verifica GcPortalAgendaRestEndpoint (Task 3): consulta RPT_PORTAL_AGENDA
+    filtrada por unidade retorna os vencimentos daquela unidade ordenados
+    por competencia ASC (mais proximo primeiro); unidade sem agenda retorna
+    array vazio "[]". Checa o JSON de retorno (montado manualmente, ver
+    GcJsonEscape em src/auditoria-rest.prw) via operador `$` (contains) e
+    via posicao (At()) para validar a ordenacao. Cria e limpa dados de
+    teste em RPT_PORTAL_AGENDA.
+    @type User Function
+    @author Claude
+    @since 2026-07-31
+    @return lOk, logical, .T. se todos os casos passaram
+*/
+User Function TestPortalAgendaRestEndpoint()
+    Local cUnidade as character
+    Local cJson as character
+    Local lOk as logical
+    Local nPosJan as numeric
+    Local nPosFev as numeric
+
+    lOk := .T.
+    // Unidade precisa existir em UNI (REA_UNIDADE tem FOREIGN KEY para UNI.UNI_CODIGO)
+    cUnidade := "102"
+
+    // Setup: competencias fora do range usado por outros testes (2025-*) para nao colidir
+    TCSqlExec("DELETE FROM RPT_PORTAL_AGENDA WHERE REA_UNIDADE = '" + cUnidade + "' AND REA_COMPETENCIA IN ('9997-01', '9997-02')")
+    TCSqlExec("INSERT INTO RPT_PORTAL_AGENDA (REA_UNIDADE, REA_COMPETENCIA, REA_VENCIMENTO, REA_VALOR, D_E_L_E_T_) " + ;
+        "VALUES ('" + cUnidade + "', '9997-01', '2025-01-10', 800.00, ' ')")
+    TCSqlExec("INSERT INTO RPT_PORTAL_AGENDA (REA_UNIDADE, REA_COMPETENCIA, REA_VENCIMENTO, REA_VALOR, D_E_L_E_T_) " + ;
+        "VALUES ('" + cUnidade + "', '9997-02', '2025-02-10', 900.00, ' ')")
+
+    // Caso 1: unidade com agenda retorna as 2 competencias, mais proxima primeiro (ASC)
+    cJson := GcPortalAgendaRestEndpoint(cUnidade)
+    If !('"competencia": "9997-01"' $ cJson) .Or. !('"competencia": "9997-02"' $ cJson)
+        ConOut("[FAIL] TestPortalAgendaRestEndpoint: agenda da unidade nao retornou as 2 competencias esperadas. JSON=" + cJson)
+        lOk := .F.
+    Else
+        nPosJan := At('"competencia": "9997-01"', cJson)
+        nPosFev := At('"competencia": "9997-02"', cJson)
+        If nPosJan >= nPosFev
+            ConOut("[FAIL] TestPortalAgendaRestEndpoint: ordenacao incorreta, esperado 9997-01 antes de 9997-02 (ASC). JSON=" + cJson)
+            lOk := .F.
+        Else
+            ConOut("[PASS] TestPortalAgendaRestEndpoint: agenda da unidade OK (2 competencias, ordenacao ASC)")
+        EndIf
+    EndIf
+
+    // Caso 2: unidade sem agenda retorna array vazio
+    cJson := GcPortalAgendaRestEndpoint("test3-uni-inexistente")
+    If AllTrim(cJson) <> "[]"
+        ConOut("[FAIL] TestPortalAgendaRestEndpoint: unidade sem agenda deveria retornar []. JSON=" + cJson)
+        lOk := .F.
+    Else
+        ConOut("[PASS] TestPortalAgendaRestEndpoint: unidade sem agenda OK ([])")
+    EndIf
+
+    // Teardown
+    TCSqlExec("DELETE FROM RPT_PORTAL_AGENDA WHERE REA_UNIDADE = '" + cUnidade + "' AND REA_COMPETENCIA IN ('9997-01', '9997-02')")
+Return lOk
+
+/*/{Protheus.doc} TestPortalAvisosRestEndpoint
+    Verifica GcPortalAvisosRestEndpoint (Task 3): retorna avisos com
+    AVI_ATIVO = 1 (ativos), e nao retorna avisos com AVI_ATIVO = 0
+    (arquivados). Checa o JSON de retorno (montado manualmente, ver
+    GcJsonEscape em src/auditoria-rest.prw) via operador `$` (contains).
+    Cria e limpa dados de teste em AVISOS.
+    @type User Function
+    @author Claude
+    @since 2026-07-31
+    @return lOk, logical, .T. se todos os casos passaram
+*/
+User Function TestPortalAvisosRestEndpoint()
+    Local cJson as character
+    Local lOk as logical
+    Local cTituloAtivo as character
+    Local cTituloInativo as character
+
+    lOk := .T.
+    cTituloAtivo := "test3-aviso-ativo-9999"
+    cTituloInativo := "test3-aviso-inativo-9999"
+
+    // Setup
+    TCSqlExec("DELETE FROM AVISOS WHERE AVI_TITULO = '" + cTituloAtivo + "' OR AVI_TITULO = '" + cTituloInativo + "'")
+    TCSqlExec("INSERT INTO AVISOS (AVI_TITULO, AVI_CORPO, AVI_ATIVO, D_E_L_E_T_) " + ;
+        "VALUES ('" + cTituloAtivo + "', 'corpo do aviso ativo', 1, ' ')")
+    TCSqlExec("INSERT INTO AVISOS (AVI_TITULO, AVI_CORPO, AVI_ATIVO, D_E_L_E_T_) " + ;
+        "VALUES ('" + cTituloInativo + "', 'corpo do aviso inativo', 0, ' ')")
+
+    cJson := GcPortalAvisosRestEndpoint()
+
+    If !(cTituloAtivo $ cJson)
+        ConOut("[FAIL] TestPortalAvisosRestEndpoint: aviso ativo deveria aparecer no retorno. JSON=" + cJson)
+        lOk := .F.
+    Else
+        ConOut("[PASS] TestPortalAvisosRestEndpoint: aviso ativo presente no retorno")
+    EndIf
+
+    If cTituloInativo $ cJson
+        ConOut("[FAIL] TestPortalAvisosRestEndpoint: aviso inativo nao deveria aparecer no retorno. JSON=" + cJson)
+        lOk := .F.
+    Else
+        ConOut("[PASS] TestPortalAvisosRestEndpoint: aviso inativo corretamente ausente do retorno")
+    EndIf
+
+    // Teardown
+    TCSqlExec("DELETE FROM AVISOS WHERE AVI_TITULO = '" + cTituloAtivo + "' OR AVI_TITULO = '" + cTituloInativo + "'")
 Return lOk
 
 /*/{Protheus.doc} TestGcValidarToken
