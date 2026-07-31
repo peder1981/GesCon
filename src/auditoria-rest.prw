@@ -159,6 +159,156 @@ User Function GcAuditoriaAlertasRestEndpoint() as character
 Return cReturn
 
 /*{Protheus.doc}
+Escapa valor de texto para embutir com seguranca dentro de uma string JSON
+construida manualmente (barra invertida, aspas duplas e quebras de linha).
+Usado pelos endpoints /portal/* porque JsonObject():toJson() neste advplc
+(v2.0.3) so serializa pares chave/valor escalares de um unico objeto - nao
+ha suporte a array (":fromArray" nao existe, erro "unknown method FROMARRAY
+on JsonObject") nem a objetos aninhados, entao arrays JSON precisam ser
+montados como string.
+@type Static Function
+@author Claude
+@since 2026-07-31
+@param cValor Character valor a escapar (aceita Nil)
+@return Character valor escapado, seguro para uso entre aspas duplas em JSON
+/*/
+Static Function GcJsonEscape(cValor as character) as character
+  Local cRet as character
+
+  cRet := cValor
+  If cRet == Nil
+    cRet := ""
+  EndIf
+
+  cRet := StrTran(cRet, "\", "\\")
+  cRet := StrTran(cRet, '"', '\"')
+  cRet := StrTran(cRet, Chr(13), "")
+  cRet := StrTran(cRet, Chr(10), "\n")
+
+Return cRet
+
+/*{Protheus.doc}
+REST endpoint: GET /portal/extratos?unidade=T01
+Consulta o snapshot RPT_PORTAL_EXTRATOS (gerado por GcGerarPortalExtratos)
+filtrado pela unidade informada. JSON montado manualmente (ver GcJsonEscape)
+porque JsonObject():toJson() neste advplc nao serializa arrays.
+@type Function
+@author Claude
+@since 2026-07-31
+@param cUnidade Character codigo da unidade
+@return Character JSON array de extratos, ordenado por competencia DESC
+/*/
+User Function GcPortalExtratosRestEndpoint(cUnidade as character) as character
+  Local cQuery as character
+  Local aExtratos as array
+  Local cJson as character
+  Local i as numeric
+
+  cQuery := "SELECT REX_ID, REX_COMPETENCIA, REX_VALOR, REX_VENCIMENTO, REX_STATUS " + ;
+            "FROM RPT_PORTAL_EXTRATOS WHERE REX_UNIDADE = '" + GcSqlLit(cUnidade) + "' AND D_E_L_E_T_ = ' ' " + ;
+            "ORDER BY REX_COMPETENCIA DESC"
+
+  aExtratos := TCSqlQuery(cQuery)
+
+  cJson := "["
+  For i := 1 To Len(aExtratos)
+    If i > 1
+      cJson += ", "
+    EndIf
+    cJson += "{"
+    cJson += '"id": ' + AllTrim(aExtratos[i]:REX_ID) + ", "
+    cJson += '"competencia": "' + GcJsonEscape(aExtratos[i]:REX_COMPETENCIA) + '", '
+    cJson += '"valor": ' + AllTrim(aExtratos[i]:REX_VALOR) + ", "
+    cJson += '"vencimento": "' + GcJsonEscape(aExtratos[i]:REX_VENCIMENTO) + '", '
+    cJson += '"status": "' + GcJsonEscape(aExtratos[i]:REX_STATUS) + '"'
+    cJson += "}"
+  Next i
+  cJson += "]"
+
+Return cJson
+
+/*{Protheus.doc}
+REST endpoint: GET /portal/agenda?unidade=T01
+Consulta o snapshot RPT_PORTAL_AGENDA (gerado por GcGerarPortalAgenda,
+proximos 12 meses de vencimentos) filtrado pela unidade informada. JSON
+montado manualmente (ver GcJsonEscape) porque JsonObject():toJson() neste
+advplc nao serializa arrays.
+@type Function
+@author Claude
+@since 2026-07-31
+@param cUnidade Character codigo da unidade
+@return Character JSON array de vencimentos futuros, ordenado por competencia ASC
+/*/
+User Function GcPortalAgendaRestEndpoint(cUnidade as character) as character
+  Local cQuery as character
+  Local aAgenda as array
+  Local cJson as character
+  Local i as numeric
+
+  cQuery := "SELECT REA_ID, REA_COMPETENCIA, REA_VENCIMENTO, REA_VALOR " + ;
+            "FROM RPT_PORTAL_AGENDA WHERE REA_UNIDADE = '" + GcSqlLit(cUnidade) + "' AND D_E_L_E_T_ = ' ' " + ;
+            "ORDER BY REA_COMPETENCIA ASC"
+
+  aAgenda := TCSqlQuery(cQuery)
+
+  cJson := "["
+  For i := 1 To Len(aAgenda)
+    If i > 1
+      cJson += ", "
+    EndIf
+    cJson += "{"
+    cJson += '"id": ' + AllTrim(aAgenda[i]:REA_ID) + ", "
+    cJson += '"competencia": "' + GcJsonEscape(aAgenda[i]:REA_COMPETENCIA) + '", '
+    cJson += '"vencimento": "' + GcJsonEscape(aAgenda[i]:REA_VENCIMENTO) + '", '
+    cJson += '"valor": ' + AllTrim(aAgenda[i]:REA_VALOR)
+    cJson += "}"
+  Next i
+  cJson += "]"
+
+Return cJson
+
+/*{Protheus.doc}
+REST endpoint: GET /portal/avisos
+Consulta o mural de avisos (tabela AVISOS) filtrando apenas os ativos
+(AVI_ATIVO = 1), limitado aos 10 mais recentes. JSON montado manualmente
+(ver GcJsonEscape) porque JsonObject():toJson() neste advplc nao serializa
+arrays. Nota: a coluna real de data de criacao em AVISOS e AVI_DATA_CRIACAO
+(nao AVI_CRIADO_EM) - ver schema.sql; a chave JSON de saida continua
+"criado_em" por clareza da API.
+@type Function
+@author Claude
+@since 2026-07-31
+@return Character JSON array dos avisos ativos, mais recentes primeiro
+/*/
+User Function GcPortalAvisosRestEndpoint() as character
+  Local cQuery as character
+  Local aAvisos as array
+  Local cJson as character
+  Local i as numeric
+
+  cQuery := "SELECT AVI_ID, AVI_TITULO, AVI_CORPO, AVI_DATA_CRIACAO FROM AVISOS " + ;
+            "WHERE AVI_ATIVO = 1 AND D_E_L_E_T_ = ' ' " + ;
+            "ORDER BY AVI_DATA_CRIACAO DESC LIMIT 10"
+
+  aAvisos := TCSqlQuery(cQuery)
+
+  cJson := "["
+  For i := 1 To Len(aAvisos)
+    If i > 1
+      cJson += ", "
+    EndIf
+    cJson += "{"
+    cJson += '"id": ' + AllTrim(aAvisos[i]:AVI_ID) + ", "
+    cJson += '"titulo": "' + GcJsonEscape(aAvisos[i]:AVI_TITULO) + '", '
+    cJson += '"corpo": "' + GcJsonEscape(aAvisos[i]:AVI_CORPO) + '", '
+    cJson += '"criado_em": "' + GcJsonEscape(aAvisos[i]:AVI_DATA_CRIACAO) + '"'
+    cJson += "}"
+  Next i
+  cJson += "]"
+
+Return cJson
+
+/*{Protheus.doc}
 REST endpoint: POST /auth/login
 @type Function
 @author Claude
