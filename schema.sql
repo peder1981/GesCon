@@ -191,6 +191,7 @@ INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL
 ('RPT_DESCAT', 2, 'RDC_TOTAL', 'N', 14, 2, 'Total');
 
 -- GesCon — USR_PERFIL: perfil do usuário (Plano 2).
+-- Note: SQLite doesn't support IF NOT EXISTS for ADD COLUMN, so we ignore the error if column exists
 ALTER TABLE USR ADD COLUMN USR_PERFIL TEXT DEFAULT 'ADMIN';
 
 -- Metadados SX3 para CFG_BOLETO

@@ -2,7 +2,6 @@
 // Acesso a exercícios, períodos, validações de lançamentos
 #include "totvs.ch"
 #include "db.prw"
-#include "portal-v2.prw"
 
 /*/{Protheus.doc} GcSqlLit
     Escapa aspas simples e envolve com quotes — todo valor de texto interpolado
