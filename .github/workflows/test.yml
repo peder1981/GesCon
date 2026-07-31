@@ -1,38 +1,62 @@
-name: Lint
+name: Build
 
 on:
   push:
     branches: [master]
     paths:
-      - 'src/**'
-      - 'tests/**'
+      - '**.prw'
+      - 'schema.sql'
+      - 'scripts/**'
+      - '.github/workflows/test.yml'
+  pull_request:
+    paths:
+      - '**.prw'
+      - 'schema.sql'
+      - 'scripts/**'
       - '.github/workflows/test.yml'
 
 jobs:
-  lint:
+  build:
     runs-on: ubuntu-latest
+    env:
+      ADVPP_SRC: ${{ github.workspace }}/AdvPP
+      ADVPP_DB: ${{ github.workspace }}/ci.db
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout GesCon
+        uses: actions/checkout@v4
+        with:
+          path: GesCon
 
-      - name: Check AdvPL/TLPP source files exist
-        run: |
-          test -f gescon.prw || exit 1
-          test -d src && [ $(find src -name "*.prw" | wc -l) -ge 10 ] || exit 1
-          test -d tests && [ $(find tests -name "*_test.prw" | wc -l) -ge 5 ] || exit 1
-          echo "✓ Source structure valid"
+      # O GesCon compila com o AdvPP, um compilador AdvPL/TLPP em Go que
+      # vive em outro repositorio. Sem ele nao ha como validar sintaxe nem
+      # gerar o executavel -- o lint por grep que existia aqui antes nao
+      # compilava nada, e deixava passar erro de sintaxe.
+      - name: Checkout AdvPP (compilador)
+        uses: actions/checkout@v4
+        with:
+          repository: peder1981/AdvPP
+          path: AdvPP
 
-      - name: Check syntax (basic file validation)
-        run: |
-          for f in src/*.prw tests/*_test.prw gescon.prw; do
-            [ -f "$f" ] || continue
-            # Check for basic AdvPL/TLPP structure
-            grep -q "^Function\|^User Function\|^method\|^class" "$f" || [ $(wc -l < "$f") -gt 5 ] || exit 1
-            echo "  ✓ $f"
-          done
-          echo "✓ All files have content"
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: AdvPP/go.mod
+          cache-dependency-path: AdvPP/go.sum
 
-      - name: Check database schema
+      - name: Build advplc
         run: |
-          test -f schema.sql || exit 1
-          grep -q "CREATE TABLE" schema.sql || exit 1
-          echo "✓ Schema file valid"
+          mkdir -p "$HOME/.local/bin"
+          cd AdvPP
+          go build -o "$HOME/.local/bin/advplc" ./cmd/advplc
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Bootstrap do banco
+        run: |
+          cd GesCon
+          sqlite3 "$ADVPP_DB" < schema.sql
+          sqlite3 "$ADVPP_DB" < scripts/seed-contabil.sql
+
+      - name: Sintaxe de todos os fontes
+        run: GesCon/scripts/check.sh
+
+      - name: Executavel desktop
+        run: GesCon/scripts/build.sh -o /tmp/GesConApp
