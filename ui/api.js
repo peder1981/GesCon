@@ -62,7 +62,7 @@ const API = {
           });
         } else if (r.status === 401) {
           return r.json().then(data => {
-            throw new Error(data.error || 'Credenciais inválidas');
+            throw new Error(data.error || 'Credenciais invï¿½lidas');
           });
         } else {
           throw new Error('Erro ao autenticar');
@@ -98,9 +98,9 @@ const API = {
         } else if (r.status === 401) {
           // Token expired or invalid
           this.removeToken();
-          throw new Error('Sessão expirada');
+          throw new Error('Sessï¿½o expirada');
         } else {
-          throw new Error('Erro ao validar sessão');
+          throw new Error('Erro ao validar sessï¿½o');
         }
       });
   },
@@ -114,7 +114,7 @@ const API = {
           return r.json();
         } else if (r.status === 401) {
           this.removeToken();
-          throw new Error('Sessão expirada');
+          throw new Error('Sessï¿½o expirada');
         } else {
           throw new Error('Erro ao carregar extratos');
         }
@@ -130,7 +130,7 @@ const API = {
           return r.json();
         } else if (r.status === 401) {
           this.removeToken();
-          throw new Error('Sessão expirada');
+          throw new Error('Sessï¿½o expirada');
         } else {
           throw new Error('Erro ao carregar agenda');
         }
@@ -145,9 +145,61 @@ const API = {
           return r.json();
         } else if (r.status === 401) {
           this.removeToken();
-          throw new Error('Sessão expirada');
+          throw new Error('Sessï¿½o expirada');
         } else {
           throw new Error('Erro ao carregar avisos');
+        }
+      });
+  },
+
+  // GET /api/auditoria/dashboards?periodo=YYYY-MM
+  getAuditoriaDashboard: function(periodo) {
+    const url = '/api/auditoria/dashboards' + (periodo ? '?periodo=' + encodeURIComponent(periodo) : '');
+    return this.fetch(url)
+      .then(r => {
+        if (r.status === 200) {
+          return r.json();
+        } else if (r.status === 401) {
+          this.removeToken();
+          throw new Error('Sessï¿½o expirada');
+        } else {
+          throw new Error('Erro ao carregar dashboard de auditoria');
+        }
+      });
+  },
+
+  // GET /api/auditoria/anomalias?periodo=YYYY-MM&tipo=TIPO
+  getAuditoriaAnomalias: function(periodo, tipo) {
+    let url = '/api/auditoria/anomalias';
+    const params = [];
+    if (periodo) params.push('periodo=' + encodeURIComponent(periodo));
+    if (tipo) params.push('tipo=' + encodeURIComponent(tipo));
+    if (params.length > 0) url += '?' + params.join('&');
+
+    return this.fetch(url)
+      .then(r => {
+        if (r.status === 200) {
+          return r.json();
+        } else if (r.status === 401) {
+          this.removeToken();
+          throw new Error('Sessï¿½o expirada');
+        } else {
+          throw new Error('Erro ao carregar anomalias de auditoria');
+        }
+      });
+  },
+
+  // GET /api/auditoria/alertas
+  getAuditoriaAlertas: function() {
+    return this.fetch('/api/auditoria/alertas')
+      .then(r => {
+        if (r.status === 200) {
+          return r.json();
+        } else if (r.status === 401) {
+          this.removeToken();
+          throw new Error('Sessï¿½o expirada');
+        } else {
+          throw new Error('Erro ao carregar alertas de auditoria');
         }
       });
   }

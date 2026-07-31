@@ -87,9 +87,16 @@ const Auth = {
 
     // Populate username display from token
     const unidade = Auth.getUnidadeFromToken();
+    const perfil = Auth.getPerfilFromToken();
     const usernameDisplay = document.getElementById('username-display');
     if (usernameDisplay && unidade) {
       usernameDisplay.textContent = 'Unidade ' + unidade;
+    }
+
+    // Show Auditoria tab only for admin users
+    const auditoriaTabBtn = document.getElementById('auditoria-tab-btn');
+    if (auditoriaTabBtn) {
+      auditoriaTabBtn.style.display = (perfil === 'admin' || perfil === 'auditor') ? 'inline-block' : 'none';
     }
 
     // Load portal data
@@ -151,6 +158,26 @@ const Auth = {
       const data = JSON.parse(payload);
 
       return data.unidade || null;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  // Extract perfil (role) from token (if available)
+  getPerfilFromToken: function() {
+    const token = API.getToken();
+    if (!token) return null;
+
+    try {
+      // JWT format: header.payload.signature
+      const parts = token.split('.');
+      if (parts.length !== 3) return null;
+
+      // Decode payload
+      const payload = atob(parts[1]);
+      const data = JSON.parse(payload);
+
+      return data.perfil || null;
     } catch (e) {
       return null;
     }
