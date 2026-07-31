@@ -1,10 +1,11 @@
-// tests/auditoria_test.prw— Testes das tabelas de auditoria e anomalias
+// tests/auditoria_test.prw? Testes das tabelas de auditoria e anomalias
 // Verifica criao e existncia das tabelas ANOMALIA_LOG, ALERTA e DASHBOARD_CACHE
 #include "totvs.ch"
 #include "../src/db.prw"
 #include "../src/login.prw"
 #include "../src/usuarios.prw"
 #include "../src/auth-primitives.prw"
+#include "../src/auditoria-rest.prw"
 
 /*/{Protheus.doc} RunAuditoriaTests
     Driver de execucao: `advplc run tests/auditoria_test.prw` so executa a
@@ -13,10 +14,10 @@
     as funcoes `Test*`), entao esta funcao roda em sequencia todas as
     suites deste arquivo e agrega o resultado. As 3 suites
     TestAuthValidateToken/TestAuthLoginRestEndpoint/TestAuthLogoutRestEndpoint
-    (Task 2, endpoints REST) usam JsonObject():parse(), metodo nao
-    implementado no advplc v2.0.3 - ficam de fora desta chamada em cadeia
-    para nao abortar a execucao das demais suites (erro nao tratavel via
-    Try/Catch por ser um erro de metodo desconhecido na VM).
+    (Task 2, endpoints REST) verificam o JSON de retorno via operador `$`
+    (contains) em vez de JsonObject():parse(), que nao esta implementado
+    no advplc v2.0.3 (erro "unknown method PARSE on JsonObject", nao
+    tratavel via Try/Catch por ser erro de metodo desconhecido na VM).
     @type User Function
     @author Claude
     @since 2026-07-31
@@ -36,6 +37,15 @@ User Function RunAuditoriaTests()
         lOk := .F.
     EndIf
     If !TestGcInvalidarToken()
+        lOk := .F.
+    EndIf
+    If !TestAuthValidateToken()
+        lOk := .F.
+    EndIf
+    If !TestAuthLoginRestEndpoint()
+        lOk := .F.
+    EndIf
+    If !TestAuthLogoutRestEndpoint()
         lOk := .F.
     EndIf
 
@@ -101,75 +111,154 @@ User Function TestAuditoriaTablesExist()
 Return lOk
 
 /*/{Protheus.doc} TestAuthValidateToken
-    Verifica que um token válido retorna {ok: true, perfil, unidades}
-    via GcAuthValidateRestToken.
+    Verifica que um token valido retorna {ok: true, perfil, unidades} via
+    GcAuthValidateRestToken, e que um token inexistente retorna
+    {ok: false}. Checa o JSON de retorno via operador `$` (contains) pois
+    JsonObject():parse() nao esta implementado no advplc v2.0.3. Cria e
+    limpa um token de teste em GCT_TOKEN.
     @type Function
     @author Claude
-    @since 2026-07-30
+    @since 2026-07-31
     @return lOk, logical, .T. se o teste passou
 */
 User Function TestAuthValidateToken()
     Local cToken as character
-    Local oResult as object
+    Local cValido as character
+    Local cJson as character
     Local lOk as logical
 
-    cToken := "test-token-uuid"
-    oResult := JsonObject():parse(GcAuthValidateRestToken(cToken))
+    lOk := .T.
+    cToken := "test2-tok-validate"
+    cValido := DTOS(Date() + 2)
+    cValido := SubStr(cValido, 1, 4) + "-" + SubStr(cValido, 5, 2) + "-" + SubStr(cValido, 7, 2) + " 23:59:59"
 
-    If oResult["ok"] <> .T.
-        ConOut("[FAIL] TestAuthValidateToken: token validation failed")
-        Return .F.
+    // Setup
+    TCSqlExec("DELETE FROM GCT_TOKEN WHERE TOKEN = '" + cToken + "'")
+    TCSqlExec("INSERT INTO GCT_TOKEN (TOKEN, USR_LOGIN, CON_CODIGO, UNI_CODIGO, CRIPTADO, VALIDO_ATE, USADO, TOK_PERFIL) " + ;
+        "VALUES ('" + cToken + "', 'admin', 'C15', 'U15', '2026-07-01 10:00:00', '" + cValido + "', 0, 'ADMIN')")
+
+    // Caso 1: token valido
+    cJson := GcAuthValidateRestToken(cToken)
+    If !('"ok": true' $ cJson) .Or. !('"perfil": "ADMIN"' $ cJson)
+        ConOut("[FAIL] TestAuthValidateToken: token valido nao retornou ok=true/perfil=ADMIN. JSON=" + cJson)
+        lOk := .F.
+    Else
+        ConOut("[PASS] TestAuthValidateToken: token valido OK (ok=true, perfil=ADMIN)")
     EndIf
 
-    lOk := .T.
-    ConOut("[PASS] TestAuthValidateToken: token validado com sucesso")
+    // Caso 2: token inexistente
+    cJson := GcAuthValidateRestToken("test2-tok-inexistente")
+    If !('"ok": false' $ cJson)
+        ConOut("[FAIL] TestAuthValidateToken: token inexistente deveria retornar ok=false. JSON=" + cJson)
+        lOk := .F.
+    Else
+        ConOut("[PASS] TestAuthValidateToken: token inexistente OK (ok=false)")
+    EndIf
+
+    // Teardown
+    TCSqlExec("DELETE FROM GCT_TOKEN WHERE TOKEN = '" + cToken + "'")
 Return lOk
 
 /*/{Protheus.doc} TestAuthLoginRestEndpoint
-    Verifica que login com credenciais válidas retorna token via
-    GcAuthLoginRestEndpoint.
+    Verifica que login com credenciais validas retorna token via
+    GcAuthLoginRestEndpoint, e que credenciais invalidas retornam
+    ok=false. Checa o JSON de retorno via operador `$` (contains) pois
+    JsonObject():parse() nao esta implementado no advplc v2.0.3. Cria e
+    limpa um usuario de teste em USR.
     @type Function
     @author Claude
-    @since 2026-07-30
+    @since 2026-07-31
     @return lOk, logical, .T. se o teste passou
 */
 User Function TestAuthLoginRestEndpoint()
-    Local oResult as object
+    Local cLogin as character
+    Local cSenha as character
+    Local cJson as character
     Local lOk as logical
 
-    oResult := JsonObject():parse(GcAuthLoginRestEndpoint("admin", "admin123"))
+    lOk := .T.
+    cLogin := "test2user"
+    cSenha := "test2senha"
 
-    If oResult["ok"] <> .T. .Or. Empty(oResult["token"])
-        ConOut("[FAIL] TestAuthLoginRestEndpoint: login failed or token empty")
-        Return .F.
+    // Setup
+    TCSqlExec("DELETE FROM GCT_TOKEN WHERE USR_LOGIN = '" + cLogin + "'")
+    TCSqlExec("DELETE FROM USR WHERE USR_LOGIN = '" + cLogin + "'")
+    TCSqlExec("INSERT INTO USR (USR_LOGIN, USR_SENHA, USR_PERFIL) VALUES ('" + cLogin + "', '" + FWHash(cSenha) + "', 'CONDOMINO')")
+
+    // Caso 1: credenciais validas
+    cJson := GcAuthLoginRestEndpoint(cLogin, cSenha)
+    If !('"ok": true' $ cJson) .Or. !('"perfil": "CONDOMINO"' $ cJson) .Or. !('"token": "' $ cJson)
+        ConOut("[FAIL] TestAuthLoginRestEndpoint: login valido nao retornou ok=true/token/perfil. JSON=" + cJson)
+        lOk := .F.
+    Else
+        ConOut("[PASS] TestAuthLoginRestEndpoint: login valido OK (ok=true, token recebido, perfil CONDOMINO)")
     EndIf
 
-    lOk := .T.
-    ConOut("[PASS] TestAuthLoginRestEndpoint: login efetuado, token recebido")
+    // Caso 2: credenciais invalidas
+    cJson := GcAuthLoginRestEndpoint(cLogin, "senha-errada")
+    If !('"ok": false' $ cJson)
+        ConOut("[FAIL] TestAuthLoginRestEndpoint: credenciais invalidas deveriam retornar ok=false. JSON=" + cJson)
+        lOk := .F.
+    Else
+        ConOut("[PASS] TestAuthLoginRestEndpoint: credenciais invalidas OK (ok=false)")
+    EndIf
+
+    // Teardown
+    TCSqlExec("DELETE FROM GCT_TOKEN WHERE USR_LOGIN = '" + cLogin + "'")
+    TCSqlExec("DELETE FROM USR WHERE USR_LOGIN = '" + cLogin + "'")
 Return lOk
 
 /*/{Protheus.doc} TestAuthLogoutRestEndpoint
-    Verifica que logout invalida o token via GcAuthLogoutRestEndpoint.
+    Verifica que logout invalida o token via GcAuthLogoutRestEndpoint
+    (ok=true e token some das consultas ativas), e que revogar de novo o
+    mesmo token retorna ok=false. Checa o JSON de retorno via operador
+    `$` (contains) pois JsonObject():parse() nao esta implementado no
+    advplc v2.0.3. Cria e limpa um token de teste em GCT_TOKEN.
     @type Function
     @author Claude
-    @since 2026-07-30
+    @since 2026-07-31
     @return lOk, logical, .T. se o teste passou
 */
 User Function TestAuthLogoutRestEndpoint()
     Local cToken as character
-    Local oResult as object
+    Local cJson as character
     Local lOk as logical
-
-    cToken := "test-token-uuid"
-    oResult := JsonObject():parse(GcAuthLogoutRestEndpoint(cToken))
-
-    If oResult["ok"] <> .T.
-        ConOut("[FAIL] TestAuthLogoutRestEndpoint: logout failed")
-        Return .F.
-    EndIf
+    Local aAtivo as array
 
     lOk := .T.
-    ConOut("[PASS] TestAuthLogoutRestEndpoint: logout efetuado com sucesso")
+    cToken := "test2-tok-logout"
+
+    // Setup
+    TCSqlExec("DELETE FROM GCT_TOKEN WHERE TOKEN = '" + cToken + "'")
+    TCSqlExec("INSERT INTO GCT_TOKEN (TOKEN, USR_LOGIN, CON_CODIGO, UNI_CODIGO, CRIPTADO, VALIDO_ATE, USADO, TOK_PERFIL) " + ;
+        "VALUES ('" + cToken + "', 'admin', 'C15', 'U15', '2026-07-01 10:00:00', '2099-01-01 00:00:00', 0, 'ADMIN')")
+
+    // Caso 1: logout de token existente
+    cJson := GcAuthLogoutRestEndpoint(cToken)
+    If !('"ok": true' $ cJson)
+        ConOut("[FAIL] TestAuthLogoutRestEndpoint: logout deveria retornar ok=true. JSON=" + cJson)
+        lOk := .F.
+    Else
+        aAtivo := TCSqlQuery("SELECT TOKEN FROM GCT_TOKEN WHERE TOKEN = '" + cToken + "' AND D_E_L_E_T_ = ' '")
+        If Len(aAtivo) <> 0
+            ConOut("[FAIL] TestAuthLogoutRestEndpoint: token revogado ainda aparece como ativo")
+            lOk := .F.
+        Else
+            ConOut("[PASS] TestAuthLogoutRestEndpoint: logout efetuado com sucesso (ok=true, token revogado)")
+        EndIf
+    EndIf
+
+    // Caso 2: logout de token ja revogado
+    cJson := GcAuthLogoutRestEndpoint(cToken)
+    If !('"ok": false' $ cJson)
+        ConOut("[FAIL] TestAuthLogoutRestEndpoint: segundo logout deveria retornar ok=false. JSON=" + cJson)
+        lOk := .F.
+    Else
+        ConOut("[PASS] TestAuthLogoutRestEndpoint: segundo logout OK (ok=false, ja estava revogado)")
+    EndIf
+
+    // Teardown
+    TCSqlExec("DELETE FROM GCT_TOKEN WHERE TOKEN = '" + cToken + "'")
 Return lOk
 
 /*/{Protheus.doc} TestGcValidarToken
