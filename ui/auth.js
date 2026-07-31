@@ -34,7 +34,7 @@ const Auth = {
     const password = passwordInput.value.trim();
 
     if (!username || !password) {
-      Auth.showError('Usuário e senha são obrigatórios', errorMsg);
+      Auth.showError('Usuï¿½rio e senha sï¿½o obrigatï¿½rios', errorMsg);
       return;
     }
 
@@ -84,6 +84,13 @@ const Auth = {
 
     if (loginSection) loginSection.style.display = 'none';
     if (portalSection) portalSection.style.display = 'block';
+
+    // Populate username display from token
+    const unidade = Auth.getUnidadeFromToken();
+    const usernameDisplay = document.getElementById('username-display');
+    if (usernameDisplay && unidade) {
+      usernameDisplay.textContent = 'Unidade ' + unidade;
+    }
 
     // Load portal data
     if (typeof Portal !== 'undefined') {

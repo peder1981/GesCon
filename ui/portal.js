@@ -15,7 +15,7 @@ const Portal = {
   loadExtratos: function(unidade) {
     const container = document.getElementById('extratos-container');
     const table = document.getElementById('extratos-table');
-    const tbody = table.querySelector('tbody');
+    let tbody = table.querySelector('tbody');
 
     if (!tbody) {
       // Create tbody if not exists
@@ -47,7 +47,7 @@ const Portal = {
         container?.querySelector('.loading-message')?.remove();
 
         if (!data || data.length === 0) {
-          Portal.showNoData('Nenhum extrato disponível', container);
+          Portal.showNoData('Nenhum extrato disponï¿½vel', container);
           return;
         }
 
@@ -71,7 +71,7 @@ const Portal = {
   loadAgenda: function(unidade) {
     const container = document.getElementById('agenda-container');
     const table = document.getElementById('agenda-table');
-    const tbody = table.querySelector('tbody');
+    let tbody = table.querySelector('tbody');
 
     if (!tbody) {
       // Create tbody if not exists
@@ -149,7 +149,7 @@ const Portal = {
         container?.querySelector('.loading-message')?.remove();
 
         if (!data || data.length === 0) {
-          Portal.showNoData('Nenhum aviso disponível', container);
+          Portal.showNoData('Nenhum aviso disponï¿½vel', container);
           return;
         }
 
