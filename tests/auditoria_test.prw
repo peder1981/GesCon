@@ -85,6 +85,15 @@ User Function RunAuditoriaTests()
     If !TestGcValidarAlteracoesEmPeriodoFechado()
         lOk := .F.
     EndIf
+    If !TestGcAuditarPeriodoCompleto()
+        lOk := .F.
+    EndIf
+    If !TestGcCriarAlertaCritico()
+        lOk := .F.
+    EndIf
+    If !TestGcAtualizarDashboardCache()
+        lOk := .F.
+    EndIf
 
     If lOk
         ConOut("=== RunAuditoriaTests: TODAS AS SUITES PASSARAM ===")
@@ -1213,4 +1222,214 @@ User Function TestGcValidarAlteracoesEmPeriodoFechado()
     TCSqlExec("DELETE FROM ANOMALIA_LOG WHERE ANL_PERIODO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
     TCSqlExec("DELETE FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "'")
     TCSqlExec("DELETE FROM EXERCICIO WHERE EXE_CODIGO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
+Return lOk
+
+/*/{Protheus.doc} TestGcAuditarPeriodoCompleto
+    Verifica GcAuditarPeriodoCompleto (Task 6): roda os 6 validadores em
+    sequencia para um periodo com um lancamento AUTOMATICO_RATEIO
+    desbalanceado (rateio nao fecha com LAN_VALOR) e espera .T. (alguma
+    anomalia encontrada), com pelo menos 1 linha gravada em ANOMALIA_LOG
+    (DESEQUILIBRIO_CONTABIL) e o cache do dashboard (DASHBOARD_CACHE)
+    atualizado refletindo essa contagem; um periodo totalmente limpo
+    retorna .F. e ainda assim grava/atualiza um DASHBOARD_CACHE zerado.
+    Cria e limpa dados de teste em EXERCICIO, LANCAMENTOS, RATEIO_DETALHE,
+    ANOMALIA_LOG e DASHBOARD_CACHE.
+    @type User Function
+    @author Claude
+    @since 2026-07-31
+    @return lOk, logical, .T. se todos os casos passaram
+*/
+User Function TestGcAuditarPeriodoCompleto()
+    Local cPeriodo as character
+    Local cPeriodoLimpo as character
+    Local cDescr as character
+    Local nLanId as numeric
+    Local aLan as array
+    Local aCache as array
+    Local lOk as logical
+
+    lOk := .T.
+    cPeriodo := "9994-01"
+    cPeriodoLimpo := "9994-91"
+    cDescr := "test6-auditarcompleto"
+
+    // Setup
+    TCSqlExec("DELETE FROM DASHBOARD_CACHE WHERE DSH_PERIODO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
+    TCSqlExec("DELETE FROM ANOMALIA_LOG WHERE ANL_PERIODO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
+    TCSqlExec("DELETE FROM RATEIO_DETALHE WHERE RAT_LANCAMENTO IN (SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "')")
+    TCSqlExec("DELETE FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "'")
+    TCSqlExec("DELETE FROM EXERCICIO WHERE EXE_CODIGO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
+    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) " + ;
+        "VALUES ('" + cPeriodo + "', '9994-01-01', '9994-01-31', 0, 0, ' ')")
+    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) " + ;
+        "VALUES ('" + cPeriodoLimpo + "', '9994-91-01', '9994-91-28', 0, 0, ' ')")
+    TCSqlExec("INSERT INTO LANCAMENTOS (LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, " + ;
+        "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_) VALUES (" + ;
+        "'99940101', '4000', '1000', 100.00, '" + cDescr + "', 'AUTOMATICO_RATEIO', '" + cPeriodo + "', datetime('now'), 'TEST6', ' ')")
+    aLan := TCSqlQuery("SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "' ORDER BY LAN_ID DESC LIMIT 1")
+    nLanId := Val(aLan[1]:LAN_ID)
+    // RATEIO_DETALHE soma apenas 80.00, mas LAN_VALOR = 100.00 -> desequilibrio
+    TCSqlExec("INSERT INTO RATEIO_DETALHE (RAT_LANCAMENTO, RAT_UNIDADE, RAT_VALOR, RAT_PERCENTUAL, D_E_L_E_T_) " + ;
+        "VALUES (" + AllTrim(Str(nLanId, 10, 0)) + ", '101', 80.00, 80.00, ' ')")
+
+    // Caso 1: periodo com anomalia -> .T., ANOMALIA_LOG gravado, DASHBOARD_CACHE atualizado
+    If !GcAuditarPeriodoCompleto(cPeriodo)
+        ConOut("[FAIL] TestGcAuditarPeriodoCompleto: periodo com lancamento desbalanceado deveria retornar .T.")
+        lOk := .F.
+    Else
+        aCache := TCSqlQuery("SELECT DSH_ANOMALIAS_TOTAL, DSH_DESEQUILIBRIO_COUNT FROM DASHBOARD_CACHE WHERE DSH_PERIODO = '" + cPeriodo + "' AND D_E_L_E_T_ = ' '")
+        If Len(aCache) == 0
+            ConOut("[FAIL] TestGcAuditarPeriodoCompleto: nao gravou DASHBOARD_CACHE para o periodo")
+            lOk := .F.
+        ElseIf Val(aCache[1]:DSH_ANOMALIAS_TOTAL) < 1 .Or. Val(aCache[1]:DSH_DESEQUILIBRIO_COUNT) < 1
+            ConOut("[FAIL] TestGcAuditarPeriodoCompleto: DASHBOARD_CACHE nao refletiu a anomalia detectada")
+            lOk := .F.
+        Else
+            ConOut("[PASS] TestGcAuditarPeriodoCompleto: anomalia detectada e DASHBOARD_CACHE atualizado corretamente")
+        EndIf
+    EndIf
+
+    // Caso 2: periodo totalmente limpo -> .F., mas ainda assim atualiza DASHBOARD_CACHE (zerado)
+    If GcAuditarPeriodoCompleto(cPeriodoLimpo)
+        ConOut("[FAIL] TestGcAuditarPeriodoCompleto: periodo limpo deveria retornar .F.")
+        lOk := .F.
+    Else
+        aCache := TCSqlQuery("SELECT DSH_ANOMALIAS_TOTAL FROM DASHBOARD_CACHE WHERE DSH_PERIODO = '" + cPeriodoLimpo + "' AND D_E_L_E_T_ = ' '")
+        If Len(aCache) == 0 .Or. Val(aCache[1]:DSH_ANOMALIAS_TOTAL) <> 0
+            ConOut("[FAIL] TestGcAuditarPeriodoCompleto: periodo limpo deveria gravar DASHBOARD_CACHE zerado")
+            lOk := .F.
+        Else
+            ConOut("[PASS] TestGcAuditarPeriodoCompleto: periodo limpo OK (.F., DASHBOARD_CACHE zerado)")
+        EndIf
+    EndIf
+
+    // Teardown
+    TCSqlExec("DELETE FROM DASHBOARD_CACHE WHERE DSH_PERIODO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
+    TCSqlExec("DELETE FROM ANOMALIA_LOG WHERE ANL_PERIODO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
+    TCSqlExec("DELETE FROM RATEIO_DETALHE WHERE RAT_LANCAMENTO IN (SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "')")
+    TCSqlExec("DELETE FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "'")
+    TCSqlExec("DELETE FROM EXERCICIO WHERE EXE_CODIGO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
+Return lOk
+
+/*/{Protheus.doc} TestGcCriarAlertaCritico
+    Verifica GcCriarAlertaCritico (Task 6): tipo e mensagem validos gravam
+    uma linha ativa em ALERTA (ALT_VISTO = 0) e retornam .T.; tipo vazio ou
+    mensagem vazia retornam .F. sem gravar nada. Cria e limpa dados de
+    teste em ALERTA.
+    @type User Function
+    @author Claude
+    @since 2026-07-31
+    @return lOk, logical, .T. se todos os casos passaram
+*/
+User Function TestGcCriarAlertaCritico()
+    Local cMsg as character
+    Local aAlerta as array
+    Local lOk as logical
+
+    lOk := .T.
+    cMsg := "test6-alerta-critico"
+
+    // Setup
+    TCSqlExec("DELETE FROM ALERTA WHERE ALT_MENSAGEM = '" + cMsg + "'")
+
+    // Caso 1: tipo e mensagem validos
+    If !GcCriarAlertaCritico("CRITICO", cMsg)
+        ConOut("[FAIL] TestGcCriarAlertaCritico: alerta valido deveria retornar .T.")
+        lOk := .F.
+    Else
+        aAlerta := TCSqlQuery("SELECT ALT_TIPO, ALT_VISTO FROM ALERTA WHERE ALT_MENSAGEM = '" + cMsg + "' AND D_E_L_E_T_ = ' '")
+        If Len(aAlerta) == 0 .Or. AllTrim(aAlerta[1]:ALT_TIPO) <> "CRITICO" .Or. Val(aAlerta[1]:ALT_VISTO) <> 0
+            ConOut("[FAIL] TestGcCriarAlertaCritico: alerta nao foi gravado corretamente em ALERTA")
+            lOk := .F.
+        Else
+            ConOut("[PASS] TestGcCriarAlertaCritico: alerta gravado corretamente (tipo CRITICO, nao visto)")
+        EndIf
+    EndIf
+
+    // Caso 2: tipo vazio
+    If GcCriarAlertaCritico("", cMsg)
+        ConOut("[FAIL] TestGcCriarAlertaCritico: tipo vazio deveria retornar .F.")
+        lOk := .F.
+    Else
+        ConOut("[PASS] TestGcCriarAlertaCritico: tipo vazio OK (.F.)")
+    EndIf
+
+    // Caso 3: mensagem vazia
+    If GcCriarAlertaCritico("CRITICO", "")
+        ConOut("[FAIL] TestGcCriarAlertaCritico: mensagem vazia deveria retornar .F.")
+        lOk := .F.
+    Else
+        ConOut("[PASS] TestGcCriarAlertaCritico: mensagem vazia OK (.F.)")
+    EndIf
+
+    // Teardown
+    TCSqlExec("DELETE FROM ALERTA WHERE ALT_MENSAGEM = '" + cMsg + "'")
+Return lOk
+
+/*/{Protheus.doc} TestGcAtualizarDashboardCache
+    Verifica GcAtualizarDashboardCache (Task 6): dado um periodo com
+    linhas ativas em ANOMALIA_LOG de varios tipos, grava/atualiza uma
+    unica linha em DASHBOARD_CACHE com os contadores corretos por tipo e
+    o total somado; rodar a funcao 2 vezes seguidas para o mesmo periodo
+    nao duplica a linha (substitui a anterior via delete+insert). Cria e
+    limpa dados de teste em ANOMALIA_LOG e DASHBOARD_CACHE.
+    @type User Function
+    @author Claude
+    @since 2026-07-31
+    @return lOk, logical, .T. se todos os casos passaram
+*/
+User Function TestGcAtualizarDashboardCache()
+    Local cPeriodo as character
+    Local aCache as array
+    Local lOk as logical
+
+    lOk := .T.
+    cPeriodo := "9994-02"
+
+    // Setup
+    TCSqlExec("DELETE FROM DASHBOARD_CACHE WHERE DSH_PERIODO = '" + cPeriodo + "'")
+    TCSqlExec("DELETE FROM ANOMALIA_LOG WHERE ANL_PERIODO = '" + cPeriodo + "'")
+    TCSqlExec("INSERT INTO ANOMALIA_LOG (ANL_TIPO, ANL_PERIODO, ANL_VALOR, ANL_DESCRICAO, ANL_CRIADO_EM, ANL_STATUS, D_E_L_E_T_) " + ;
+        "VALUES ('DESEQUILIBRIO_CONTABIL', '" + cPeriodo + "', 10.00, 'test6-cache-1', datetime('now'), 'ABERTO', ' ')")
+    TCSqlExec("INSERT INTO ANOMALIA_LOG (ANL_TIPO, ANL_PERIODO, ANL_VALOR, ANL_DESCRICAO, ANL_CRIADO_EM, ANL_STATUS, D_E_L_E_T_) " + ;
+        "VALUES ('LAN_ORFAO', '" + cPeriodo + "', 1.00, 'test6-cache-2', datetime('now'), 'ABERTO', ' ')")
+    TCSqlExec("INSERT INTO ANOMALIA_LOG (ANL_TIPO, ANL_PERIODO, ANL_VALOR, ANL_DESCRICAO, ANL_CRIADO_EM, ANL_STATUS, D_E_L_E_T_) " + ;
+        "VALUES ('LAN_ORFAO', '" + cPeriodo + "', 1.00, 'test6-cache-3', datetime('now'), 'ABERTO', ' ')")
+
+    // Caso 1: primeira atualizacao grava contadores corretos (1 desequilibrio, 2 lan_orfao, total 3)
+    If !GcAtualizarDashboardCache(cPeriodo)
+        ConOut("[FAIL] TestGcAtualizarDashboardCache: deveria retornar .T.")
+        lOk := .F.
+    Else
+        aCache := TCSqlQuery("SELECT DSH_ANOMALIAS_TOTAL, DSH_DESEQUILIBRIO_COUNT, DSH_LAN_ORFAO_COUNT FROM DASHBOARD_CACHE WHERE DSH_PERIODO = '" + cPeriodo + "' AND D_E_L_E_T_ = ' '")
+        If Len(aCache) <> 1
+            ConOut("[FAIL] TestGcAtualizarDashboardCache: esperava exatamente 1 linha em DASHBOARD_CACHE, achou " + AllTrim(Str(Len(aCache), 5, 0)))
+            lOk := .F.
+        ElseIf Val(aCache[1]:DSH_ANOMALIAS_TOTAL) <> 3 .Or. Val(aCache[1]:DSH_DESEQUILIBRIO_COUNT) <> 1 .Or. Val(aCache[1]:DSH_LAN_ORFAO_COUNT) <> 2
+            ConOut("[FAIL] TestGcAtualizarDashboardCache: contadores incorretos (total=" + AllTrim(Str(Val(aCache[1]:DSH_ANOMALIAS_TOTAL), 10, 0)) + ;
+                ", desequilibrio=" + AllTrim(Str(Val(aCache[1]:DSH_DESEQUILIBRIO_COUNT), 10, 0)) + ;
+                ", lan_orfao=" + AllTrim(Str(Val(aCache[1]:DSH_LAN_ORFAO_COUNT), 10, 0)) + ")")
+            lOk := .F.
+        Else
+            ConOut("[PASS] TestGcAtualizarDashboardCache: contadores corretos (total=3, desequilibrio=1, lan_orfao=2)")
+        EndIf
+    EndIf
+
+    // Caso 2: segunda chamada para o mesmo periodo nao duplica a linha (delete+insert)
+    If !GcAtualizarDashboardCache(cPeriodo)
+        ConOut("[FAIL] TestGcAtualizarDashboardCache: segunda chamada deveria retornar .T.")
+        lOk := .F.
+    Else
+        aCache := TCSqlQuery("SELECT DSH_ID FROM DASHBOARD_CACHE WHERE DSH_PERIODO = '" + cPeriodo + "' AND D_E_L_E_T_ = ' '")
+        If Len(aCache) <> 1
+            ConOut("[FAIL] TestGcAtualizarDashboardCache: segunda chamada duplicou a linha em DASHBOARD_CACHE (" + AllTrim(Str(Len(aCache), 5, 0)) + " linhas)")
+            lOk := .F.
+        Else
+            ConOut("[PASS] TestGcAtualizarDashboardCache: segunda chamada nao duplicou a linha (delete+insert OK)")
+        EndIf
+    EndIf
+
+    // Teardown
+    TCSqlExec("DELETE FROM DASHBOARD_CACHE WHERE DSH_PERIODO = '" + cPeriodo + "'")
+    TCSqlExec("DELETE FROM ANOMALIA_LOG WHERE ANL_PERIODO = '" + cPeriodo + "'")
 Return lOk

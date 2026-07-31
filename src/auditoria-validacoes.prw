@@ -275,3 +275,159 @@ User Function GcValidarAlteracoesEmPeriodoFechado(cPeriodo as character) as logi
   EndIf
 
 Return .F.
+
+/*{Protheus.doc}
+Orquestrador: executa os 6 validadores de auditoria (Task 5) para o periodo
+informado, em sequencia, e ao final atualiza o cache do dashboard
+(DASHBOARD_CACHE) via GcAtualizarDashboardCache. Cada validador grava sua
+propria linha de resumo em ANOMALIA_LOG quando encontra alguma ocorrencia
+(ver cabecalhos individuais); esta funcao apenas agrega o resultado
+logico (alguma anomalia encontrada em qualquer um dos 6 tipos) e garante
+que o cache fique consistente com o estado mais recente de ANOMALIA_LOG.
+@type Function
+@author Claude
+@since 2026-07-31
+@param cPeriodo Character periodo/exercicio (ex: "2025-01")
+@return Logical .T. se algum dos 6 validadores encontrou alguma anomalia
+/*/
+User Function GcAuditarPeriodoCompleto(cPeriodo as character) as logical
+  Local lAnomaliaEncontrada as logical := .F.
+
+  If GcValidarDesequilibrioContabil(cPeriodo)
+    lAnomaliaEncontrada := .T.
+  EndIf
+
+  If GcValidarLancamentosOrfaos(cPeriodo)
+    lAnomaliaEncontrada := .T.
+  EndIf
+
+  If GcValidarCobrancasOrfaos(cPeriodo)
+    lAnomaliaEncontrada := .T.
+  EndIf
+
+  If GcValidarRateioValido(cPeriodo)
+    lAnomaliaEncontrada := .T.
+  EndIf
+
+  If GcValidarTimingLancamentos(cPeriodo)
+    lAnomaliaEncontrada := .T.
+  EndIf
+
+  If GcValidarAlteracoesEmPeriodoFechado(cPeriodo)
+    lAnomaliaEncontrada := .T.
+  EndIf
+
+  GcAtualizarDashboardCache(cPeriodo)
+
+Return lAnomaliaEncontrada
+
+/*{Protheus.doc}
+Cria um alerta (ALERTA) para consumo do portal/dashboard. Tipos aceitos por
+constraint de banco (ver schema.sql, CHECK ALT_TIPO): 'CRITICO', 'AVISO',
+'INFO'. O broadcast via WebSocket fica como stub comentado nesta task --
+o frontend (Task 7+) consome ALERTA por polling em
+GcAuditoriaAlertasRestEndpoint (src/auditoria-rest.prw); nao ha ainda
+infraestrutura de WebSocket neste projeto para efetivamente empurrar o
+evento, entao a chamada fica documentada mas nao implementada.
+@type Function
+@author Claude
+@since 2026-07-31
+@param cTipo Character tipo do alerta (CRITICO, AVISO, INFO)
+@param cMsg Character mensagem do alerta
+@return Logical .T. se o alerta foi criado, .F. se cTipo ou cMsg vierem vazios
+/*/
+User Function GcCriarAlertaCritico(cTipo as character, cMsg as character) as logical
+  Local cQuery as character
+
+  If Empty(cTipo) .Or. Empty(cMsg)
+    Return .F.
+  EndIf
+
+  cQuery := "INSERT INTO ALERTA (ALT_TIPO, ALT_MENSAGEM, ALT_CRIADO_EM, ALT_VISTO, D_E_L_E_T_) " + ;
+            "VALUES ('" + GcSqlLit(cTipo) + "', '" + GcSqlLit(cMsg) + "', datetime('now'), 0, ' ')"
+
+  TCSqlExec(cQuery)
+
+  // Broadcast via WebSocket -- stub: sem infra de WebSocket neste projeto
+  // ainda, o frontend consome ALERTA por polling via
+  // GcAuditoriaAlertasRestEndpoint (src/auditoria-rest.prw).
+  // GcEnviarWebSocketBroadcast("/auditoria/alertas", {tipo: cTipo, msg: cMsg})
+
+Return .T.
+
+/*{Protheus.doc}
+Atualiza o snapshot diario de contadores de anomalia em DASHBOARD_CACHE
+para o periodo informado, contando (COUNT) as linhas ativas de
+ANOMALIA_LOG por ANL_TIPO. Substitui (delete + insert) qualquer cache
+previamente gravado para a mesma DSH_PERIODO nesta chamada, ja que
+DASHBOARD_CACHE tem indice unico em (DSH_DATA, DSH_PERIODO, D_E_L_E_T_) --
+rodar esta funcao mais de uma vez no mesmo dia para o mesmo periodo nao
+gera violacao de unicidade nem duplica linhas. DSH_USUARIO_COUNT conta o
+tipo 'USUARIO_ANOMALIA' gravado por GcValidarAlteracoesEmPeriodoFechado.
+@type Function
+@author Claude
+@since 2026-07-31
+@param cPeriodo Character periodo/exercicio (ex: "2025-01")
+@return Logical .T. (sempre; a funcao nao tem caminho de falha logica)
+/*/
+User Function GcAtualizarDashboardCache(cPeriodo as character) as logical
+  Local cQuery as character
+  Local nTotal as numeric := 0
+  Local nDesequilibrio as numeric := 0
+  Local nLanOrfao as numeric := 0
+  Local nCobOrfao as numeric := 0
+  Local nRateio as numeric := 0
+  Local nTiming as numeric := 0
+  Local nUsuario as numeric := 0
+
+  nDesequilibrio := GcContarAnomaliasPorTipo(cPeriodo, "DESEQUILIBRIO_CONTABIL")
+  nLanOrfao      := GcContarAnomaliasPorTipo(cPeriodo, "LAN_ORFAO")
+  nCobOrfao      := GcContarAnomaliasPorTipo(cPeriodo, "COB_ORFAO")
+  nRateio        := GcContarAnomaliasPorTipo(cPeriodo, "RATEIO_INVALIDO")
+  nTiming        := GcContarAnomaliasPorTipo(cPeriodo, "TIMING_ANOMALIA")
+  nUsuario       := GcContarAnomaliasPorTipo(cPeriodo, "USUARIO_ANOMALIA")
+
+  nTotal := nDesequilibrio + nLanOrfao + nCobOrfao + nRateio + nTiming + nUsuario
+
+  cQuery := "DELETE FROM DASHBOARD_CACHE WHERE DSH_PERIODO = '" + GcSqlLit(cPeriodo) + "'"
+  TCSqlExec(cQuery)
+
+  cQuery := "INSERT INTO DASHBOARD_CACHE (DSH_DATA, DSH_PERIODO, DSH_ANOMALIAS_TOTAL, " + ;
+            "DSH_DESEQUILIBRIO_COUNT, DSH_LAN_ORFAO_COUNT, DSH_COB_ORFAO_COUNT, " + ;
+            "DSH_RATEIO_INVALID_COUNT, DSH_TIMING_COUNT, DSH_USUARIO_COUNT, DSH_ATUALIZADO_EM, D_E_L_E_T_) " + ;
+            "VALUES (date('now'), '" + GcSqlLit(cPeriodo) + "', " + AllTrim(Str(nTotal, 10, 0)) + ", " + ;
+            AllTrim(Str(nDesequilibrio, 10, 0)) + ", " + AllTrim(Str(nLanOrfao, 10, 0)) + ", " + ;
+            AllTrim(Str(nCobOrfao, 10, 0)) + ", " + AllTrim(Str(nRateio, 10, 0)) + ", " + ;
+            AllTrim(Str(nTiming, 10, 0)) + ", " + AllTrim(Str(nUsuario, 10, 0)) + ", " + ;
+            "datetime('now'), ' ')"
+
+  TCSqlExec(cQuery)
+
+Return .T.
+
+/*{Protheus.doc}
+Auxiliar interna de GcAtualizarDashboardCache: conta as linhas ativas
+(D_E_L_E_T_ = ' ') de ANOMALIA_LOG para um periodo e tipo especificos.
+Extraida para evitar repetir a mesma query 6 vezes com apenas o literal de
+tipo mudando.
+@type Static Function
+@author Claude
+@since 2026-07-31
+@param cPeriodo Character periodo/exercicio
+@param cTipo Character valor de ANL_TIPO a contar
+@return Numeric quantidade de linhas encontradas
+/*/
+Static Function GcContarAnomaliasPorTipo(cPeriodo as character, cTipo as character) as numeric
+  Local cQuery as character
+  Local aResult as array
+
+  cQuery := "SELECT COUNT(*) as CNT FROM ANOMALIA_LOG WHERE ANL_PERIODO = '" + GcSqlLit(cPeriodo) + ;
+            "' AND ANL_TIPO = '" + GcSqlLit(cTipo) + "' AND D_E_L_E_T_ = ' '"
+
+  aResult := TCSqlQuery(cQuery)
+
+  If Len(aResult) > 0
+    Return Val(aResult[1]:CNT)
+  EndIf
+
+Return 0
