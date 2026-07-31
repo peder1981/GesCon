@@ -1,0 +1,19 @@
+#!/bin/sh
+# gescon -- abre o GesCon em janela desktop (Fyne).
+#
+# ADVPP_FORCE_GUI=1 e obrigatorio: sem ele, o executavel lancado de um
+# terminal detecta o TTY e escolhe a UI de terminal, que nao implementa
+# dialogos -- os menus funcionam e os formularios quebram com
+# "MSDIALOG: requer o modo web". Ver docs/PADRAO_GUI.md, secao 4.
+set -e
+
+DIR="$(dirname "$0")"
+APP="${GESCON_APP:-$DIR/GesConApp}"
+
+if [ ! -x "$APP" ]; then
+    echo "GesCon: executavel nao encontrado em $APP" >&2
+    echo "Gere com: scripts/build.sh" >&2
+    exit 1
+fi
+
+ADVPP_FORCE_GUI=1 exec "$APP" "$@"
