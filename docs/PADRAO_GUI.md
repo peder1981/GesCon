@@ -150,9 +150,38 @@ agrupa os controles em linhas por proximidade de `y` (tolerância de 8px,
 
 - a **ordem** (linhas de cima para baixo, campos da esquerda para a direita)
   é respeitada;
-- a **largura** dos campos não é; `SIZE` em `GET` é ignorado e os campos saem
-  estreitos;
+- a **largura** do campo vem do `SIZE`, não da coluna;
 - `@ ... BOX` é puramente decorativo e não renderiza.
 
 Escreva os formulários pensando em ordem, não em pixel. Um `SAY` antes de
 cada `GET` na mesma linha é o que produz um rótulo à esquerda do campo.
+
+### Declare `SIZE` em todo `GET`
+
+```advpl
+@ 10, 10 SAY "Data (AAAAMMDD):" PIXEL
+@ 10,120 GET cData SIZE 70,10   PIXEL
+@ 90, 10 SAY "Histórico:"       PIXEL
+@ 90,120 GET cDescr SIZE 220,10 PIXEL
+```
+
+A largura sai do `SIZE`; sem ele, o AdvPP cai no tamanho da `PICTURE` e
+depois no valor atual, com um piso. Um campo de data e um de histórico
+livre não devem ter o mesmo tamanho — dimensione pelo conteúdo esperado.
+
+Referência usada neste projeto:
+
+| Conteúdo | `SIZE` |
+|---|---|
+| dia do mês (`10`) | 40 |
+| código de banco/carteira (`237`) | 50 |
+| competência (`2026-03`), conta (`1100`) | 60 |
+| data `AAAAMMDD`, agência | 70 |
+| valor (`1500,50`) | 80 |
+| conta corrente, convênio | 90 |
+| descrição / histórico livre | 220 |
+
+> Honrar o `SIZE` no Fyne foi implementado no AdvPP em
+> `pkg/vm/dialog.go` (`AT_GET` captura a cláusula) e `pkg/ui/msdialog.go`
+> (`entryWidth`). Antes disso a cláusula era descartada e todo campo saía
+> com dois ou três caracteres de largura.
