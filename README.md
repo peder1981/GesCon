@@ -11,16 +11,35 @@ diálogos não bloqueantes no desktop) e motivou 4 capacidades novas
 (`TCSqlExec`/`TCSqlQuery`, `TMailMessage`, `FWMenuSelect`/`FWGetText`,
 `FWHash`) no AdvPP — ver [`ARQUITETURA.md`](docs/ARQUITETURA.md).
 
-Login de administrador seguido de um menu real navegando entre as
-telas: cadastro de unidades e condôminos, lançamento de despesas,
-Fechamento Mensal com rateio por fração ideal, Cobrança e Registro de
-Pagamento, Mala Direta com envio real de e-mail, Relatórios
-(Balancete Mensal, Inadimplência, Extrato por Unidade, Despesas por
-Categoria), Sistema Contábil em Partida Dupla (com validação de
-integridade, auditoria e fechamento de período), gestão de usuários
-(criar admin, gerar/revogar token temporário), boleto bancário
-Itaú/Bradesco e portal do condômino (acesso read-only via token).
+Aplicação **desktop**: `advplc build` gera um executável autocontido que
+abre em janela nativa (Fyne), com banco SQLite local. Não há servidor nem
+navegador envolvidos.
 
+Login de administrador e menu navegando entre as telas: cadastro de unidades
+e condôminos, lançamento de despesas, Fechamento Mensal com rateio por fração
+ideal, cobranças e registro de pagamento, mala direta com envio real de
+e-mail, relatórios (balancete, inadimplência, extrato por unidade, despesas
+por categoria), contabilidade em partida dobrada (lançamento manual, despesa
+rateada, validação de integridade, balancete e fechamento de período),
+auditoria com seis validadores de anomalia e alertas, boleto bancário
+Itaú/Bradesco, avisos do condomínio, gestão de usuários e tokens, e acesso
+do condômino às próprias cobranças por token.
+
+```bash
+scripts/bootstrap-db.sh    # banco
+scripts/build.sh           # executável
+./gescon                   # abre a janela
+```
+
+O portal do condômino na web está adiado — ver
+[GUIA_UTILIZACAO.md](GUIA_UTILIZACAO.md), seção 8.
+
+- **[Guia de utilização](GUIA_UTILIZACAO.md)** — instalação, compilação,
+  execução e problemas comuns.
+- **[Manual do usuário](MANUAL_USUARIO.md)** — passo a passo de cada tela.
+- **[Padrão de GUI](docs/PADRAO_GUI.md)** — como escrever tela neste
+  projeto: primitivas disponíveis, o padrão de formulário e as armadilhas
+  do AdvPP, todas verificadas na janela real.
 - **[Documentação funcional](docs/FUNCIONAL.md)** — o que o sistema faz,
   telas, regras de negócio, limitações conhecidas.
 - **[Documentação técnica](docs/ARQUITETURA.md)** — stack, estrutura de
