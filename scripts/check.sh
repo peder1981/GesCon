@@ -45,7 +45,7 @@ done
 echo
 # Alcancabilidade: funcao de negocio sem caminho de menu e o defeito que
 # motivou esta fase do projeto -- modulos inteiros compilados e invisiveis.
-if ! python3 "$(dirname "$0")/alcance.py"; then
+if ! python3 scripts/alcance.py; then
     falhas=$((falhas + 1))
 fi
 
