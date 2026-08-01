@@ -1,7 +1,8 @@
 ; installer/gescon.iss -- instalador Windows do GesCon (Inno Setup 6).
 ;
 ; Compilar:  ISCC.exe /DAppVersion=1.0.4 installer\gescon.iss
-; Espera, ao lado deste .iss:  GesConApp-windows-amd64.exe  e  mesa\*.dll
+; Espera, ao lado deste .iss:  GesConApp-windows-amd64.exe,  mesa\*.dll  e
+; GesCon.exe (o lancador, compilado de installer\launcher)
 ;
 ; Tres coisas que o zip solto nao resolvia:
 ;
@@ -44,7 +45,7 @@ PrivilegesRequired=admin
 WizardStyle=modern
 DisableProgramGroupPage=yes
 UninstallDisplayName=GesCon {#AppVersion}
-UninstallDisplayIcon={app}\GesConApp-windows-amd64.exe
+UninstallDisplayIcon={app}\GesCon.exe
 
 [Languages]
 Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
@@ -56,36 +57,33 @@ Name: "desktopicon"; Description: "Criar atalho na Area de Trabalho"; GroupDescr
 Name: "mesa"; Description: "Renderizacao por software (maquina virtual ou sem driver de video)"; GroupDescription: "Compatibilidade:"; Flags: unchecked
 
 [Files]
-Source: "GesConApp-windows-amd64.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "installer\GesCon.cmd"; DestDir: "{app}"; Flags: ignoreversion
-; Os DLLs vao para a pasta do executavel porque e la que o Windows procura
-; DLL antes do System32 -- o diretorio de trabalho nao entra nessa busca.
-Source: "mesa\opengl32.dll"; DestDir: "{app}"; Tasks: mesa; Flags: ignoreversion
-Source: "mesa\libgallium_wgl.dll"; DestDir: "{app}"; Tasks: mesa; Flags: ignoreversion
+Source: "GesCon.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "GesConApp-windows-amd64.exe"; DestDir: "{app}\app"; Flags: ignoreversion
+; Os DLLs vao para a pasta do EXECUTAVEL, nao a do lancador: e la que o
+; Windows procura DLL antes do System32, e o diretorio de trabalho nao entra
+; nessa busca.
+Source: "mesa\opengl32.dll"; DestDir: "{app}\app"; Tasks: mesa; Flags: ignoreversion
+Source: "mesa\libgallium_wgl.dll"; DestDir: "{app}\app"; Tasks: mesa; Flags: ignoreversion
 
 [Dirs]
 Name: "{commonappdata}\GesCon"; Permissions: users-modify
 
 [Icons]
-; Apontam para o .cmd, nao para o .exe, porque e o .cmd que define ADVPP_DB.
-; runminimized + o "start" de dentro dele: o cmd devolve na hora e encerra,
-; entao o console nao chega a aparecer. IconFilename tira o icone de terminal
-; e devolve o do proprio programa.
-Name: "{group}\GesCon"; Filename: "{app}\GesCon.cmd"; WorkingDir: "{app}"; \
-    IconFilename: "{app}\GesConApp-windows-amd64.exe"; Flags: runminimized
+; Apontam para o lancador, que e quem define ADVPP_DB. Ele e um binario do
+; subsistema GUI: nenhum console pisca.
+Name: "{group}\GesCon"; Filename: "{app}\GesCon.exe"
 Name: "{group}\Desinstalar o GesCon"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\GesCon"; Filename: "{app}\GesCon.cmd"; WorkingDir: "{app}"; \
-    IconFilename: "{app}\GesConApp-windows-amd64.exe"; Flags: runminimized; Tasks: desktopicon
+Name: "{autodesktop}\GesCon"; Filename: "{app}\GesCon.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\GesCon.cmd"; WorkingDir: "{app}"; Description: "Abrir o GesCon agora"; \
-    Flags: nowait postinstall skipifsilent runminimized
+Filename: "{app}\GesCon.exe"; Description: "Abrir o GesCon agora"; \
+    Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
 ; So o que o instalador colocou. {commonappdata}\GesCon guarda o banco do
 ; condominio e fica -- apagar dado de cliente na desinstalacao seria perda
 ; irreversivel por um clique.
-Type: filesandordirs; Name: "{app}\mesa"
+Type: filesandordirs; Name: "{app}\app"
 
 [Code]
 // Heuristica para o estado inicial da caixa "Renderizacao por software".
