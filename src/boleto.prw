@@ -1,6 +1,6 @@
 // src/boleto.prw - geracao de boleto bancario FEBRABAN (Itau 341 e Bradesco 237).
-// Retorna linha digitavel (formato bancario) e codigo de barras (num�rico agrupado).
-// Zero depend�ncias externas - tudo em AdvPL puro.
+// Retorna linha digitavel (formato bancario) e codigo de barras (numérico agrupado).
+// Zero dependências externas - tudo em AdvPL puro.
 #include "totvs.ch"
 
 /*/{Protheus.doc} GcBoletoLinhaDigitavel
@@ -23,8 +23,7 @@
 */
 User Function GcBoletoLinhaDigitavel(cBanco, cAgencia, cConta, nAgDv, cCobrta, cCarteira, nCartDv, dVenc, nValor, cNumeroDoc)
     Local cCampoLivre := GcBoletoCampoLivre(cBanco, cAgencia, cConta, nAgDv, cCobrta, cCarteira, nCartDv, cNumeroDoc)
-    Return GcBoletoCalculaLinha(cBanco, cCampoLivre, dVenc, nValor)
-Return
+Return GcBoletoCalculaLinha(cBanco, cCampoLivre, dVenc, nValor)
 
 /*/{Protheus.doc} GcBoletoCodigoBarras
     Gera codigo de barras em texto (48 digitos: 47 dados + 1 DV final).
@@ -46,8 +45,7 @@ Return
 */
 User Function GcBoletoCodigoBarras(cBanco, cAgencia, cConta, nAgDv, cCobrta, cCarteira, nCartDv, dVenc, nValor, cNumeroDoc)
     Local cCampoLivre := GcBoletoCampoLivre(cBanco, cAgencia, cConta, nAgDv, cCobrta, cCarteira, nCartDv, cNumeroDoc)
-    Return GcBoletoMontaCodigoBarras(cBanco, cCampoLivre, dVenc, nValor)
-Return
+Return GcBoletoMontaCodigoBarras(cBanco, cCampoLivre, dVenc, nValor)
 
 /*/{Protheus.doc} GcBoletoCalculaDv
     Calcula DV modulo 11 sobre string numerica. Pesos: 2,3,4,5,6,7 repetindo da direita para esquerda.
@@ -364,25 +362,72 @@ User Function GcBoletoCalculaLinha(cBanco, cCampoLivre, dVenc, nValor)
     @since 2026-07-24
 */
 User Function GcBoletoConfigurar()
-    Local cBanco    := FWGetText("Codigo do banco? (1=Itau, 237=Bradesco)", "237")
-    Local cAgencia  := FWGetText("Agencia?", "1234")
-    Local cConta    := FWGetText("Conta corrente?", "12345")
-    Local cCobrta   := FWGetText("Carta/Cedente ou Convenio?", "1234")
-    Local cCarteira := FWGetText("Carteira?", "174")
+    Local oDlg
+    Local aCfg      := {}
+    Local cBanco    := "237"
+    Local cAgencia  := ""
+    Local cConta    := ""
+    Local cCobrta   := ""
+    Local cCarteira := "174"
+    Local lOk       := .F.
+
+    // Pre-carrega a configuracao atual, se houver: a tela edita o que existe
+    // em vez de comecar em branco toda vez.
+    aCfg := TCSqlQuery("SELECT CFG_BANCO, CFG_AGENCIA, CFG_CONTA, CFG_COBRT, CFG_CARTEIRA " + ;
+        "FROM CFG_BOLETO WHERE D_E_L_E_T_ = ' '")
+    If Len(aCfg) > 0
+        cBanco    := AllTrim(aCfg[1]["CFG_BANCO"])
+        cAgencia  := AllTrim(aCfg[1]["CFG_AGENCIA"])
+        cConta    := AllTrim(aCfg[1]["CFG_CONTA"])
+        cCobrta   := AllTrim(aCfg[1]["CFG_COBRT"])
+        cCarteira := AllTrim(aCfg[1]["CFG_CARTEIRA"])
+    EndIf
+
+    DEFINE MSDIALOG oDlg TITLE "Configuração de Boleto" FROM 0,0 TO 260,440 PIXEL
+
+    @ 10, 10 SAY "Banco (341=Itaú, 237=Bradesco):" PIXEL
+    @ 10,140 GET cBanco SIZE 50,10                            PIXEL
+    @ 30, 10 SAY "Agência:"                        PIXEL
+    @ 30,140 GET cAgencia SIZE 70,10                          PIXEL
+    @ 50, 10 SAY "Conta corrente:"                 PIXEL
+    @ 50,140 GET cConta SIZE 90,10                            PIXEL
+    @ 70, 10 SAY "Cedente / Convênio:"             PIXEL
+    @ 70,140 GET cCobrta SIZE 90,10                           PIXEL
+    @ 90, 10 SAY "Carteira:"                       PIXEL
+    @ 90,140 GET cCarteira SIZE 50,10                         PIXEL
+    @125, 10 BUTTON "Confirmar" ACTION (lOk := .T.) SIZE 40,12 PIXEL
+    @125,140 BUTTON "Cancelar"                      SIZE 40,12 PIXEL
+
+    ACTIVATE MSDIALOG oDlg CENTERED
+
+    If !lOk
+        Return .F.
+    EndIf
 
     cBanco    := AllTrim(cBanco)
     cAgencia  := AllTrim(cAgencia)
-    cConta    := AllTrim(Replace(cConta, "-", ""))
+    cConta    := AllTrim(StrTran(cConta, "-", ""))
     cCobrta   := AllTrim(cCobrta)
     cCarteira := AllTrim(cCarteira)
 
-    TCSqlExec("DELETE FROM CFG_BOLETO WHERE R_E_C_N_O_ = 1 AND D_E_L_E_T_ = ' '")
+    If Empty(cBanco) .Or. Empty(cAgencia) .Or. Empty(cConta)
+        MsgAlert("Banco, agência e conta são obrigatórios.", "Configuração de Boleto")
+        Return .F.
+    EndIf
+
+    If cBanco != "341" .And. cBanco != "237"
+        MsgAlert("Apenas Itaú (341) e Bradesco (237) têm fórmula implementada.", "Configuração de Boleto")
+        Return .F.
+    EndIf
+
+    // Snapshot: uma configuracao por vez, entao limpa tudo antes de gravar
+    TCSqlExec("DELETE FROM CFG_BOLETO WHERE D_E_L_E_T_ = ' '")
     TCSqlExec("INSERT INTO CFG_BOLETO (CFG_BANCO, CFG_AGENCIA, CFG_CONTA, CFG_COBRT, CFG_CARTEIRA) VALUES (" + ;
         "'" + GcSqlLit(cBanco) + "', '" + GcSqlLit(cAgencia) + "', '" + GcSqlLit(cConta) + "', " + ;
         "'" + GcSqlLit(cCobrta) + "', '" + GcSqlLit(cCarteira) + "')")
 
-    MsgInfo("Configuracao de boleto salva.", "GesCon")
-Return
+    MsgInfo("Configuração de boleto salva.", "Configuração de Boleto")
+Return .T.
 
 /*/{Protheus.doc} GcBoletoGera
     Gera boleto para uma cobranca especifica.
@@ -394,26 +439,27 @@ Return
     @return lOk, logical, .T. se gerou com sucesso
 */
 User Function GcBoletoGera(nRecno)
-    Local aCob := TCSqlQuery("SELECT COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, COB_NUMDOC " + ;
+    Local aCob := TCSqlQuery("SELECT COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS " + ;
         "FROM COB WHERE R_E_C_N_O_ = " + StrZero(nRecno, 10) + " AND D_E_L_E_T_ = ' '")
 
     If Len(aCob) == 0
-        MsgStop("Cobranca n ao encontrada.", "GcBoletoGera")
+        MsgStop("Cobrança não encontrada.", "Gerar Boleto")
         Return .F.
     EndIf
 
     Local nValor  := Val(aCob[1]["COB_VALOR"])
-    Local dVenc   := CToD(AllTrim(aCob[1]["COB_VENCTO"]))
-    Local cNumeroDoc := AllTrim(aCob[1]["COB_NUMDOC"])
-    If Empty(cNumeroDoc)
-        cNumeroDoc := ""
-    EndIf
+    // SToD, não CToD: COB_VENCTO é gravado como AAAAMMDD, e CToD espera
+    // DD/MM/AAAA -- devolvia data vazia e o fator de vencimento saía zerado.
+    Local dVenc   := SToD(AllTrim(aCob[1]["COB_VENCTO"]))
+    // A tabela COB não tem numero de documento proprio; o R_E_C_N_O_ da
+    // cobranca serve como nosso-numero, unico e estavel.
+    Local cNumeroDoc := StrZero(nRecno, 8)
 
     Local aCfg := TCSqlQuery("SELECT CFG_BANCO, CFG_AGENCIA, CFG_CONTA, CFG_COBRT, CFG_CARTEIRA " + ;
         "FROM CFG_BOLETO WHERE D_E_L_E_T_ = ' '")
 
     If Len(aCfg) == 0
-        MsgStop("Configuracao de boleto n ao encontrada. Execute GcBoletoConfigurar().", "GcBoletoGera")
+        MsgStop("Configuração de boleto não encontrada. Use Boletos > Configurar.", "Gerar Boleto")
         Return .F.
     EndIf
 
@@ -423,24 +469,13 @@ User Function GcBoletoGera(nRecno)
         dVenc, nValor, cNumeroDoc)
 
     Local cCodBar := GcBoletoCodigoBarras( ;
-        aCfg[1]["CFG_BANCO"], aCfg[1]["CFG_AGENCIA"], aCfg[1]["CFG_CONTA"], 0;
+        aCfg[1]["CFG_BANCO"], aCfg[1]["CFG_AGENCIA"], aCfg[1]["CFG_CONTA"], 0, ;
         aCfg[1]["CFG_COBRT"], aCfg[1]["CFG_CARTEIRA"], 0, ;
         dVenc, nValor, cNumeroDoc)
 
     MsgInfo("Linha Digitavel:" + Chr(10) + cLinha + Chr(10) + ;
-        Chr(10) + "Codigo de Barras:" + Chr(10) + cCodBar, "Boleto � " + AllTrim(aCob[1]["COB_COMPET"]))
+        Chr(10) + "Codigo de Barras:" + Chr(10) + cCodBar, "Boleto — " + AllTrim(aCob[1]["COB_COMPET"]))
 Return .T.
-
-/*/{Protheus.doc} GcBoletoExibe
-    Exibe boleto formatado. Alias para GcBoletoGera.
-    @type User Function
-    @author GesCon
-    @since 2026-07-24
-    @param nRecno, numeric, numero do registro na tabela COB
-    @return lOk, logical, resultado de GcBoletoGera
-*/
-User Function GcBoletoExibe(nRecno)
-Return GcBoletoGera(nRecno)
 
 /*/{Protheus.doc} PadLeft
     Preenche a esquerda com caractere padding ate tamanho desejado.

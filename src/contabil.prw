@@ -1,21 +1,27 @@
 // src/contabil.prw — utilidades do sistema contábil em partida dupla
 // Acesso a exercícios, períodos, validações de lançamentos
 #include "totvs.ch"
-#include "db.prw"
 
-/*/{Protheus.doc} GcSqlLit
-    Escapa aspas simples e envolve com quotes — todo valor de texto interpolado
-    numa query via TCSqlExec/TCSqlQuery precisa passar por aqui para evitar
-    SQL injection e quebra de literais.
+/*/{Protheus.doc} GcSqlVal
+    Escapa aspas simples E envolve com quotes, devolvendo um literal SQL
+    pronto para concatenar. Difere de GcSqlLit (src/db.prw), que apenas
+    escapa e deixa as aspas por conta de quem chama:
+
+        GcSqlLit("O'Brien")  ->   O''Brien      (quem chama poe as aspas)
+        GcSqlVal("O'Brien")  ->  'O''Brien'     (literal completo)
+
+    Os dois existiam com o mesmo nome GcSqlLit, em arquivos diferentes e
+    com contratos incompativeis; qual vencia dependia da ordem de #include.
+    Use GcSqlVal quando concatenar direto (cSql += GcSqlVal(x) + ", ").
     @type Function
     @author GesCon
     @since 2026-07-30
     @param cValor, character, valor a escapar (aceita Nil)
     @return cRet, character, valor com aspas simples duplicadas e envolvido com quotes
     @example
-        cSql := "INSERT INTO EXERCICIO (EXE_CODIGO, EXE_NOME) VALUES (" + GcSqlLit("2025-01") + ", " + GcSqlLit("João's Company") + ")"
+        cSql := "INSERT INTO EXERCICIO (EXE_CODIGO, EXE_NOME) VALUES (" + GcSqlVal("2025-01") + ", " + GcSqlVal("João's Company") + ")"
 */
-User Function GcSqlLit(cValor)
+User Function GcSqlVal(cValor)
     Local cRet := ""
 
     If cValor == Nil
@@ -76,7 +82,7 @@ User Function GcPeriodoFechado(cExercicio)
     Local lFechado := .F.
 
     If !Empty(cExercicio)
-        aExercicio := TCSqlQuery("SELECT EXE_FECHADO FROM EXERCICIO WHERE EXE_CODIGO = " + GcSqlLit(cExercicio) + " AND D_E_L_E_T_ = ' '")
+        aExercicio := TCSqlQuery("SELECT EXE_FECHADO FROM EXERCICIO WHERE EXE_CODIGO = " + GcSqlVal(cExercicio) + " AND D_E_L_E_T_ = ' '")
 
         If Len(aExercicio) > 0
             lFechado := (aExercicio[1]:EXE_FECHADO = 1)
@@ -140,16 +146,16 @@ User Function GcCriarLancamentoManualDireto(dData, cDescricao, cContaDeb, cConta
     cSql += "LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, "
     cSql += "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, R_E_C_N_O_"
     cSql += ") VALUES ("
-    cSql += GcSqlLit(DtoS(dData)) + ", "
-    cSql += GcSqlLit(cContaDeb) + ", "
-    cSql += GcSqlLit(cContaCred) + ", "
+    cSql += GcSqlVal(DtoS(dData)) + ", "
+    cSql += GcSqlVal(cContaDeb) + ", "
+    cSql += GcSqlVal(cContaCred) + ", "
     cSql += cValToChar(nValor) + ", "
-    cSql += GcSqlLit(cDescricao) + ", "
-    cSql += GcSqlLit("MANUAL") + ", "
-    cSql += GcSqlLit(cExercicio) + ", "
+    cSql += GcSqlVal(cDescricao) + ", "
+    cSql += GcSqlVal("MANUAL") + ", "
+    cSql += GcSqlVal(cExercicio) + ", "
     cSql += "datetime('now'), "
-    cSql += GcSqlLit("TEST_USER") + ", "
-    cSql += GcSqlLit(" ") + ", "
+    cSql += GcSqlVal("TEST_USER") + ", "
+    cSql += GcSqlVal(" ") + ", "
     cSql += "(SELECT COALESCE(MAX(R_E_C_N_O_), 0) + 1 FROM LANCAMENTOS)"
     cSql += ")"
 
@@ -205,7 +211,7 @@ User Function GcEditarLancamentoDescricao(nRecno, cDescricao)
     EndIf
 
     // Monta SQL de atualização (apenas descrição e timestamp)
-    cSql := "UPDATE LANCAMENTOS SET LAN_DESCR = " + GcSqlLit(cDescricao) + ", LAN_DATA_HORA = datetime('now') WHERE R_E_C_N_O_ = " + cValToChar(nRecno) + " AND D_E_L_E_T_ = ' '"
+    cSql := "UPDATE LANCAMENTOS SET LAN_DESCR = " + GcSqlVal(cDescricao) + ", LAN_DATA_HORA = datetime('now') WHERE R_E_C_N_O_ = " + cValToChar(nRecno) + " AND D_E_L_E_T_ = ' '"
 
     // Executa atualização
     TCSqlExec(cSql)
@@ -399,16 +405,16 @@ User Function GcLancarDespesaContabil(dData, cDescricao, nValor, cReparticao, nD
     cSql += "LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, "
     cSql += "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, R_E_C_N_O_"
     cSql += ") VALUES ("
-    cSql += GcSqlLit(DtoS(dData)) + ", "
-    cSql += GcSqlLit("4000") + ", "
-    cSql += GcSqlLit("1000") + ", "
+    cSql += GcSqlVal(DtoS(dData)) + ", "
+    cSql += GcSqlVal("4000") + ", "
+    cSql += GcSqlVal("1000") + ", "
     cSql += cValToChar(nValor) + ", "
-    cSql += GcSqlLit(cDescricao) + ", "
-    cSql += GcSqlLit("AUTOMATICO_DESPESA") + ", "
-    cSql += GcSqlLit(cExercicio) + ", "
+    cSql += GcSqlVal(cDescricao) + ", "
+    cSql += GcSqlVal("AUTOMATICO_DESPESA") + ", "
+    cSql += GcSqlVal(cExercicio) + ", "
     cSql += "datetime('now'), "
-    cSql += GcSqlLit("TEST_USER") + ", "
-    cSql += GcSqlLit(" ") + ", "
+    cSql += GcSqlVal("TEST_USER") + ", "
+    cSql += GcSqlVal(" ") + ", "
     cSql += "(SELECT COALESCE(MAX(R_E_C_N_O_), 0) + 1 FROM LANCAMENTOS)"
     cSql += ")"
 
@@ -416,7 +422,7 @@ User Function GcLancarDespesaContabil(dData, cDescricao, nValor, cReparticao, nD
     TCSqlExec(cSql)
 
     // Recupera o LAN_ID do lançamento principal (ID auto-gerado)
-    aVerificacao := TCSqlQuery("SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_DESCR = " + GcSqlLit(cDescricao) + " AND LAN_TIPO = 'AUTOMATICO_DESPESA' AND D_E_L_E_T_ = ' ' ORDER BY LAN_ID DESC LIMIT 1")
+    aVerificacao := TCSqlQuery("SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_DESCR = " + GcSqlVal(cDescricao) + " AND LAN_TIPO = 'AUTOMATICO_DESPESA' AND D_E_L_E_T_ = ' ' ORDER BY LAN_ID DESC LIMIT 1")
     If Len(aVerificacao) > 0
         nLanIdPrincipal := aVerificacao[1]:LAN_ID
         ConOut("Main entry created: LAN_ID = " + cValToChar(nLanIdPrincipal))
@@ -436,17 +442,17 @@ User Function GcLancarDespesaContabil(dData, cDescricao, nValor, cReparticao, nD
         cSql += "LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, "
         cSql += "LAN_TIPO, LAN_REFERENCIA, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, R_E_C_N_O_"
         cSql += ") VALUES ("
-        cSql += GcSqlLit(DtoS(dData)) + ", "
-        cSql += GcSqlLit("5000") + ", "
-        cSql += GcSqlLit("3000") + ", "
+        cSql += GcSqlVal(DtoS(dData)) + ", "
+        cSql += GcSqlVal("5000") + ", "
+        cSql += GcSqlVal("3000") + ", "
         cSql += cValToChar(nValorUnit) + ", "
-        cSql += GcSqlLit(cDescricao + " - Unidade " + cUnidade) + ", "
-        cSql += GcSqlLit("AUTOMATICO_RATEIO") + ", "
+        cSql += GcSqlVal(cDescricao + " - Unidade " + cUnidade) + ", "
+        cSql += GcSqlVal("AUTOMATICO_RATEIO") + ", "
         cSql += cValToChar(nLanIdPrincipal) + ", "
-        cSql += GcSqlLit(cExercicio) + ", "
+        cSql += GcSqlVal(cExercicio) + ", "
         cSql += "datetime('now'), "
-        cSql += GcSqlLit("TEST_USER") + ", "
-        cSql += GcSqlLit(" ") + ", "
+        cSql += GcSqlVal("TEST_USER") + ", "
+        cSql += GcSqlVal(" ") + ", "
         cSql += "(SELECT COALESCE(MAX(R_E_C_N_O_), 0) + 1 FROM LANCAMENTOS)"
         cSql += ")"
 
@@ -475,12 +481,12 @@ User Function GcLancarDespesaContabil(dData, cDescricao, nValor, cReparticao, nD
         cSql := "INSERT INTO COB ("
         cSql += "COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_, R_E_C_D_E_L_"
         cSql += ") VALUES ("
-        cSql += GcSqlLit(cUnidade) + ", "
-        cSql += GcSqlLit(cExercicio) + ", "
+        cSql += GcSqlVal(cUnidade) + ", "
+        cSql += GcSqlVal(cExercicio) + ", "
         cSql += cValToChar(nValorUnit) + ", "
-        cSql += GcSqlLit(cVencimento) + ", "
-        cSql += GcSqlLit("PENDENTE") + ", "
-        cSql += GcSqlLit(" ") + ", "
+        cSql += GcSqlVal(cVencimento) + ", "
+        cSql += GcSqlVal("PENDENTE") + ", "
+        cSql += GcSqlVal(" ") + ", "
         cSql += "0"
         cSql += ")"
 
@@ -496,20 +502,218 @@ User Function GcLancarDespesaContabil(dData, cDescricao, nValor, cReparticao, nD
 Return lRet
 
 /*/{Protheus.doc} GcNovoLancamento
-    Ponto de entrada UI para criação manual de lançamentos.
-    Placeholder para MVP — será expandido em fases posteriores com
-    FWGetText (entrada de dados) e integração a FWMBrowse (visualização).
+    Formulário de lançamento manual (MsDialog). A regra de negócio fica em
+    GcCriarLancamentoManualDireto -- esta função só coleta os campos e
+    valida o que é de tela.
+
+    Segue docs/PADRAO_GUI.md: o writeback dos GET acontece mesmo no
+    cancelamento, então nada é gravado antes de testar lOk.
     @type Function
     @author GesCon
     @since 2026-07-30
-    @return lRet, logical, .F. (por enquanto placeholder)
-    @example
-        GcNovoLancamento()  // abre tela de entrada manual
+    @return lRet, logical, .T. se o lançamento foi criado
 */
 User Function GcNovoLancamento()
-    // TODO: Expandir em fase posterior com UI (FWGetText, FWMBrowse, dialogs)
-    // Por enquanto retorna .F. como placeholder
-Return .F.
+    Local oDlg
+    Local cData     := DtoS(Date())
+    Local cContaDeb := ""
+    Local cContaCred := ""
+    Local cValor    := ""
+    Local cDescr    := ""
+    Local lOk       := .F.
+    Local nValor    := 0
+    Local cExercicio := ""
+
+    cExercicio := GcExercicioAtivo()
+    If Empty(cExercicio)
+        MsgAlert("Nenhum exercício ativo. Abra um em Contabilidade > Abrir Exercício.", "Novo Lançamento")
+        Return .F.
+    EndIf
+
+    If GcPeriodoFechado(cExercicio)
+        MsgAlert("Exercício " + cExercicio + " está fechado; não aceita lançamento.", "Novo Lançamento")
+        Return .F.
+    EndIf
+
+    DEFINE MSDIALOG oDlg TITLE "Novo Lançamento — " + cExercicio FROM 0,0 TO 260,460 PIXEL
+
+    @ 10, 10 SAY "Data (AAAAMMDD):"  PIXEL
+    @ 10,120 GET cData SIZE 70,10               PIXEL
+    @ 30, 10 SAY "Conta débito:"     PIXEL
+    @ 30,120 GET cContaDeb SIZE 60,10           PIXEL
+    @ 50, 10 SAY "Conta crédito:"    PIXEL
+    @ 50,120 GET cContaCred SIZE 60,10          PIXEL
+    @ 70, 10 SAY "Valor:"            PIXEL
+    @ 70,120 GET cValor SIZE 80,10              PIXEL
+    @ 90, 10 SAY "Histórico:"        PIXEL
+    @ 90,120 GET cDescr SIZE 220,10              PIXEL
+    @125, 10 BUTTON "Confirmar" ACTION (lOk := .T.) SIZE 40,12 PIXEL
+    @125,120 BUTTON "Cancelar"                      SIZE 40,12 PIXEL
+
+    ACTIVATE MSDIALOG oDlg CENTERED
+
+    If !lOk
+        Return .F.
+    EndIf
+
+    cData      := AllTrim(cData)
+    cContaDeb  := AllTrim(cContaDeb)
+    cContaCred := AllTrim(cContaCred)
+    cDescr     := AllTrim(cDescr)
+    nValor     := Val(StrTran(AllTrim(cValor), ",", "."))
+
+    If Empty(cData) .Or. Empty(cContaDeb) .Or. Empty(cContaCred) .Or. Empty(cDescr)
+        MsgAlert("Data, contas e histórico são obrigatórios.", "Novo Lançamento")
+        Return .F.
+    EndIf
+
+    If Len(cData) != 8
+        MsgAlert("Data deve estar no formato AAAAMMDD (ex: 20260131).", "Novo Lançamento")
+        Return .F.
+    EndIf
+
+    If nValor <= 0
+        MsgAlert("Valor deve ser maior que zero.", "Novo Lançamento")
+        Return .F.
+    EndIf
+
+    If cContaDeb == cContaCred
+        MsgAlert("Conta de débito e de crédito não podem ser a mesma.", "Novo Lançamento")
+        Return .F.
+    EndIf
+
+    // As contas precisam existir: LANCAMENTOS tem FK para PLANO_CONTAS, e
+    // sem esta checagem o erro chegaria ao usuário como falha de constraint.
+    If !GcContaExiste(cContaDeb)
+        MsgAlert("Conta de débito " + cContaDeb + " não existe no plano de contas.", "Novo Lançamento")
+        Return .F.
+    EndIf
+
+    If !GcContaExiste(cContaCred)
+        MsgAlert("Conta de crédito " + cContaCred + " não existe no plano de contas.", "Novo Lançamento")
+        Return .F.
+    EndIf
+
+    If !GcCriarLancamentoManualDireto(SToD(cData), cDescr, cContaDeb, cContaCred, nValor)
+        MsgStop("Não foi possível criar o lançamento.", "Novo Lançamento")
+        Return .F.
+    EndIf
+
+    MsgInfo("Lançamento criado no exercício " + cExercicio + ".", "Novo Lançamento")
+Return .T.
+
+/*/{Protheus.doc} GcContaExiste
+    Confere se uma conta existe e está ativa no plano de contas.
+    @type Function
+    @author GesCon
+    @since 2026-07-31
+    @param cConta, character, código da conta
+    @return lRet, logical, .T. se a conta existe e está ativa
+*/
+User Function GcContaExiste(cConta)
+    Local aConta := TCSqlQuery("SELECT PLA_CODIGO FROM PLANO_CONTAS WHERE PLA_CODIGO = " + ;
+        GcSqlVal(cConta) + " AND PLA_ATIVO = 1 AND D_E_L_E_T_ = ' '")
+Return Len(aConta) > 0
+
+/*/{Protheus.doc} GcMenuLancamentos
+    Submenu de lançamentos contábeis: novo, editar histórico, excluir e
+    consulta. As três primeiras ações precisam de um lançamento escolhido,
+    o que o FWMBrowse não devolve -- daí o seletor GcSelecionarLancamento.
+    @type Function
+    @author GesCon
+    @since 2026-07-31
+*/
+User Function GcMenuLancamentos()
+    Local aMenu := {"Novo Lançamento", "Lançar Despesa com Rateio", "Editar Histórico", ;
+        "Excluir Lançamento", "Consultar Lançamentos", "Voltar"}
+    Local nOpcao := FWMenuSelect(aMenu, "Lançamentos")
+    Local nRecno := 0
+    Local cDescr := ""
+    Local oBrowse
+
+    Do Case
+        Case nOpcao == 1
+            GcNovoLancamento()
+        Case nOpcao == 2
+            GcLancarDespesaUI()
+        Case nOpcao == 3
+            nRecno := GcSelecionarLancamento("Editar histórico de qual lançamento?")
+            If nRecno > 0
+                cDescr := FWGetText("Novo histórico:", "")
+                If !Empty(AllTrim(cDescr))
+                    If GcEditarLancamentoDescricao(nRecno, AllTrim(cDescr))
+                        MsgInfo("Histórico alterado.", "Editar Lançamento")
+                    Else
+                        MsgAlert("Não foi possível alterar (período fechado ou lançamento automático).", "Editar Lançamento")
+                    EndIf
+                EndIf
+            EndIf
+        Case nOpcao == 4
+            nRecno := GcSelecionarLancamento("Excluir qual lançamento?")
+            If nRecno > 0
+                If MsgYesNo("Confirma a exclusão do lançamento?", "Excluir Lançamento")
+                    If GcDeletarLancamento(nRecno)
+                        MsgInfo("Lançamento excluído.", "Excluir Lançamento")
+                    Else
+                        MsgAlert("Não foi possível excluir (período fechado ou lançamento automático).", "Excluir Lançamento")
+                    EndIf
+                EndIf
+            EndIf
+        Case nOpcao == 5
+            oBrowse := FWMBrowse():New()
+            oBrowse:SetAlias("LANCAMENTOS")
+            oBrowse:SetDescription("Lançamentos Contábeis")
+            oBrowse:Activate()
+    EndCase
+Return
+
+/*/{Protheus.doc} GcSelecionarLancamento
+    Lista os lançamentos do exercício ativo e devolve o R_E_C_N_O_ escolhido.
+    @type Function
+    @author GesCon
+    @since 2026-07-31
+    @param cTitulo, character, título do menu
+    @return nRecno, numeric, R_E_C_N_O_ escolhido, ou 0
+*/
+User Function GcSelecionarLancamento(cTitulo)
+    Local cExercicio := GcExercicioAtivo()
+    Local aLan   := {}
+    Local aItens := {}
+    Local nI     := 0
+    Local nEscolha := 0
+
+    If cTitulo == Nil
+        cTitulo := "Selecione o lançamento"
+    EndIf
+
+    If Empty(cExercicio)
+        MsgAlert("Nenhum exercício ativo.", cTitulo)
+        Return 0
+    EndIf
+
+    aLan := TCSqlQuery("SELECT R_E_C_N_O_, LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, LAN_TIPO " + ;
+        "FROM LANCAMENTOS WHERE LAN_EXERCICIO = " + GcSqlVal(cExercicio) + ;
+        " AND D_E_L_E_T_ = ' ' ORDER BY LAN_DATA, R_E_C_N_O_")
+
+    If Len(aLan) == 0
+        MsgAlert("Nenhum lançamento no exercício " + cExercicio + ".", cTitulo)
+        Return 0
+    EndIf
+
+    For nI := 1 To Len(aLan)
+        AAdd(aItens, AllTrim(aLan[nI]["LAN_DATA"]) + ;
+            "  " + AllTrim(aLan[nI]["LAN_CONTA_DEB"]) + "/" + AllTrim(aLan[nI]["LAN_CONTA_CRED"]) + ;
+            "  R$ " + AllTrim(aLan[nI]["LAN_VALOR"]) + ;
+            "  " + AllTrim(aLan[nI]["LAN_DESCR"]))
+    Next nI
+    AAdd(aItens, "Voltar")
+
+    nEscolha := FWMenuSelect(aItens, cTitulo)
+
+    If nEscolha <= 0 .Or. nEscolha > Len(aLan)
+        Return 0
+    EndIf
+Return Val(aLan[nEscolha]["R_E_C_N_O_"])
 
 /*/{Protheus.doc} GcValidarIntegridade
     Valida integridade contábil do exercício: soma de débitos == soma de créditos.
@@ -541,7 +745,7 @@ User Function GcValidarIntegridade(cExercicio)
     EndIf
 
     // Soma débitos por conta de débito
-    aDebitos := TCSqlQuery("SELECT COALESCE(SUM(LAN_VALOR), 0) as TOTAL FROM LANCAMENTOS WHERE LAN_EXERCICIO = " + GcSqlLit(cExercicio) + " AND D_E_L_E_T_ = ' '")
+    aDebitos := TCSqlQuery("SELECT COALESCE(SUM(LAN_VALOR), 0) as TOTAL FROM LANCAMENTOS WHERE LAN_EXERCICIO = " + GcSqlVal(cExercicio) + " AND D_E_L_E_T_ = ' '")
     If Len(aDebitos) > 0
         nDebitos := aDebitos[1]:TOTAL
     EndIf
@@ -611,14 +815,14 @@ User Function GcFecharPeriodo(cExercicio)
     EndIf
 
     // Recupera exercício a fechar
-    aExercicio := TCSqlQuery("SELECT EXE_CODIGO, EXE_INICIO, EXE_FIM FROM EXERCICIO WHERE EXE_CODIGO = " + GcSqlLit(cExercicio) + " AND D_E_L_E_T_ = ' '")
+    aExercicio := TCSqlQuery("SELECT EXE_CODIGO, EXE_INICIO, EXE_FIM FROM EXERCICIO WHERE EXE_CODIGO = " + GcSqlVal(cExercicio) + " AND D_E_L_E_T_ = ' '")
     If Len(aExercicio) = 0
         ConOut("ERROR: Exercise not found: " + cExercicio)
         Return .F.
     EndIf
 
     // Marca período como fechado e inativo
-    cSql := "UPDATE EXERCICIO SET EXE_FECHADO = 1, EXE_ATIVO = 0 WHERE EXE_CODIGO = " + GcSqlLit(cExercicio)
+    cSql := "UPDATE EXERCICIO SET EXE_FECHADO = 1, EXE_ATIVO = 0 WHERE EXE_CODIGO = " + GcSqlVal(cExercicio)
     TCSqlExec(cSql)
     ConOut("Period marked as closed: " + cExercicio)
 
@@ -663,12 +867,12 @@ User Function GcFecharPeriodo(cExercicio)
     EndCase
 
     cSql := "INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) VALUES ("
-    cSql += GcSqlLit(cProximo) + ", "
-    cSql += GcSqlLit(DtoS(dProxInicio)) + ", "
-    cSql += GcSqlLit(DtoS(dProxFim)) + ", "
+    cSql += GcSqlVal(cProximo) + ", "
+    cSql += GcSqlVal(DtoS(dProxInicio)) + ", "
+    cSql += GcSqlVal(DtoS(dProxFim)) + ", "
     cSql += "1, "  // EXE_ATIVO = 1
     cSql += "0, "  // EXE_FECHADO = 0
-    cSql += GcSqlLit(" ")  // D_E_L_E_T_ = ' '
+    cSql += GcSqlVal(" ")  // D_E_L_E_T_ = ' '
     cSql += ")"
 
     TCSqlExec(cSql)
@@ -679,10 +883,10 @@ User Function GcFecharPeriodo(cExercicio)
     ConOut("Balance sheet generated for " + cExercicio + " (saldo=" + cValToChar(nSaldo) + ")")
 
     // Gera snapshots do Portal v2: extratos e agenda
-    Local nExtratosCount := U_GcGerarPortalExtratos(cExercicio)
+    Local nExtratosCount := GcGerarPortalExtratos(cExercicio)
     ConOut("Portal v2 extracts snapshot generated: " + cValToChar(nExtratosCount) + " records")
 
-    Local nAgendaCount := U_GcGerarPortalAgenda(cExercicio)
+    Local nAgendaCount := GcGerarPortalAgenda(cExercicio)
     ConOut("Portal v2 agenda snapshot generated: " + cValToChar(nAgendaCount) + " records")
 
     lRet := .T.
@@ -721,13 +925,13 @@ User Function GcGerarBalancetePeriodo(cExercicio)
     EndIf
 
     // Soma receitas (contas 3000+)
-    aReceitas := TCSqlQuery("SELECT COALESCE(SUM(LAN_VALOR), 0) as TOTAL FROM LANCAMENTOS WHERE LAN_EXERCICIO = " + GcSqlLit(cExercicio) + " AND LAN_CONTA_CRED >= '3000' AND D_E_L_E_T_ = ' '")
+    aReceitas := TCSqlQuery("SELECT COALESCE(SUM(LAN_VALOR), 0) as TOTAL FROM LANCAMENTOS WHERE LAN_EXERCICIO = " + GcSqlVal(cExercicio) + " AND LAN_CONTA_CRED >= '3000' AND D_E_L_E_T_ = ' '")
     If Len(aReceitas) > 0
         nReceitas := aReceitas[1]:TOTAL
     EndIf
 
     // Soma despesas (contas 4000+)
-    aDespesas := TCSqlQuery("SELECT COALESCE(SUM(LAN_VALOR), 0) as TOTAL FROM LANCAMENTOS WHERE LAN_EXERCICIO = " + GcSqlLit(cExercicio) + " AND LAN_CONTA_DEB >= '4000' AND D_E_L_E_T_ = ' '")
+    aDespesas := TCSqlQuery("SELECT COALESCE(SUM(LAN_VALOR), 0) as TOTAL FROM LANCAMENTOS WHERE LAN_EXERCICIO = " + GcSqlVal(cExercicio) + " AND LAN_CONTA_DEB >= '4000' AND D_E_L_E_T_ = ' '")
     If Len(aDespesas) > 0
         nDespesas := aDespesas[1]:TOTAL
     EndIf
@@ -736,25 +940,135 @@ User Function GcGerarBalancetePeriodo(cExercicio)
     nSaldo := nReceitas - nDespesas
 
     // Verifica se balancete já existe
-    aVerificacao := TCSqlQuery("SELECT R_E_C_N_O_ FROM RPT_BALANCETE WHERE RPT_EXERCICIO = " + GcSqlLit(cExercicio) + " AND D_E_L_E_T_ = ' '")
+    aVerificacao := TCSqlQuery("SELECT R_E_C_N_O_ FROM RPT_BALANCETE WHERE RPT_EXERCICIO = " + GcSqlVal(cExercicio) + " AND D_E_L_E_T_ = ' '")
 
     If Len(aVerificacao) > 0
         // Atualiza registro existente
-        cSql := "UPDATE RPT_BALANCETE SET RPT_RECEITAS = " + cValToChar(nReceitas) + ", RPT_DESPESAS = " + cValToChar(nDespesas) + ", RPT_SALDO = " + cValToChar(nSaldo) + ", RPT_DATA_GERACAO = datetime('now') WHERE RPT_EXERCICIO = " + GcSqlLit(cExercicio)
+        cSql := "UPDATE RPT_BALANCETE SET RPT_RECEITAS = " + cValToChar(nReceitas) + ", RPT_DESPESAS = " + cValToChar(nDespesas) + ", RPT_SALDO = " + cValToChar(nSaldo) + ", RPT_DATA_GERACAO = datetime('now') WHERE RPT_EXERCICIO = " + GcSqlVal(cExercicio)
         TCSqlExec(cSql)
         ConOut("Balance sheet updated for " + cExercicio + ": receitas=" + cValToChar(nReceitas) + ", despesas=" + cValToChar(nDespesas) + ", saldo=" + cValToChar(nSaldo))
     Else
         // Insere novo registro
         cSql := "INSERT INTO RPT_BALANCETE (RPT_EXERCICIO, RPT_RECEITAS, RPT_DESPESAS, RPT_SALDO, RPT_DATA_GERACAO, D_E_L_E_T_) VALUES ("
-        cSql += GcSqlLit(cExercicio) + ", "
+        cSql += GcSqlVal(cExercicio) + ", "
         cSql += cValToChar(nReceitas) + ", "
         cSql += cValToChar(nDespesas) + ", "
         cSql += cValToChar(nSaldo) + ", "
         cSql += "datetime('now'), "
-        cSql += GcSqlLit(" ")
+        cSql += GcSqlVal(" ")
         cSql += ")"
         TCSqlExec(cSql)
         ConOut("Balance sheet created for " + cExercicio + ": receitas=" + cValToChar(nReceitas) + ", despesas=" + cValToChar(nDespesas) + ", saldo=" + cValToChar(nSaldo))
     EndIf
 
 Return nSaldo
+
+/*/{Protheus.doc} GcLancarDespesaUI
+    Formulário da despesa rateada: lança a despesa na contabilidade e
+    distribui o valor entre as unidades pelo tipo de repartição escolhido,
+    gerando as cobranças. A regra fica em GcLancarDespesaContabil, que por
+    sua vez usa GcCalcularRateio.
+    @type Function
+    @author GesCon
+    @since 2026-07-31
+    @return lRet, logical, .T. se a despesa foi lançada
+*/
+User Function GcLancarDespesaUI()
+    Local oDlg
+    Local cData    := DtoS(Date())
+    Local cDescr   := ""
+    Local cValor   := ""
+    Local cRepart  := ""
+    Local cDiaVenc := "10"
+    Local lOk      := .F.
+    Local nValor   := 0
+    Local nDiaVenc := 0
+    Local cExercicio := ""
+    Local aRep     := {}
+    Local aItens   := {}
+    Local nI       := 0
+    Local nEscolha := 0
+
+    cExercicio := GcExercicioAtivo()
+    If Empty(cExercicio)
+        MsgAlert("Nenhum exercício ativo. Abra um em Contabilidade > Abrir Exercício.", "Lançar Despesa")
+        Return .F.
+    EndIf
+
+    If GcPeriodoFechado(cExercicio)
+        MsgAlert("Exercício " + cExercicio + " está fechado; não aceita lançamento.", "Lançar Despesa")
+        Return .F.
+    EndIf
+
+    // O tipo de rateio sai de uma lista, não digitado: é chave estrangeira
+    // de REPARTICAO e digitar errado só produziria erro de constraint.
+    aRep := TCSqlQuery("SELECT REP_CODIGO, REP_NOME FROM REPARTICAO " + ;
+        "WHERE REP_ATIVO = 1 AND D_E_L_E_T_ = ' ' ORDER BY REP_CODIGO")
+
+    If Len(aRep) == 0
+        MsgAlert("Nenhum tipo de repartição cadastrado.", "Lançar Despesa")
+        Return .F.
+    EndIf
+
+    For nI := 1 To Len(aRep)
+        AAdd(aItens, AllTrim(aRep[nI]["REP_CODIGO"]) + " - " + AllTrim(aRep[nI]["REP_NOME"]))
+    Next nI
+    AAdd(aItens, "Cancelar")
+
+    nEscolha := FWMenuSelect(aItens, "Tipo de rateio")
+    If nEscolha <= 0 .Or. nEscolha > Len(aRep)
+        Return .F.
+    EndIf
+    cRepart := AllTrim(aRep[nEscolha]["REP_CODIGO"])
+
+    DEFINE MSDIALOG oDlg TITLE "Lançar Despesa — rateio " + cRepart FROM 0,0 TO 250,460 PIXEL
+
+    @ 10, 10 SAY "Data (AAAAMMDD):"        PIXEL
+    @ 10,140 GET cData SIZE 70,10                     PIXEL
+    @ 30, 10 SAY "Descrição:"              PIXEL
+    @ 30,140 GET cDescr SIZE 220,10                    PIXEL
+    @ 50, 10 SAY "Valor total:"            PIXEL
+    @ 50,140 GET cValor SIZE 80,10                    PIXEL
+    @ 70, 10 SAY "Dia de vencimento (1-28):" PIXEL
+    @ 70,140 GET cDiaVenc SIZE 40,10                  PIXEL
+    @105, 10 BUTTON "Confirmar" ACTION (lOk := .T.) SIZE 40,12 PIXEL
+    @105,140 BUTTON "Cancelar"                      SIZE 40,12 PIXEL
+
+    ACTIVATE MSDIALOG oDlg CENTERED
+
+    If !lOk
+        Return .F.
+    EndIf
+
+    cData    := AllTrim(cData)
+    cDescr   := AllTrim(cDescr)
+    nValor   := Val(StrTran(AllTrim(cValor), ",", "."))
+    nDiaVenc := Val(AllTrim(cDiaVenc))
+
+    If Empty(cData) .Or. Empty(cDescr)
+        MsgAlert("Data e descrição são obrigatórias.", "Lançar Despesa")
+        Return .F.
+    EndIf
+
+    If Len(cData) != 8
+        MsgAlert("Data deve estar no formato AAAAMMDD (ex: 20260131).", "Lançar Despesa")
+        Return .F.
+    EndIf
+
+    If nValor <= 0
+        MsgAlert("Valor deve ser maior que zero.", "Lançar Despesa")
+        Return .F.
+    EndIf
+
+    If nDiaVenc < 1 .Or. nDiaVenc > 28
+        MsgAlert("Dia de vencimento deve estar entre 1 e 28.", "Lançar Despesa")
+        Return .F.
+    EndIf
+
+    If !GcLancarDespesaContabil(SToD(cData), cDescr, nValor, cRepart, nDiaVenc)
+        MsgStop("Não foi possível lançar a despesa.", "Lançar Despesa")
+        Return .F.
+    EndIf
+
+    MsgInfo("Despesa lançada e rateada no exercício " + cExercicio + ".", "Lançar Despesa")
+Return .T.

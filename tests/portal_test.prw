@@ -1,12 +1,29 @@
-// tests/portal_test.prw � testes do portal do cond�mino (token auth + browse limitado).
-// Os testes usam TCSqlQuery/TCSqlExec direto pois FWGetText � interativo.
+// tests/portal_test.prw — testes do portal do condômino (token auth + browse limitado).
+// Os testes usam TCSqlQuery/TCSqlExec direto pois FWGetText — interativo.
 #include "totvs.ch"
-#include "../src/db.prw"
-#include "../src/portal.prw"
-#include "../src/usuarios.prw"
+
+// Os #include dos modulos ficam no FIM do arquivo, de proposito.
+// `advplc run` escolhe sozinho o ponto de entrada: a primeira User
+// Function cuja linha seja >= a primeira linha de codigo do arquivo raiz
+// (pkg/compiler/codegen.go). Como #include cola o texto incluido no lugar,
+// includes no topo empurram as funcoes dos modulos para antes do runner
+// deste arquivo -- e a suite inteira roda em silencio, executando algo
+// como GcSqlLit no lugar dos testes. Com os includes no fim, o runner
+// abaixo e sempre a primeira funcao do compilado. scripts/test.sh
+// confere isso a cada execucao.
+
+/*/{Protheus.doc} RunPortalTests
+    Ponto de entrada da suite do portal. Precisa ser a primeira User
+    Function do arquivo -- ver a nota sobre includes no topo.
+    @type Function
+    @author GesCon
+    @since 2026-07-31
+*/
+User Function RunPortalTests()
+Return PortalTest()
 
 /*/{Protheus.doc} TestaGcPortalAuthVazio
-    Chamada com token vazio/n�o encontrado deve retornar .F.
+    Chamada com token vazio/não encontrado deve retornar .F.
 */
 User Function AT06TokenInvalido()
     Local lOk := .T.
@@ -20,7 +37,7 @@ User Function AT06TokenInvalido()
 Return lOk
 
 /*/{Protheus.doc} TestaGcPortalAuthValido
-    Cria um token v�lido na GCT_TOKEN, chama GcAuthPortalToken e verifica:
+    Cria um token válido na GCT_TOKEN, chama GcAuthPortalToken e verifica:
     (1) retorna .T., (2) marca USADO=1, (3) seta g_cUniPortal/g_cConPortal.
 */
 User Function AT06TokenValido()
@@ -29,18 +46,18 @@ User Function AT06TokenValido()
     // Limpa token anterior se existir
     TCSqlExec("DELETE FROM GCT_TOKEN WHERE TOKEN = 'test-token-0000-0000-0000-000000000001' AND D_E_L_E_T_ = ' '")
 
-    // Cria unidade e cond�mino de teste se necess�rio
+    // Cria unidade e condômino de teste se necessário
     Local aUni := TCSqlQuery("SELECT UNI_CODIGO FROM UNI WHERE UNI_CODIGO = '99' AND D_E_L_E_T_ = ' '")
     If Len(aUni) == 0
-        TCSqlExec("INSERT INTO UNI (UNI_CODIGO, UNI_NOME, UNI_ENDERECO, UNI_BAIRRO, UNI_CIDADE, UNI_ESTADO, UNI_CEP, UNI_COMPLEMENTO, UNI_FONE) VALUES ('99', 'Teste', 'Rua Teste', 'Centro', 'S�o Paulo', 'SP', '00000-000', 'Apto 1', '11111111')")
+        TCSqlExec("INSERT INTO UNI (UNI_CODIGO, UNI_NOME, UNI_ENDERECO, UNI_BAIRRO, UNI_CIDADE, UNI_ESTADO, UNI_CEP, UNI_COMPLEMENTO, UNI_FONE) VALUES ('99', 'Teste', 'Rua Teste', 'Centro', 'São Paulo', 'SP', '00000-000', 'Apto 1', '11111111')")
     EndIf
 
     Local aCon := TCSqlQuery("SELECT CON_CODIGO FROM CON WHERE CON_CODIGO = 'C999' AND D_E_L_E_T_ = ' '")
     If Len(aCon) == 0
-        TCSqlExec("INSERT INTO CON (CON_CODIGO, CON_NOME, CON_CPF, CON_EMAIL, CON_FONE, CON_UNI) VALUES ('C999', 'Cond�mino Teste', '000.000.000-00', 'teste@teste.com', '11111111', '99')")
+        TCSqlExec("INSERT INTO CON (CON_CODIGO, CON_NOME, CON_CPF, CON_EMAIL, CON_TEL) VALUES ('C999', 'Condômino Teste', '000.000.000-00', 'teste@teste.com', '11111111')")
     EndIf
 
-    // Gera token v�lido com validade futura (data fixa para teste)
+    // Gera token válido com validade futura (data fixa para teste)
     Local cValidadeIso := "2099-12-31 23:59:59"
 
     TCSqlExec("INSERT INTO GCT_TOKEN (TOKEN, USR_LOGIN, CON_CODIGO, UNI_CODIGO, CRIPTADO, VALIDO_ATE, USADO) " + ;
@@ -59,7 +76,7 @@ User Function AT06TokenValido()
         ConOut("erro_token_desapareceu=.T.")
     EndIf
 
-    // Verifica vari�veis globais
+    // Verifica variáveis globais
     ConOut("uni_portal=" + cValToChar(g_cUniPortal))
     ConOut("con_portal=" + cValToChar(g_cConPortal))
 
@@ -73,38 +90,38 @@ User Function AT06TokenValido()
 Return lOk
 
 /*/{Protheus.doc} TestaGcPortalCalcCobrancas
-    Ap�s autentica��o, chama GcPortalCalcCobrancas e verifica que as
-    cobran�as da unidade '99' s�o copiadas para RPT_COND_COBRANCAS.
+    Após autenticação, chama GcPortalCalcCobrancas e verifica que as
+    cobranças da unidade '99' são copiadas para RPT_COND_COBRANCAS.
 */
 User Function AT06PortalCalc()
     Local lOk := .T.
 
-    // Garante unidade e cond�mino de teste
+    // Garante unidade e condômino de teste
     Local aUni := TCSqlQuery("SELECT UNI_CODIGO FROM UNI WHERE UNI_CODIGO = '99' AND D_E_L_E_T_ = ' '")
     If Len(aUni) == 0
-        TCSqlExec("INSERT INTO UNI (UNI_CODIGO, UNI_NOME, UNI_ENDERECO, UNI_BAIRRO, UNI_CIDADE, UNI_ESTADO, UNI_CEP, UNI_COMPLEMENTO, UNI_FONE) VALUES ('99', 'Teste', 'Rua Teste', 'Centro', 'S�o Paulo', 'SP', '00000-000', 'Apto 1', '11111111')")
+        TCSqlExec("INSERT INTO UNI (UNI_CODIGO, UNI_NOME, UNI_ENDERECO, UNI_BAIRRO, UNI_CIDADE, UNI_ESTADO, UNI_CEP, UNI_COMPLEMENTO, UNI_FONE) VALUES ('99', 'Teste', 'Rua Teste', 'Centro', 'São Paulo', 'SP', '00000-000', 'Apto 1', '11111111')")
     EndIf
 
-    // Garante cobran�a de teste para unidade 99
+    // Garante cobrança de teste para unidade 99
     TCSqlExec("DELETE FROM COB WHERE COB_UNIDADE = '99' AND D_E_L_E_T_ = ' '")
     TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS) VALUES ('99', '2026-07', '150.00', '2026-07-10', 'aberto')")
     TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS) VALUES ('99', '2026-08', '150.00', '2026-08-10', 'aberto')")
-    // Cobran�a de outra unidade � N�O deve ser copiada
+    // Cobrança de outra unidade — NÃO deve ser copiada
     TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS) VALUES ('88', '2026-07', '200.00', '2026-07-10', 'aberto')")
 
-    // Simula autentica��o portal
+    // Simula autenticação portal
     g_cUniPortal := "99"
     g_cConPortal := "C999"
     g_lAutoPortal := .T.
 
-    // Calcula cobran�as
+    // Calcula cobranças
     Local nQtd := GcPortalCalcCobrancas()
     ConOut("cobrancas_encontradas=" + Str(nQtd))
     If nQtd != 2
         lOk := .F.
     EndIf
 
-    // Verifica que a cobran�a da unidade 88 n�o foi copiada
+    // Verifica que a cobrança da unidade 88 não foi copiada
     Local aOutraUni := TCSqlQuery("SELECT COUNT(*) AS QTD FROM RPT_COND_COBRANCAS WHERE RCC_UNIDADE = '88' AND D_E_L_E_T_ = ' '")
     If Len(aOutraUni) > 0
         Local nCount := Val(aOutraUni[1]:QTD)
@@ -125,12 +142,12 @@ User Function AT06PortalCalc()
 Return lOk
 
 /*/{Protheus.doc} TestaGcSairPortal
-    Chama GcSairPortal e verifica que as vari�veis globais s�o zeradas.
+    Chama GcSairPortal e verifica que as variáveis globais são zeradas.
 */
 User Function AT06SairPortal()
     Local lOk := .T.
 
-    // Simula sess�o ativa
+    // Simula sessão ativa
     g_cUniPortal := "99"
     g_cConPortal := "C999"
     g_lAutoPortal := .T.
@@ -154,13 +171,13 @@ Return lOk
 User Function AT08TokenUsado()
     Local lOk := .T.
 
-    // Insere token j� marcado como usado
+    // Insere token já marcado como usado
     TCSqlExec("DELETE FROM GCT_TOKEN WHERE TOKEN = 'test-token-0008-0000-0000-000000000008' AND D_E_L_E_T_ = ' '")
     TCSqlExec("INSERT INTO GCT_TOKEN (TOKEN, USR_LOGIN, CON_CODIGO, UNI_CODIGO, CRIPTADO, VALIDO_ATE, USADO) " + ;
         "VALUES ('test-token-0008-0000-0000-000000000008', 'admin', 'C999', '99', 'criptado', '" + ;
         "2099-12-31 23:59:59', 1)")
 
-    // Autentica � deve falhar porque USADO=1
+    // Autentica — deve falhar porque USADO=1
     Local lAutenticado := GcAuthPortalToken("test-token-0008-0000-0000-000000000008")
     If lAutenticado
         lOk := .F.
@@ -193,8 +210,10 @@ Return lOk
 User Function PortalTest()
     Local lTodosOk := .T.
     Local cTokenTest := "e2e-" + GcGerarTokenId()
-    Local dValidade  := Date() + 2
-    Local cValidade  := GcDateToIso(dValidade) + " 23:59:59"
+    // A conta de dias fica com o SQLite: no AdvPP, Date() + 2 perde o tipo
+    // data e DtoS() devolve "" -- a validade virava "-- 23:59:59" e o token
+    // nascia invalido, o mesmo defeito que havia em GcGerarToken.
+    Local cValidade  := TCSqlQuery("SELECT datetime('now', '+2 days') as DT")[1]:DT
 
     // ========================================
     // Step 0: Reset state (teardown prévio)
@@ -237,7 +256,7 @@ User Function PortalTest()
     // ========================================
     // Step 3: Criar condômino vinculado à unidade
     // ========================================
-    TCSqlExec("INSERT INTO CON (CON_CODIGO, CON_NOME, CON_CPF, CON_EMAIL, CON_UNI) VALUES ('CE2E99', 'Condômino E2E Teste', '000.000.000-00', 'e2e@teste.com', 'E2E99')")
+    TCSqlExec("INSERT INTO CON (CON_CODIGO, CON_NOME, CON_CPF, CON_EMAIL) VALUES ('CE2E99', 'Condômino E2E Teste', '000.000.000-00', 'e2e@teste.com')")
     Local aCon := TCSqlQuery("SELECT CON_CODIGO FROM CON WHERE CON_CODIGO = 'CE2E99' AND D_E_L_E_T_ = ' '")
     If Len(aCon) != 1
         lTodosOk := .F.
@@ -369,3 +388,7 @@ User Function PortalTest()
         ConOut("PORTAL_TEST_FAIL")
     EndIf
 Return lTodosOk
+
+#include "../src/db.prw"
+#include "../src/portal.prw"
+#include "../src/usuarios.prw"

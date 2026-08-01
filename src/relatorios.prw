@@ -14,7 +14,6 @@
 // execução headless, mesmo padrão de GcCondominos/GcUnidades/etc, que
 // também nunca são testadas via advplc run por esse motivo.
 #include "totvs.ch"
-#include "db.prw"
 
 /*/{Protheus.doc} GcBalanceteMensal
     Balancete de uma competência: receitas (Cobrança paga), despesas

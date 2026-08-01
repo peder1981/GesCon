@@ -1,8 +1,15 @@
 // tests/portal-v2_test.prw — testes da plataforma Portal v2 (snapshots de faturas, avisos, agenda)
 #include "totvs.ch"
-#include "../src/db.prw"
-#include "../src/contabil.prw"
-#include "../src/portal-v2.prw"
+
+// Os #include dos modulos ficam no FIM do arquivo, de proposito.
+// `advplc run` escolhe sozinho o ponto de entrada: a primeira User
+// Function cuja linha seja >= a primeira linha de codigo do arquivo raiz
+// (pkg/compiler/codegen.go). Como #include cola o texto incluido no lugar,
+// includes no topo empurram as funcoes dos modulos para antes do runner
+// deste arquivo -- e a suite inteira roda em silencio, executando algo
+// como GcSqlLit no lugar dos testes. Com os includes no fim, o runner
+// abaixo e sempre a primeira funcao do compilado. scripts/test.sh
+// confere isso a cada execucao.
 
 /*/{Protheus.doc} PortalV2Test
     Orquestrador dos testes do Portal v2.
@@ -68,7 +75,7 @@ User Function TestPortalTablesExist()
 
     For i := 1 To Len(aTabelas)
         cQuery := "SELECT name FROM sqlite_master WHERE type='table' AND name='" + aTabelas[i] + "'"
-        aResult := FWGetTable(cQuery)
+        aResult := TCSqlQuery(cQuery)
 
         If Len(aResult) > 0
             ConOut("[PASS] " + aTabelas[i] + " table exists")
@@ -89,7 +96,7 @@ User Function TestAvisosTableStructure()
 
     // Verifica existência das colunas esperadas
     cQuery := "PRAGMA table_info(AVISOS)"
-    aResult := FWGetTable(cQuery)
+    aResult := TCSqlQuery(cQuery)
 
     If Len(aResult) > 0
         ConOut("[PASS] AVISOS table structure is valid (" + AllTrim(Str(Len(aResult))) + " columns)")
@@ -108,7 +115,7 @@ User Function TestExtratoTableStructure()
 
     // Verifica existência das colunas esperadas
     cQuery := "PRAGMA table_info(RPT_PORTAL_EXTRATOS)"
-    aResult := FWGetTable(cQuery)
+    aResult := TCSqlQuery(cQuery)
 
     If Len(aResult) > 0
         ConOut("[PASS] RPT_PORTAL_EXTRATOS table structure is valid (" + AllTrim(Str(Len(aResult))) + " columns)")
@@ -127,7 +134,7 @@ User Function TestAgendaTableStructure()
 
     // Verifica existência das colunas esperadas
     cQuery := "PRAGMA table_info(RPT_PORTAL_AGENDA)"
-    aResult := FWGetTable(cQuery)
+    aResult := TCSqlQuery(cQuery)
 
     If Len(aResult) > 0
         ConOut("[PASS] RPT_PORTAL_AGENDA table structure is valid (" + AllTrim(Str(Len(aResult))) + " columns)")
@@ -192,7 +199,7 @@ User Function TestGcGerarPortalExtratos()
     TCSqlExec(cSql)
 
     // Step 3: Chama função
-    nCount := U_GcGerarPortalExtratos(cCompet)
+    nCount := GcGerarPortalExtratos(cCompet)
     ConOut("GcGerarPortalExtratos returned: " + cValToChar(nCount))
 
     // Step 4: Valida resultado
@@ -204,7 +211,7 @@ User Function TestGcGerarPortalExtratos()
     // Step 5: Verifica registros inseridos
     cSql := "SELECT COUNT(*) as CNT FROM RPT_PORTAL_EXTRATOS WHERE REX_COMPETENCIA = '" + cCompet + "' AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
-    If Len(aResult) > 0 .And. aResult[1]:CNT = 3
+    If Len(aResult) > 0 .And. Val(aResult[1]:CNT) = 3
         ConOut("[PASS] 3 records inserted into RPT_PORTAL_EXTRATOS")
     Else
         ConOut("[ERROR] [FAIL] Expected 3 records in RPT_PORTAL_EXTRATOS")
@@ -215,10 +222,10 @@ User Function TestGcGerarPortalExtratos()
     cSql := "SELECT REX_VALOR, REX_STATUS FROM RPT_PORTAL_EXTRATOS WHERE REX_COMPETENCIA = '" + cCompet + "' AND REX_UNIDADE = '101' AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
     If Len(aResult) > 0
-        If aResult[1]:REX_VALOR = 1000.00 .And. aResult[1]:REX_STATUS = "PENDENTE"
+        If Val(aResult[1]:REX_VALOR) = 1000.00 .And. aResult[1]:REX_STATUS = "PENDENTE"
             ConOut("[PASS] Unit 101 data correct: value=1000.00, status=PENDENTE")
         Else
-            ConOut("[ERROR] [FAIL] Unit 101 data incorrect: value=" + cValToChar(aResult[1]:REX_VALOR) + ", status=" + aResult[1]:REX_STATUS)
+            ConOut("[ERROR] [FAIL] Unit 101 data incorrect: value=" + cValToChar(Val(aResult[1]:REX_VALOR)) + ", status=" + aResult[1]:REX_STATUS)
             Return .F.
         EndIf
     Else
@@ -267,10 +274,13 @@ User Function TestGcGerarPortalAgenda()
     TCSqlExec(cSql)
 
     // Gera os 3 primeiros meses (2025-01, 2025-02, 2025-03)
+    // AAdd, nao aMeses[n] := -- atribuir por indice num array vazio nao
+    // cresce o array, e Len(aMeses) ficava 1: o fixture so criava cobrancas
+    // de 2025-01 e o teste cobrava 3 meses.
     aMeses := {}
-    aMeses[1] := "2025-01"
-    aMeses[2] := "2025-02"
-    aMeses[3] := "2025-03"
+    AAdd(aMeses, "2025-01")
+    AAdd(aMeses, "2025-02")
+    AAdd(aMeses, "2025-03")
 
     For i := 1 To Len(aMeses)
         cMesAtual := aMeses[i]
@@ -310,7 +320,7 @@ User Function TestGcGerarPortalAgenda()
     Next i
 
     // Step 3: Chama função
-    nCount := U_GcGerarPortalAgenda(cCompet)
+    nCount := GcGerarPortalAgenda(cCompet)
     ConOut("GcGerarPortalAgenda returned: " + cValToChar(nCount))
 
     // Step 4: Valida resultado (espera 12 meses * 3 unidades = 36 registros)
@@ -323,7 +333,7 @@ User Function TestGcGerarPortalAgenda()
     // Step 5: Verifica registros inseridos para o primeiro mês
     cSql := "SELECT COUNT(*) as CNT FROM RPT_PORTAL_AGENDA WHERE REA_COMPETENCIA = '2025-01' AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
-    If Len(aResult) > 0 .And. aResult[1]:CNT >= 3
+    If Len(aResult) > 0 .And. Val(aResult[1]:CNT) >= 3
         ConOut("[PASS] At least 3 records inserted into RPT_PORTAL_AGENDA for 2025-01")
     Else
         ConOut("[ERROR] [FAIL] Expected at least 3 records for 2025-01 in RPT_PORTAL_AGENDA")
@@ -334,10 +344,10 @@ User Function TestGcGerarPortalAgenda()
     cSql := "SELECT REA_VALOR, REA_COMPETENCIA FROM RPT_PORTAL_AGENDA WHERE REA_COMPETENCIA = '2025-01' AND REA_UNIDADE = '101' AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
     If Len(aResult) > 0
-        If aResult[1]:REA_VALOR = 1000.00 .And. aResult[1]:REA_COMPETENCIA = "2025-01"
+        If Val(aResult[1]:REA_VALOR) = 1000.00 .And. aResult[1]:REA_COMPETENCIA = "2025-01"
             ConOut("[PASS] Unit 101 data correct: value=1000.00, competencia=2025-01")
         Else
-            ConOut("[ERROR] [FAIL] Unit 101 data incorrect: value=" + cValToChar(aResult[1]:REA_VALOR) + ", competencia=" + aResult[1]:REA_COMPETENCIA)
+            ConOut("[ERROR] [FAIL] Unit 101 data incorrect: value=" + cValToChar(Val(aResult[1]:REA_VALOR)) + ", competencia=" + aResult[1]:REA_COMPETENCIA)
             Return .F.
         EndIf
     Else
@@ -348,8 +358,8 @@ User Function TestGcGerarPortalAgenda()
     // Step 7: Verifica que foram criados registros para meses subsequentes (2025-02)
     cSql := "SELECT COUNT(*) as CNT FROM RPT_PORTAL_AGENDA WHERE REA_COMPETENCIA = '2025-02' AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
-    If Len(aResult) > 0 .And. aResult[1]:CNT >= 3
-        ConOut("[PASS] Records created for 2025-02: " + cValToChar(aResult[1]:CNT) + " records")
+    If Len(aResult) > 0 .And. Val(aResult[1]:CNT) >= 3
+        ConOut("[PASS] Records created for 2025-02: " + cValToChar(Val(aResult[1]:CNT)) + " records")
     Else
         ConOut("[ERROR] [FAIL] Expected at least 3 records for 2025-02")
         Return .F.
@@ -386,7 +396,14 @@ User Function TestPeriodClosureGeneratesSnapshots()
     TCSqlExec(cSql)
     cSql := "DELETE FROM COB WHERE COB_COMPET = '" + cCompet + "'"
     TCSqlExec(cSql)
-    cSql := "DELETE FROM LANCAMENTOS WHERE LAN_EXERCICIO = '" + cCompet + "'"
+    // Ordem importa: RATEIO_DETALHE aponta para LANCAMENTOS, e LANCAMENTOS
+    // aponta para EXERCICIO. Apagar o exercicio seguinte sem antes apagar os
+    // lancamentos dele (deixados por suites anteriores, que fecham periodos e
+    // criam o proximo) estourava FOREIGN KEY constraint failed.
+    cSql := "DELETE FROM RATEIO_DETALHE WHERE RAT_LANCAMENTO IN ("
+    cSql += "SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_EXERCICIO IN ('" + cCompet + "', '" + cProxCompet + "'))"
+    TCSqlExec(cSql)
+    cSql := "DELETE FROM LANCAMENTOS WHERE LAN_EXERCICIO IN ('" + cCompet + "', '" + cProxCompet + "')"
     TCSqlExec(cSql)
     cSql := "DELETE FROM EXERCICIO WHERE EXE_CODIGO IN ('" + cCompet + "', '" + cProxCompet + "')"
     TCSqlExec(cSql)
@@ -465,14 +482,14 @@ User Function TestPeriodClosureGeneratesSnapshots()
     // Step 5: Verifica que os snapshots NÃO existem antes do fechamento
     cSql := "SELECT COUNT(*) as CNT FROM RPT_PORTAL_EXTRATOS WHERE REX_COMPETENCIA = '" + cCompet + "' AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
-    If Len(aResult) > 0 .And. aResult[1]:CNT = 0
+    If Len(aResult) > 0 .And. Val(aResult[1]:CNT) = 0
         ConOut("Pre-closure check: RPT_PORTAL_EXTRATOS is empty (as expected)")
     Else
         ConOut("[WARN] Pre-closure check: RPT_PORTAL_EXTRATOS already has records")
     EndIf
 
     // Step 6: Chama GcFecharPeriodo() que deve gerar os snapshots
-    If U_GcFecharPeriodo(cCompet)
+    If GcFecharPeriodo(cCompet)
         ConOut("Period " + cCompet + " closed successfully")
     Else
         ConOut("[ERROR] [FAIL] Period closure failed for " + cCompet)
@@ -482,7 +499,7 @@ User Function TestPeriodClosureGeneratesSnapshots()
     // Step 7: Verifica se o exercício foi marcado como fechado
     cSql := "SELECT EXE_FECHADO FROM EXERCICIO WHERE EXE_CODIGO = '" + cCompet + "' AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
-    If Len(aResult) > 0 .And. aResult[1]:EXE_FECHADO = 1
+    If Len(aResult) > 0 .And. Val(aResult[1]:EXE_FECHADO) = 1
         ConOut("[PASS] Exercise marked as closed")
     Else
         ConOut("[ERROR] [FAIL] Exercise not marked as closed")
@@ -492,7 +509,7 @@ User Function TestPeriodClosureGeneratesSnapshots()
     // Step 8: Verifica se o próximo exercício foi criado
     cSql := "SELECT EXE_ATIVO FROM EXERCICIO WHERE EXE_CODIGO = '" + cProxCompet + "' AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
-    If Len(aResult) > 0 .And. aResult[1]:EXE_ATIVO = 1
+    If Len(aResult) > 0 .And. Val(aResult[1]:EXE_ATIVO) = 1
         ConOut("[PASS] Next exercise created and set as active")
     Else
         ConOut("[ERROR] [FAIL] Next exercise not created or not active")
@@ -503,7 +520,7 @@ User Function TestPeriodClosureGeneratesSnapshots()
     cSql := "SELECT COUNT(*) as CNT FROM RPT_PORTAL_EXTRATOS WHERE REX_COMPETENCIA = '" + cCompet + "' AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
     If Len(aResult) > 0
-        nExtratoCount := aResult[1]:CNT
+        nExtratoCount := Val(aResult[1]:CNT)
         If nExtratoCount >= 2
             ConOut("[PASS] Portal v2 extracts snapshot created: " + cValToChar(nExtratoCount) + " records")
         Else
@@ -519,7 +536,7 @@ User Function TestPeriodClosureGeneratesSnapshots()
     cSql := "SELECT COUNT(*) as CNT FROM RPT_PORTAL_AGENDA WHERE REA_COMPETENCIA = '" + cCompet + "' AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
     If Len(aResult) > 0
-        nAgendaCount := aResult[1]:CNT
+        nAgendaCount := Val(aResult[1]:CNT)
         If nAgendaCount >= 2
             ConOut("[PASS] Portal v2 agenda snapshot created: " + cValToChar(nAgendaCount) + " records")
         Else
@@ -535,10 +552,10 @@ User Function TestPeriodClosureGeneratesSnapshots()
     cSql := "SELECT REX_UNIDADE, REX_VALOR FROM RPT_PORTAL_EXTRATOS WHERE REX_COMPETENCIA = '" + cCompet + "' AND REX_UNIDADE = '101' AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
     If Len(aResult) > 0
-        If aResult[1]:REX_VALOR = 500.00
+        If Val(aResult[1]:REX_VALOR) = 500.00
             ConOut("[PASS] Extract snapshot data correct for Unit 101: value=500.00")
         Else
-            ConOut("[ERROR] [FAIL] Extract snapshot data incorrect for Unit 101: value=" + cValToChar(aResult[1]:REX_VALOR))
+            ConOut("[ERROR] [FAIL] Extract snapshot data incorrect for Unit 101: value=" + cValToChar(Val(aResult[1]:REX_VALOR)))
             Return .F.
         EndIf
     Else
@@ -567,7 +584,7 @@ Return .T.
 User Function TestE2EPortalFlow()
     Local cCompet := "2025-03" as character
     Local cProxCompet := "2025-04" as character
-    Local cToken := "e2e-test-token-" + SubStr(FWTimeStamp(), 1, 14) as character
+    Local cToken := "e2e-test-token-" + DtoS(Date()) + StrTran(Left(Time(), 8), ":", "") as character
     Local cUnitCode := "E2E_UNIT_001" as character
     Local cSql := "" as character
     Local aResult := {} as array
@@ -582,7 +599,7 @@ User Function TestE2EPortalFlow()
 
     // Passo 1: Limpa dados de testes anteriores
     ConOut("Step 1: Cleanup previous test data")
-    cSql := "DELETE FROM GCT_TOKEN WHERE GCT_TOKEN LIKE 'e2e-test-token-%'"
+    cSql := "DELETE FROM GCT_TOKEN WHERE TOKEN LIKE 'e2e-test-token-%'"
     TCSqlExec(cSql)
     cSql := "DELETE FROM RPT_PORTAL_EXTRATOS WHERE REX_COMPETENCIA IN ('" + cCompet + "', '" + cProxCompet + "')"
     TCSqlExec(cSql)
@@ -600,13 +617,24 @@ User Function TestE2EPortalFlow()
     TCSqlExec(cSql)
     ConOut("[PASS] Previous test data cleaned")
 
+    // Passo 1b: Garante a unidade em UNI. RPT_PORTAL_EXTRATOS e
+    // RPT_PORTAL_AGENDA tem FOREIGN KEY para UNI(UNI_CODIGO); sem esta
+    // linha a geracao dos snapshots morria em FOREIGN KEY constraint failed.
+    cSql := "INSERT OR IGNORE INTO UNI (UNI_CODIGO, UNI_BLOCO, UNI_FRACAO, D_E_L_E_T_) VALUES ("
+    cSql += "'" + cUnitCode + "', 'E2E', 0.01, ' ')"
+    TCSqlExec(cSql)
+
     // Passo 2: Cria token válido na tabela GCT_TOKEN
     ConOut("Step 2: Create valid authentication token")
-    cSql := "INSERT INTO GCT_TOKEN (GCT_TOKEN, UNI_CODIGO, VALIDO_ATE, CRIADO_EM, USADO, D_E_L_E_T_) VALUES ("
+    // Colunas conforme schema.sql: a coluna e TOKEN (nao GCT_TOKEN), nao
+    // existe CRIADO_EM, e USR_LOGIN/CON_CODIGO/CRIPTADO sao NOT NULL.
+    cSql := "INSERT INTO GCT_TOKEN (TOKEN, USR_LOGIN, CON_CODIGO, UNI_CODIGO, CRIPTADO, VALIDO_ATE, USADO, D_E_L_E_T_) VALUES ("
     cSql += "'" + cToken + "', "
+    cSql += "'teste-portal', "
+    cSql += "'C001', "
     cSql += "'" + cUnitCode + "', "
-    cSql += "'" + DtoS(Date() + 2) + "', "  // válido por 2 dias
-    cSql += "datetime('now'), "
+    cSql += "'0', "
+    cSql += "datetime('now', '+2 days'), "  // válido por 2 dias
     cSql += "0, "
     cSql += "' ')"
     TCSqlExec(cSql)
@@ -670,11 +698,11 @@ User Function TestE2EPortalFlow()
 
     // Passo 6: Cria avisos via GcCriarAviso
     ConOut("Step 6: Create test avisos (notices)")
-    If !U_GcCriarAviso("E2E Test Aviso 1", "This is the first E2E test notice")
+    If !GcCriarAviso("E2E Test Aviso 1", "This is the first E2E test notice")
         ConOut("[ERROR] [FAIL] Failed to create first aviso")
         Return .F.
     EndIf
-    If !U_GcCriarAviso("E2E Test Aviso 2", "This is the second E2E test notice")
+    If !GcCriarAviso("E2E Test Aviso 2", "This is the second E2E test notice")
         ConOut("[ERROR] [FAIL] Failed to create second aviso")
         Return .F.
     EndIf
@@ -682,7 +710,7 @@ User Function TestE2EPortalFlow()
 
     // Passo 7: Fecha período (deve gerar snapshots)
     ConOut("Step 7: Close period (triggers snapshot generation)")
-    If !U_GcFecharPeriodo(cCompet)
+    If !GcFecharPeriodo(cCompet)
         ConOut("[ERROR] [FAIL] Period closure failed")
         Return .F.
     EndIf
@@ -692,7 +720,7 @@ User Function TestE2EPortalFlow()
     ConOut("Step 8: Verify exercise was marked as closed")
     cSql := "SELECT EXE_FECHADO FROM EXERCICIO WHERE EXE_CODIGO = '" + cCompet + "' AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
-    If Len(aResult) > 0 .And. aResult[1]:EXE_FECHADO = 1
+    If Len(aResult) > 0 .And. Val(aResult[1]:EXE_FECHADO) = 1
         ConOut("[PASS] Exercise marked as closed")
     Else
         ConOut("[ERROR] [FAIL] Exercise not marked as closed")
@@ -703,7 +731,7 @@ User Function TestE2EPortalFlow()
     ConOut("Step 9: Verify next exercise was created")
     cSql := "SELECT EXE_ATIVO FROM EXERCICIO WHERE EXE_CODIGO = '" + cProxCompet + "' AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
-    If Len(aResult) > 0 .And. aResult[1]:EXE_ATIVO = 1
+    If Len(aResult) > 0 .And. Val(aResult[1]:EXE_ATIVO) = 1
         ConOut("[PASS] Next exercise created and active")
     Else
         ConOut("[ERROR] [FAIL] Next exercise not created or not active")
@@ -715,7 +743,7 @@ User Function TestE2EPortalFlow()
     cSql := "SELECT COUNT(*) as CNT FROM RPT_PORTAL_EXTRATOS WHERE REX_COMPETENCIA = '" + cCompet + "' AND REX_UNIDADE = '" + cUnitCode + "' AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
     If Len(aResult) > 0
-        nExtratoCount := aResult[1]:CNT
+        nExtratoCount := Val(aResult[1]:CNT)
         If nExtratoCount >= 1
             ConOut("[PASS] Extract snapshots created: " + cValToChar(nExtratoCount) + " records for unit " + cUnitCode)
         Else
@@ -732,7 +760,7 @@ User Function TestE2EPortalFlow()
     cSql := "SELECT COUNT(*) as CNT FROM RPT_PORTAL_AGENDA WHERE REA_UNIDADE = '" + cUnitCode + "' AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
     If Len(aResult) > 0
-        nAgendaCount := aResult[1]:CNT
+        nAgendaCount := Val(aResult[1]:CNT)
         If nAgendaCount >= 1
             ConOut("[PASS] Agenda snapshots created: " + cValToChar(nAgendaCount) + " records for unit " + cUnitCode)
         Else
@@ -749,7 +777,7 @@ User Function TestE2EPortalFlow()
     cSql := "SELECT COUNT(*) as CNT FROM AVISOS WHERE AVI_TITULO LIKE 'E2E Test%' AND AVI_ATIVO = 1 AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
     If Len(aResult) > 0
-        nAvisoCount := aResult[1]:CNT
+        nAvisoCount := Val(aResult[1]:CNT)
         If nAvisoCount >= 2
             ConOut("[PASS] Avisos created and available: " + cValToChar(nAvisoCount) + " notices")
         Else
@@ -763,7 +791,7 @@ User Function TestE2EPortalFlow()
 
     // Passo 13: Acessa portal via token (sem avaliar dados específicos, apenas autenticação)
     ConOut("Step 13: Access portal via token (authentication)")
-    If U_GcPortalCondominoV2(cToken)
+    If GcPortalCondominoV2(cToken)
         ConOut("[PASS] Portal accessed successfully with token")
     Else
         ConOut("[ERROR] [FAIL] Portal access failed with token")
@@ -772,10 +800,10 @@ User Function TestE2EPortalFlow()
 
     // Passo 14: Verifica que token foi marcado como usado
     ConOut("Step 14: Verify token was marked as used")
-    cSql := "SELECT USADO FROM GCT_TOKEN WHERE GCT_TOKEN = '" + cToken + "' AND D_E_L_E_T_ = ' '"
+    cSql := "SELECT USADO FROM GCT_TOKEN WHERE TOKEN = '" + cToken + "' AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
     If Len(aResult) > 0
-        If aResult[1]:USADO = 1
+        If Val(aResult[1]:USADO) = 1
             ConOut("[PASS] Token marked as used")
         Else
             ConOut("[WARN] Token not marked as used (may indicate issue with GcPortalCondominoV2)")
@@ -809,7 +837,7 @@ User Function TestGcCriarAviso()
     TCSqlExec(cSql)
 
     // Step 2: Testa criação de aviso válido
-    lResult := U_GcCriarAviso("Teste Aviso 1", "Este é um aviso de teste para validar a função GcCriarAviso")
+    lResult := GcCriarAviso("Teste Aviso 1", "Este é um aviso de teste para validar a função GcCriarAviso")
     If lResult
         ConOut("[PASS] Aviso criado com sucesso")
     Else
@@ -820,7 +848,7 @@ User Function TestGcCriarAviso()
     // Step 3: Verifica se o registro foi inserido
     cSql := "SELECT COUNT(*) as CNT FROM AVISOS WHERE AVI_TITULO = 'Teste Aviso 1' AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
-    If Len(aResult) > 0 .And. aResult[1]:CNT > 0
+    If Len(aResult) > 0 .And. Val(aResult[1]:CNT) > 0
         ConOut("[PASS] Aviso inserido na tabela AVISOS")
     Else
         ConOut("[ERROR] [FAIL] Aviso não encontrado em AVISOS")
@@ -831,10 +859,10 @@ User Function TestGcCriarAviso()
     cSql := "SELECT AVI_TITULO, AVI_CORPO, AVI_ATIVO FROM AVISOS WHERE AVI_TITULO = 'Teste Aviso 1' AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
     If Len(aResult) > 0
-        If aResult[1]:AVI_TITULO = "Teste Aviso 1" .And. aResult[1]:AVI_ATIVO = 1
+        If aResult[1]:AVI_TITULO = "Teste Aviso 1" .And. Val(aResult[1]:AVI_ATIVO) = 1
             ConOut("[PASS] Aviso criado com dados corretos: titulo=Teste Aviso 1, ativo=1")
         Else
-            ConOut("[ERROR] [FAIL] Dados do aviso incorretos: titulo=" + aResult[1]:AVI_TITULO + ", ativo=" + cValToChar(aResult[1]:AVI_ATIVO))
+            ConOut("[ERROR] [FAIL] Dados do aviso incorretos: titulo=" + aResult[1]:AVI_TITULO + ", ativo=" + cValToChar(Val(aResult[1]:AVI_ATIVO)))
             Return .F.
         EndIf
     Else
@@ -843,7 +871,7 @@ User Function TestGcCriarAviso()
     EndIf
 
     // Step 5: Testa validação - título vazio deve retornar .F.
-    lResult := U_GcCriarAviso("", "Corpo do aviso")
+    lResult := GcCriarAviso("", "Corpo do aviso")
     If !lResult
         ConOut("[PASS] Validação funciona: título vazio retorna .F.")
     Else
@@ -852,7 +880,7 @@ User Function TestGcCriarAviso()
     EndIf
 
     // Step 6: Testa validação - corpo vazio deve retornar .F.
-    lResult := U_GcCriarAviso("Título válido", "")
+    lResult := GcCriarAviso("Título válido", "")
     If !lResult
         ConOut("[PASS] Validação funciona: corpo vazio retorna .F.")
     Else
@@ -861,13 +889,13 @@ User Function TestGcCriarAviso()
     EndIf
 
     // Step 7: Cria múltiplos avisos para teste subsequente
-    U_GcCriarAviso("Teste Aviso 2", "Segundo aviso de teste")
-    U_GcCriarAviso("Teste Aviso 3", "Terceiro aviso de teste")
+    GcCriarAviso("Teste Aviso 2", "Segundo aviso de teste")
+    GcCriarAviso("Teste Aviso 3", "Terceiro aviso de teste")
 
     cSql := "SELECT COUNT(*) as CNT FROM AVISOS WHERE AVI_TITULO LIKE '%Teste%' AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
-    If Len(aResult) > 0 .And. aResult[1]:CNT >= 3
-        ConOut("[PASS] Múltiplos avisos criados: " + cValToChar(aResult[1]:CNT) + " avisos")
+    If Len(aResult) > 0 .And. Val(aResult[1]:CNT) >= 3
+        ConOut("[PASS] Múltiplos avisos criados: " + cValToChar(Val(aResult[1]:CNT)) + " avisos")
     Else
         ConOut("[ERROR] [FAIL] Esperava pelo menos 3 avisos")
         Return .F.
@@ -896,8 +924,8 @@ User Function TestGcArquivarAviso()
     TCSqlExec(cSql)
 
     // Step 2: Cria avisos de teste
-    U_GcCriarAviso("Arquivo Teste 1", "Aviso para ser arquivado")
-    U_GcCriarAviso("Arquivo Teste 2", "Outro aviso para ser arquivado")
+    GcCriarAviso("Arquivo Teste 1", "Aviso para ser arquivado")
+    GcCriarAviso("Arquivo Teste 2", "Outro aviso para ser arquivado")
 
     // Step 3: Obtém ID do primeiro aviso criado
     cSql := "SELECT AVI_ID FROM AVISOS WHERE AVI_TITULO = 'Arquivo Teste 1' AND D_E_L_E_T_ = ' ' ORDER BY AVI_ID DESC LIMIT 1"
@@ -912,7 +940,7 @@ User Function TestGcArquivarAviso()
     // Step 4: Verifica se aviso está ativo antes do arquivamento
     cSql := "SELECT AVI_ATIVO FROM AVISOS WHERE AVI_ID = " + cValToChar(nAvisoId) + " AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
-    If Len(aResult) > 0 .And. aResult[1]:AVI_ATIVO = 1
+    If Len(aResult) > 0 .And. Val(aResult[1]:AVI_ATIVO) = 1
         ConOut("[PASS] Aviso está ativo antes do arquivamento")
     Else
         ConOut("[ERROR] [FAIL] Aviso não está ativo antes do arquivamento")
@@ -920,7 +948,7 @@ User Function TestGcArquivarAviso()
     EndIf
 
     // Step 5: Chama função de arquivamento
-    lResult := U_GcArquivarAviso(nAvisoId)
+    lResult := GcArquivarAviso(nAvisoId)
     If lResult
         ConOut("[PASS] Função GcArquivarAviso retornou .T.")
     Else
@@ -931,7 +959,7 @@ User Function TestGcArquivarAviso()
     // Step 6: Verifica se aviso foi marcado como inativo
     cSql := "SELECT AVI_ATIVO FROM AVISOS WHERE AVI_ID = " + cValToChar(nAvisoId) + " AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
-    If Len(aResult) > 0 .And. aResult[1]:AVI_ATIVO = 0
+    If Len(aResult) > 0 .And. Val(aResult[1]:AVI_ATIVO) = 0
         ConOut("[PASS] Aviso foi marcado como inativo (AVI_ATIVO=0)")
     Else
         ConOut("[ERROR] [FAIL] Aviso não foi marcado como inativo")
@@ -939,7 +967,7 @@ User Function TestGcArquivarAviso()
     EndIf
 
     // Step 7: Testa validação - ID inválido deve retornar .F.
-    lResult := U_GcArquivarAviso(-1)
+    lResult := GcArquivarAviso(-1)
     If !lResult
         ConOut("[PASS] Validação funciona: ID negativo retorna .F.")
     Else
@@ -948,7 +976,7 @@ User Function TestGcArquivarAviso()
     EndIf
 
     // Step 8: Testa validação - ID inexistente deve retornar .F.
-    lResult := U_GcArquivarAviso(999999)
+    lResult := GcArquivarAviso(999999)
     If !lResult
         ConOut("[PASS] Validação funciona: ID inexistente retorna .F.")
     Else
@@ -961,7 +989,7 @@ User Function TestGcArquivarAviso()
     aResult := TCSqlQuery(cSql)
     If Len(aResult) > 0
         nAvisoId := aResult[1]:AVI_ID
-        lResult := U_GcArquivarAviso(nAvisoId)
+        lResult := GcArquivarAviso(nAvisoId)
         If lResult
             ConOut("[PASS] Segundo aviso também arquivado com sucesso")
         Else
@@ -973,7 +1001,7 @@ User Function TestGcArquivarAviso()
     // Step 10: Verifica que avisos ativos foram removidos da consulta
     cSql := "SELECT COUNT(*) as CNT FROM AVISOS WHERE AVI_TITULO LIKE '%Arquivo%' AND AVI_ATIVO = 1 AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
-    If Len(aResult) > 0 .And. aResult[1]:CNT = 0
+    If Len(aResult) > 0 .And. Val(aResult[1]:CNT) = 0
         ConOut("[PASS] Nenhum aviso Arquivo com AVI_ATIVO=1 encontrado")
     Else
         ConOut("[ERROR] [FAIL] Ainda existem avisos Arquivo com AVI_ATIVO=1")
@@ -998,7 +1026,6 @@ User Function TestGcPortalCondominoV2()
     Local cSql := "" as character
     Local aResult := {} as array
     Local lOk := .T. as logical
-    Local dValidoAte := Date() + 30 as date
     Local cValidoAteStr := "" as character
 
     ConOut("Test: GcPortalCondominoV2(token)")
@@ -1016,13 +1043,16 @@ User Function TestGcPortalCondominoV2()
     ConOut("Test data cleaned up")
 
     // Step 2: Insere token válido (não usado, válido por 30 dias)
-    cValidoAteStr := DtoS(dValidoAte)
-    cValidoAteStr := SubStr(cValidoAteStr, 1, 4) + "-" + SubStr(cValidoAteStr, 5, 2) + "-" + SubStr(cValidoAteStr, 7, 2) + " 23:59:59"
+    // Date() + 30 perde o tipo data no AdvPP e DtoS devolve "": a validade
+    // ia para o banco como "-- 23:59:59" e o token nascia invalido.
+    cValidoAteStr := TCSqlQuery("SELECT datetime('now', '+30 days') as DT")[1]:DT
 
-    cSql := "INSERT INTO GCT_TOKEN (TOKEN, UNI_CODIGO, CON_CODIGO, VALIDO_ATE, USADO, D_E_L_E_T_) VALUES ("
+    cSql := "INSERT INTO GCT_TOKEN (TOKEN, USR_LOGIN, UNI_CODIGO, CON_CODIGO, CRIPTADO, VALIDO_ATE, USADO, D_E_L_E_T_) VALUES ("
     cSql += "'" + cToken + "', "
+    cSql += "'teste-portal', "
     cSql += "'" + cUnitCode + "', "
     cSql += "'" + cConCode + "', "
+    cSql += "'0', "
     cSql += "'" + cValidoAteStr + "', "
     cSql += "0, "
     cSql += "' ')"
@@ -1071,7 +1101,7 @@ User Function TestGcPortalCondominoV2()
     ConOut("Test schedule inserted: 1 RPT_PORTAL_AGENDA for unit " + cUnitCode)
 
     // Step 6: Chama função GcPortalCondominoV2
-    If U_GcPortalCondominoV2(cToken)
+    If GcPortalCondominoV2(cToken)
         ConOut("GcPortalCondominoV2 returned .T. (authentication successful)")
     Else
         ConOut("[ERROR] [FAIL] GcPortalCondominoV2 returned .F.")
@@ -1081,7 +1111,7 @@ User Function TestGcPortalCondominoV2()
     // Step 7: Verifica se token foi marcado como usado
     cSql := "SELECT USADO FROM GCT_TOKEN WHERE TOKEN = '" + cToken + "' AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
-    If Len(aResult) > 0 .And. aResult[1]:USADO = 1
+    If Len(aResult) > 0 .And. Val(aResult[1]:USADO) = 1
         ConOut("[PASS] Token marked as used (USADO = 1)")
     Else
         ConOut("[ERROR] [FAIL] Token not marked as used")
@@ -1091,35 +1121,35 @@ User Function TestGcPortalCondominoV2()
     // Step 8: Verifica se dados de AVISOS foram recuperados (global, sem filtro de unidade)
     cSql := "SELECT COUNT(*) as CNT FROM AVISOS WHERE AVI_ATIVO = 1 AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
-    If Len(aResult) > 0 .And. aResult[1]:CNT = 2
+    If Len(aResult) > 0 .And. Val(aResult[1]:CNT) = 2
         ConOut("[PASS] 2 notices retrieved for unit " + cUnitCode)
     Else
-        ConOut("[ERROR] [FAIL] Expected 2 notices, got " + cValToChar(aResult[1]:CNT))
+        ConOut("[ERROR] [FAIL] Expected 2 notices, got " + cValToChar(Val(aResult[1]:CNT)))
         Return .F.
     EndIf
 
     // Step 9: Verifica se dados de RPT_PORTAL_EXTRATOS foram recuperados
     cSql := "SELECT COUNT(*) as CNT FROM RPT_PORTAL_EXTRATOS WHERE REX_UNIDADE = '" + cUnitCode + "' AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
-    If Len(aResult) > 0 .And. aResult[1]:CNT = 1
+    If Len(aResult) > 0 .And. Val(aResult[1]:CNT) = 1
         ConOut("[PASS] 1 extract retrieved for unit " + cUnitCode)
     Else
-        ConOut("[ERROR] [FAIL] Expected 1 extract, got " + cValToChar(aResult[1]:CNT))
+        ConOut("[ERROR] [FAIL] Expected 1 extract, got " + cValToChar(Val(aResult[1]:CNT)))
         Return .F.
     EndIf
 
     // Step 10: Verifica se dados de RPT_PORTAL_AGENDA foram recuperados
     cSql := "SELECT COUNT(*) as CNT FROM RPT_PORTAL_AGENDA WHERE REA_UNIDADE = '" + cUnitCode + "' AND D_E_L_E_T_ = ' '"
     aResult := TCSqlQuery(cSql)
-    If Len(aResult) > 0 .And. aResult[1]:CNT = 1
+    If Len(aResult) > 0 .And. Val(aResult[1]:CNT) = 1
         ConOut("[PASS] 1 schedule item retrieved for unit " + cUnitCode)
     Else
-        ConOut("[ERROR] [FAIL] Expected 1 schedule item, got " + cValToChar(aResult[1]:CNT))
+        ConOut("[ERROR] [FAIL] Expected 1 schedule item, got " + cValToChar(Val(aResult[1]:CNT)))
         Return .F.
     EndIf
 
     // Step 11: Verifica que token expira não pode ser usado novamente
-    If !U_GcPortalCondominoV2(cToken)
+    If !GcPortalCondominoV2(cToken)
         ConOut("[PASS] Token cannot be used twice (second attempt rejected)")
     Else
         ConOut("[ERROR] [FAIL] Token was reused after marking as used")
@@ -1128,3 +1158,8 @@ User Function TestGcPortalCondominoV2()
 
     ConOut("[PASS] TestGcPortalCondominoV2 completed successfully")
 Return .T.
+
+#include "../src/db.prw"
+#include "../src/contabil.prw"
+#include "../src/portal.prw"
+#include "../src/portal-v2.prw"

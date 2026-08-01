@@ -8,12 +8,21 @@
 // `advplc run` com "unknown function: GcSqlLit" mesmo com `advplc check`
 // passando limpo (check não pega isso).
 #include "totvs.ch"
-#include "../src/db.prw"
-#include "../src/fechamento.prw"
+
+// Os #include dos modulos ficam no FIM do arquivo, de proposito.
+// `advplc run` escolhe sozinho o ponto de entrada: a primeira User
+// Function cuja linha seja >= a primeira linha de codigo do arquivo raiz
+// (pkg/compiler/codegen.go). Como #include cola o texto incluido no lugar,
+// includes no topo empurram as funcoes dos modulos para antes do runner
+// deste arquivo -- e a suite inteira roda em silencio, executando algo
+// como GcSqlLit no lugar dos testes. Com os includes no fim, o runner
+// abaixo e sempre a primeira funcao do compilado. scripts/test.sh
+// confere isso a cada execucao.
 User Function FechamentoTest()
     Local lOk
 
     // Isola a competência de teste pra não colidir com dados reais
+    TCSqlExec("DELETE FROM COB WHERE COB_UNIDADE IN ('T01','T02')")
     TCSqlExec("DELETE FROM UNI WHERE UNI_CODIGO IN ('T01','T02')")
     TCSqlExec("DELETE FROM DES WHERE DES_COMPET = '2099-01'")
     TCSqlExec("DELETE FROM COB WHERE COB_COMPET = '2099-01'")
@@ -49,5 +58,9 @@ User Function FechamentoTest()
     TCSqlExec("DELETE FROM DES WHERE DES_COMPET = '2099-01'")
     TCSqlExec("DELETE FROM COB WHERE COB_COMPET = '2099-02'")
     TCSqlExec("DELETE FROM DES WHERE DES_COMPET = '2099-02'")
+    TCSqlExec("DELETE FROM COB WHERE COB_UNIDADE IN ('T01','T02')")
     TCSqlExec("DELETE FROM UNI WHERE UNI_CODIGO IN ('T01','T02')")
 Return
+
+#include "../src/db.prw"
+#include "../src/fechamento.prw"

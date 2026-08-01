@@ -2,7 +2,6 @@
 // Detecta inconsistências (lançamentos órfãos, desequilíbrio, cobranças órfãs)
 // e registra em tabela AUDITORIA para rastreamento
 #include "totvs.ch"
-#include "contabil.prw"
 
 /*/{Protheus.doc} GcRegistrarAnomalia
     Registra uma anomalia detectada na auditoria.
@@ -60,13 +59,13 @@ User Function GcRegistrarAnomalia(cTipo, cDescricao, cSeveridade, cExercicio, nR
     cSql += "AUD_DATA_HORA, AUD_TIPO, AUD_DESCRICAO, AUD_SEVERIDADE, AUD_EXERCICIO, AUD_RECNO_LAN, AUD_RECNO_COB, D_E_L_E_T_"
     cSql += ") VALUES ("
     cSql += "datetime('now'), "
-    cSql += GcSqlLit(cTipo) + ", "
-    cSql += GcSqlLit(cDescricao) + ", "
-    cSql += GcSqlLit(cSeveridade) + ", "
-    cSql += GcSqlLit(cExercicio) + ", "
+    cSql += GcSqlVal(cTipo) + ", "
+    cSql += GcSqlVal(cDescricao) + ", "
+    cSql += GcSqlVal(cSeveridade) + ", "
+    cSql += GcSqlVal(cExercicio) + ", "
     cSql += cValToChar(nRecnoLan) + ", "
     cSql += cValToChar(nRecnoCob) + ", "
-    cSql += GcSqlLit(" ")
+    cSql += GcSqlVal(" ")
     cSql += ")"
 
     // Executa inserção
@@ -130,8 +129,8 @@ User Function GcAuditoriaFecharPeriodo(cExercicio)
     // 2. Busca lançamentos órfãos (AUTOMATICO_RATEIO sem cobrança correspondente)
     // Lançamento de rateio deveriam ter uma cobrança relacionada em COB
     aLanOrfaos := TCSqlQuery("SELECT L.LAN_ID, L.R_E_C_N_O_, L.LAN_DESCR, L.LAN_VALOR FROM LANCAMENTOS L " +
-        "WHERE L.LAN_EXERCICIO = " + GcSqlLit(cExercicio) + " AND L.LAN_TIPO = 'AUTOMATICO_RATEIO' AND L.D_E_L_E_T_ = ' ' " +
-        "AND NOT EXISTS (SELECT 1 FROM COB WHERE COB_COMPET = " + GcSqlLit(cExercicio) + " AND COB_VALOR = L.LAN_VALOR AND D_E_L_E_T_ = ' ')")
+        "WHERE L.LAN_EXERCICIO = " + GcSqlVal(cExercicio) + " AND L.LAN_TIPO = 'AUTOMATICO_RATEIO' AND L.D_E_L_E_T_ = ' ' " +
+        "AND NOT EXISTS (SELECT 1 FROM COB WHERE COB_COMPET = " + GcSqlVal(cExercicio) + " AND COB_VALOR = L.LAN_VALOR AND D_E_L_E_T_ = ' ')")
 
     For nI := 1 To Len(aLanOrfaos)
         nRecnoLan := aLanOrfaos[nI]:R_E_C_N_O_
@@ -143,7 +142,7 @@ User Function GcAuditoriaFecharPeriodo(cExercicio)
 
     // 3. Busca cobranças órfãs (COB sem lançamento contábil relacionado)
     aCobOrfaos := TCSqlQuery("SELECT C.R_E_C_N_O_, C.COB_UNIDADE, C.COB_COMPET, C.COB_VALOR FROM COB C " +
-        "WHERE C.COB_COMPET = " + GcSqlLit(cExercicio) + " AND C.D_E_L_E_T_ = ' ' " +
+        "WHERE C.COB_COMPET = " + GcSqlVal(cExercicio) + " AND C.D_E_L_E_T_ = ' ' " +
         "AND NOT EXISTS (SELECT 1 FROM LANCAMENTOS WHERE LAN_EXERCICIO = C.COB_COMPET AND LAN_VALOR = C.COB_VALOR AND D_E_L_E_T_ = ' ')")
 
     For nI := 1 To Len(aCobOrfaos)

@@ -2,6 +2,27 @@
 // barras e linha digitavel de boletos Itau (341) e Bradesco (237).
 #include "totvs.ch"
 
+// Os #include dos modulos ficam no FIM do arquivo, de proposito.
+// `advplc run` escolhe sozinho o ponto de entrada: a primeira User
+// Function cuja linha seja >= a primeira linha de codigo do arquivo raiz
+// (pkg/compiler/codegen.go). Como #include cola o texto incluido no lugar,
+// includes no topo empurram as funcoes dos modulos para antes do runner
+// deste arquivo -- e a suite inteira roda em silencio, executando algo
+// como GcSqlLit no lugar dos testes. Com os includes no fim, o runner
+// abaixo e sempre a primeira funcao do compilado. scripts/test.sh
+// confere isso a cada execucao.
+
+/*/{Protheus.doc} RunBoletoTests
+    Ponto de entrada da suite de boletos. Precisa ser a primeira User
+    Function do arquivo -- ver a nota sobre includes no topo.
+    @type Function
+    @author GesCon
+    @since 2026-07-31
+*/
+User Function RunBoletoTests()
+    BoletoTest()
+Return
+
 // Modulo 11 (pesos 2-7 da direita para esquerda)
 Static Function StBoletoCalcDv(cNum)
     Local nSom := 0, nPeso := 2, nI, nDig, cDigStr, nResto
@@ -339,3 +360,6 @@ User Function BoletoTest()
         ConOut("FAIL: " + Str(nErros) + " falhas detectadas")
     EndIf
 Return 0
+
+#include "../src/db.prw"
+#include "../src/boleto.prw"
