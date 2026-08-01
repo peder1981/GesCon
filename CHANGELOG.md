@@ -2,6 +2,38 @@
 
 Mudanças notáveis do GesCon.
 
+## [1.0.5] — 2026-08-01
+
+### Corrigido
+
+- **O executável não abria quando lançado de `Program Files`.** Tela vazia,
+  sem mensagem, tanto como administrador quanto como usuário comum. O
+  diretório de trabalho de um duplo clique é a própria pasta de instalação,
+  onde ninguém escreve: o SQLite não criava o banco, a fábrica devolvia
+  `nil`, o primeiro `TCSqlExec` do bootstrap derrubava o programa, e o stub
+  fechava a janela antes de ela pintar.
+
+  Confirmado pelo usuário sem querer: o mesmo `.exe`, lançado pelo
+  `diagnostico.bat` a partir da Área de Trabalho, subiu normalmente — a única
+  diferença era o diretório de trabalho gravável.
+
+  Corrigido no compilador (AdvPP 2.0.11): o banco de um app distribuído passa
+  a morar sempre na pasta de dados do usuário, e erro na partida mantém a
+  janela aberta com a mensagem em vez de sumir.
+
+### Adicionado
+
+- `scripts/windows/diagnostico.bat` — coleta `ERRORLEVEL`, saída redirecionada
+  (única forma de ver o stderr de um app GUI), execução com a janela Fyne
+  desligada e com o Mesa forçado, e os erros de aplicativo do log do Windows.
+
+### Atenção
+
+- O banco agora fica em `%AppData%\advpp\GesCon\advpp.db`, que é **por
+  usuário do Windows**. Numa máquina onde síndico e gestor usam contas
+  diferentes, cada um veria o seu. Para banco compartilhado, defina
+  `ADVPP_DB` apontando para um caminho comum.
+
 ## [1.0.4] — 2026-08-01
 
 ### Corrigido
