@@ -2,6 +2,33 @@
 
 Mudanças notáveis do GesCon.
 
+## [1.0.4] — 2026-08-01
+
+### Corrigido
+
+- **O executável distribuído abria contra um banco vazio.** Quem criava as
+  tabelas era `scripts/bootstrap-db.sh` — shell mais `sqlite3`, nenhum dos
+  dois presente num Windows comum. O `ResolveDatabasePath` do AdvPP cria
+  `advpp.db` no diretório de trabalho e nada mais: reproduzido no Linux com o
+  binário da 1.0.3, `.tables` voltava vazio. O defeito do OpenGL escondia
+  este; o release do Windows nunca foi utilizável de ponta a ponta.
+
+  O `schema.sql` passa a viajar dentro do executável (`src/schema-embed.prw`,
+  gerado por `scripts/gen-schema-embed.sh`) e é aplicado no arranque, antes de
+  qualquer tela. Como o schema é idempotente por contrato — e `check.sh`
+  reprova o build se deixar de ser — ele roda sempre, o que também faz
+  aparecerem sozinhas as tabelas novas de um release novo em banco antigo.
+  `check.sh` ganhou a trava que reprova o gerado fora de sincronia.
+
+### Adicionado
+
+- **Instalador do Windows** (`GesCon-Setup-<versão>.exe`, Inno Setup).
+  Resolve o que o zip não resolvia: pasta de dados gravável e compartilhada
+  em `C:\ProgramData\GesCon` — o banco é do condomínio, não de cada conta do
+  Windows —, atalho no menu Iniciar, desinstalação, e o Mesa3D como opção
+  marcada na instalação, pré-selecionada quando não há driver OpenGL
+  registrado. O `.zip` continua publicado.
+
 ## [1.0.3] — 2026-08-01
 
 ### Corrigido

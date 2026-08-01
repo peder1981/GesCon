@@ -4,6 +4,7 @@
 // administrador (GcLogin) gate na frente do menu — sem papéis/permissões.
 #include "totvs.ch"
 #include "src/db.prw"
+#include "src/schema-embed.prw"
 #include "src/login.prw"
 #include "src/unidades.prw"
 #include "src/condominos.prw"
@@ -49,6 +50,10 @@ User Function GesCon()
     Private g_lAutoPortal  := .F.
 
     ConOut("GesCon — Sistema de Gestão Condominial")
+
+    // Antes de qualquer tela: sem isto o executável distribuído abre a
+    // tela de login contra um banco sem tabela nenhuma.
+    GcBootstrapDB()
 
     // Caminho de acesso: admin (login) ou condômino (token)
     Local aEscolha := {"Administrador", "Sou condômino"}

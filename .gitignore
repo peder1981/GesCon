@@ -10,3 +10,12 @@ GesConApp-*
 .vscode/
 .idea/
 node_modules/
+
+# Subprodutos do empacotamento Windows (gerados no runner, nunca versionados).
+# Barra inicial de proposito: /gescon.iss e a copia de trabalho na raiz, o
+# fonte versionado e installer/gescon.iss.
+/gescon.iss
+/mesa/
+/mesa.7z
+GesCon-Setup-*.exe
+GesConApp-windows-amd64.zip
