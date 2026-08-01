@@ -2,6 +2,27 @@
 
 Mudanças notáveis do GesCon.
 
+## [1.0.8] — 2026-08-01
+
+### Corrigido
+
+- **O lançador passa a resolver o OpenGL sozinho, em execução.** Nem instalar
+  nem deixar de instalar o Mesa3D acerta sempre: nesta VM QEMU/QXL o
+  `advpp-ide` morre no carregador quando o Mesa está ao lado dele, e o GesCon
+  só abre quando está — a mesma máquina precisa de respostas opostas para dois
+  binários. E o instalador não tem como decidir: adivinhar pelo registro se há
+  driver de vídeo já errou, porque o QXL registra driver e não oferece OpenGL.
+
+  Agora o lançador executa o programa, e se ele falhar reclamando de OpenGL
+  (`WGL`, `window creation error`, `APIUnavailable`), copia o Mesa de `mesa\`
+  para junto do executável e tenta de novo. Máquina com OpenGL nunca carrega
+  o Mesa; máquina sem ele se conserta na primeira execução, sem checkbox e sem
+  ninguém decidir nada. O instalador deixa `{app}\app` gravável para o usuário
+  comum exatamente por isso.
+
+  Erro não reconhecido continua virando caixa de diálogo com a saída do
+  programa, gravada também em `ProgramData\GesCon\gescon-erro.txt`.
+
 ## [1.0.7] — 2026-08-01
 
 ### Corrigido

@@ -74,6 +74,10 @@ Source: "installer\Desativar-renderizacao-por-software.bat"; DestDir: "{app}"; F
 
 [Dirs]
 Name: "{commonappdata}\GesCon"; Permissions: users-modify
+; Gravavel pelo usuario comum de proposito: e onde o lancador copia o Mesa3D
+; quando descobre, em execucao, que a maquina nao tem OpenGL. Sem isto a
+; recuperacao automatica exigiria elevacao a cada tentativa.
+Name: "{app}\app"; Permissions: users-modify
 
 [Icons]
 ; Apontam para o lancador, que e quem define ADVPP_DB. Ele e um binario do
