@@ -1,3 +1,13 @@
+// NÃO ALCANÇÁVEL PELO MENU, DE PROPÓSITO.
+//
+// GcValidarToken, GcValidarLoginPortal e GcInvalidarToken foram escritas
+// para a autenticação do portal do condômino, que está adiada: o portal web
+// saiu do repositório e o acesso de condômino dentro do app usa a via mais
+// simples de src/portal.prw (GcAuthPortalToken).
+//
+// Ficam aqui, compiladas e cobertas por tests/auditoria_test.prw, porque são
+// a base pronta de quando o portal voltar à pauta. scripts/check.sh conhece
+// esta lista e não as acusa como código morto.
 // src/auth-primitives.prw — Portal v2 auth primitives (Task 1.5, prerequisite
 // for Task 2's REST auth endpoints in src/auditoria-rest.prw).
 // Non-interactive equivalents of the interactive admin flows already in

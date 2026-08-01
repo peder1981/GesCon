@@ -22,6 +22,7 @@
 #include "src/boleto.prw"
 #include "src/plano-contas.prw"
 #include "src/exercicios.prw"
+#include "src/auditoria-menu.prw"
 
 /*/{Protheus.doc} GesCon
     Ponto de entrada do GesCon — sobe com `advplc serve gescon.prw`,
@@ -31,7 +32,9 @@
     @since 2026-07-24
 */
 User Function GesCon()
-    Local aMenu := {"Unidades", "Condôminos", "Despesas", "Cobranças", "Fechamento Mensal", "Mala Direta", "Relatórios", "Contabilidade", "Usuários", "Trocar Senha", "Sair"}
+    Local aMenu := {"Unidades", "Condôminos", "Despesas", "Cobranças", "Fechamento Mensal", ;
+        "Mala Direta", "Relatórios", "Contabilidade", "Auditoria", "Boletos", "Avisos", ;
+        "Usuários", "Trocar Senha", "Sair"}
     Local nOpcao
     Local nEscolha
     Local cCompetencia
@@ -73,7 +76,7 @@ User Function GesCon()
                     Case nOpcao == 3
                         GcDespesas()
                     Case nOpcao == 4
-                        GcCobrancas()
+                        GcMenuCobrancas()
                     Case nOpcao == 5
                         cCompetencia := FWGetText("Fechar qual competência? (YYYY-MM)", "")
                         If !Empty(cCompetencia)
@@ -96,8 +99,14 @@ User Function GesCon()
                     Case nOpcao == 8
                         GcMenuContabilidade()
                     Case nOpcao == 9
-                        GcMenuUsuarios()
+                        GcMenuAuditoria()
                     Case nOpcao == 10
+                        GcMenuBoletos()
+                    Case nOpcao == 11
+                        GcMenuAvisos()
+                    Case nOpcao == 12
+                        GcMenuUsuarios()
+                    Case nOpcao == 13
                         GcTrocarSenha()
                     Otherwise
                         Exit
@@ -164,8 +173,9 @@ Return
     @since 2026-07-30
 */
 User Function GcMenuContabilidade()
-    Local aMenu := {"Validar Integridade", "Gerar Balancete", "Auditar Período", "Fechar Período", ;
-        "Plano de Contas", "Tipos de Repartição", "Exercícios", "Abrir Exercício", "Voltar"}
+    Local aMenu := {"Lançamentos", "Validar Integridade", "Gerar Balancete", "Auditar Período", ;
+        "Fechar Período", "Plano de Contas", "Tipos de Repartição", "Exercícios", ;
+        "Abrir Exercício", "Voltar"}
     Local nOpcao := FWMenuSelect(aMenu, "Contabilidade")
     Local cExercicio
     Local lRet
@@ -174,6 +184,8 @@ User Function GcMenuContabilidade()
 
     Do Case
         Case nOpcao == 1
+            GcMenuLancamentos()
+        Case nOpcao == 2
             cExercicio := GcExercicioAtivo()
             If Empty(cExercicio)
                 MsgAlert("Nenhum exercício ativo.", "Contabilidade")
@@ -185,7 +197,7 @@ User Function GcMenuContabilidade()
                     MsgAlert("Exercício " + cExercicio + " apresenta desequilíbrio contábil.", "Validação de Integridade")
                 EndIf
             EndIf
-        Case nOpcao == 2
+        Case nOpcao == 3
             cExercicio := GcExercicioAtivo()
             If Empty(cExercicio)
                 MsgAlert("Nenhum exercício ativo.", "Contabilidade")
@@ -193,7 +205,7 @@ User Function GcMenuContabilidade()
                 nSaldo := GcGerarBalancetePeriodo(cExercicio)
                 MsgInfo("Balancete de " + cExercicio + " gerado (saldo=" + cValToChar(nSaldo) + ").", "Gerar Balancete")
             EndIf
-        Case nOpcao == 3
+        Case nOpcao == 4
             cExercicio := GcExercicioAtivo()
             If Empty(cExercicio)
                 MsgAlert("Nenhum exercício ativo.", "Contabilidade")
@@ -205,7 +217,7 @@ User Function GcMenuContabilidade()
                     MsgAlert("Auditoria detectou " + cValToChar(nAnomalias) + " anomalias críticas no exercício " + cExercicio + ".", "Auditoria")
                 EndIf
             EndIf
-        Case nOpcao == 4
+        Case nOpcao == 5
             cExercicio := GcExercicioAtivo()
             If Empty(cExercicio)
                 MsgAlert("Nenhum exercício ativo.", "Contabilidade")
@@ -217,13 +229,132 @@ User Function GcMenuContabilidade()
                     MsgAlert("Não foi possível fechar período " + cExercicio + ".", "Fechamento")
                 EndIf
             EndIf
-        Case nOpcao == 5
-            GcPlanoContas()
         Case nOpcao == 6
-            GcReparticao()
+            GcPlanoContas()
         Case nOpcao == 7
-            GcExercicios()
+            GcReparticao()
         Case nOpcao == 8
+            GcExercicios()
+        Case nOpcao == 9
             GcAbrirExercicio()
+    EndCase
+Return
+
+/*/{Protheus.doc} GcMenuCobrancas
+    Submenu de cobranças: consulta em grade e registro de pagamento.
+    O registro de pagamento precisa de uma cobrança escolhida, o que o
+    FWMBrowse não devolve -- daí GcSelecionarCobranca.
+    @type Function
+    @author GesCon
+    @since 2026-07-31
+*/
+User Function GcMenuCobrancas()
+    Local aMenu := {"Consultar Cobranças", "Registrar Pagamento", "Voltar"}
+    Local nOpcao := FWMenuSelect(aMenu, "Cobranças")
+    Local nRecno := 0
+    Local cData  := ""
+
+    Do Case
+        Case nOpcao == 1
+            GcCobrancas()
+        Case nOpcao == 2
+            nRecno := GcSelecionarCobranca("pendente", "Registrar pagamento de qual cobrança?")
+            If nRecno > 0
+                cData := AllTrim(FWGetText("Data do pagamento (AAAAMMDD):", DtoS(Date())))
+                If Len(cData) != 8
+                    MsgAlert("Data deve estar no formato AAAAMMDD.", "Registrar Pagamento")
+                Else
+                    If GcRegistrarPagamento(nRecno, SToD(cData))
+                        MsgInfo("Pagamento registrado.", "Registrar Pagamento")
+                    Else
+                        MsgAlert("Não foi possível registrar o pagamento.", "Registrar Pagamento")
+                    EndIf
+                EndIf
+            EndIf
+    EndCase
+Return
+
+/*/{Protheus.doc} GcMenuBoletos
+    Submenu de boletos: configuração bancária e emissão por cobrança.
+    @type Function
+    @author GesCon
+    @since 2026-07-31
+*/
+User Function GcMenuBoletos()
+    Local aMenu := {"Configurar Dados Bancários", "Gerar Boleto de uma Cobrança", "Voltar"}
+    Local nOpcao := FWMenuSelect(aMenu, "Boletos")
+    Local nRecno := 0
+
+    Do Case
+        Case nOpcao == 1
+            GcBoletoConfigurar()
+        Case nOpcao == 2
+            nRecno := GcSelecionarCobranca("", "Gerar boleto de qual cobrança?")
+            If nRecno > 0
+                GcBoletoGera(nRecno)
+            EndIf
+    EndCase
+Return
+
+/*/{Protheus.doc} GcMenuAvisos
+    Submenu de avisos do condomínio: consulta, criação e arquivamento.
+    @type Function
+    @author GesCon
+    @since 2026-07-31
+*/
+User Function GcMenuAvisos()
+    Local aMenu := {"Consultar Avisos", "Criar Aviso", "Arquivar Aviso", "Voltar"}
+    Local nOpcao := FWMenuSelect(aMenu, "Avisos")
+    Local oBrowse
+    Local cTitulo := ""
+    Local cCorpo  := ""
+    Local aAvisos := {}
+    Local aItens  := {}
+    Local nI      := 0
+    Local nEscolha := 0
+
+    Do Case
+        Case nOpcao == 1
+            oBrowse := FWMBrowse():New()
+            oBrowse:SetAlias("AVISOS")
+            oBrowse:SetDescription("Avisos do Condomínio")
+            oBrowse:Activate()
+        Case nOpcao == 2
+            cTitulo := AllTrim(FWGetText("Título do aviso:", ""))
+            If Empty(cTitulo)
+                Return
+            EndIf
+            cCorpo := AllTrim(FWGetText("Texto do aviso:", ""))
+            If Empty(cCorpo)
+                Return
+            EndIf
+            If GcCriarAviso(cTitulo, cCorpo)
+                MsgInfo("Aviso publicado.", "Criar Aviso")
+            Else
+                MsgAlert("Não foi possível publicar o aviso.", "Criar Aviso")
+            EndIf
+        Case nOpcao == 3
+            aAvisos := TCSqlQuery("SELECT AVI_ID, AVI_TITULO FROM AVISOS " + ;
+                "WHERE AVI_ATIVO = 1 AND D_E_L_E_T_ = ' ' ORDER BY AVI_DATA_CRIACAO DESC")
+
+            If Len(aAvisos) == 0
+                MsgInfo("Nenhum aviso ativo.", "Arquivar Aviso")
+                Return
+            EndIf
+
+            For nI := 1 To Len(aAvisos)
+                AAdd(aItens, AllTrim(aAvisos[nI]["AVI_TITULO"]))
+            Next nI
+            AAdd(aItens, "Voltar")
+
+            nEscolha := FWMenuSelect(aItens, "Arquivar qual aviso?")
+
+            If nEscolha > 0 .And. nEscolha <= Len(aAvisos)
+                If GcArquivarAviso(Val(aAvisos[nEscolha]["AVI_ID"]))
+                    MsgInfo("Aviso arquivado.", "Arquivar Aviso")
+                Else
+                    MsgAlert("Não foi possível arquivar o aviso.", "Arquivar Aviso")
+                EndIf
+            EndIf
     EndCase
 Return

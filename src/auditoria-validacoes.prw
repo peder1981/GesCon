@@ -319,6 +319,14 @@ User Function GcAuditarPeriodoCompleto(cPeriodo as character) as logical
 
   GcAtualizarDashboardCache(cPeriodo)
 
+  // Desequilibrio contabil e o unico achado que nao pode esperar revisao:
+  // debitos != creditos invalida o balancete inteiro do periodo. Vira
+  // alerta CRITICO, visivel em Auditoria > Alertas.
+  If GcValidarDesequilibrioContabil(cPeriodo)
+    GcCriarAlertaCritico("CRITICO", "Desequilibrio contabil no periodo " + cPeriodo + ;
+      ": a soma dos debitos difere da soma dos creditos.")
+  EndIf
+
 Return lAnomaliaEncontrada
 
 /*{Protheus.doc}

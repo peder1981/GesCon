@@ -210,8 +210,10 @@ Return lOk
 User Function PortalTest()
     Local lTodosOk := .T.
     Local cTokenTest := "e2e-" + GcGerarTokenId()
-    Local dValidade  := Date() + 2
-    Local cValidade  := GcDateToIso(dValidade) + " 23:59:59"
+    // A conta de dias fica com o SQLite: no AdvPP, Date() + 2 perde o tipo
+    // data e DtoS() devolve "" -- a validade virava "-- 23:59:59" e o token
+    // nascia invalido, o mesmo defeito que havia em GcGerarToken.
+    Local cValidade  := TCSqlQuery("SELECT datetime('now', '+2 days') as DT")[1]:DT
 
     // ========================================
     // Step 0: Reset state (teardown prévio)
