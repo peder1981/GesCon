@@ -53,11 +53,11 @@ O banco padrão é `~/.advpp/ADVPP.db`. Para usar outro, defina `ADVPP_DB`.
 ./gescon
 ```
 
-**Use sempre `./gescon`, nunca `./GesConApp` direto.** O launcher exporta
-`ADVPP_FORCE_GUI=1`, que é obrigatório: sem ele, o executável lançado de um
-terminal detecta o TTY e escolhe a interface de terminal, que não implementa
-formulários — os menus funcionam e as telas de cadastro quebram. O porquê
-está em [docs/PADRAO_GUI.md](docs/PADRAO_GUI.md), seção 4.
+`./GesConApp` direto também funciona: o build usa `advplc build --gui`, que
+marca o programa como app desktop — a janela abre mesmo a partir de um
+terminal, e no Windows o `.exe` sai no subsistema GUI, sem console atrás.
+O launcher `./gescon` ficou como conveniência. O porquê está em
+[docs/PADRAO_GUI.md](docs/PADRAO_GUI.md), seção 4.
 
 ---
 
@@ -95,8 +95,9 @@ vez cada.
 
 ## 7. Problemas comuns
 
-**"MSDIALOG: requer o modo web"** — o app foi executado sem
-`ADVPP_FORCE_GUI=1`. Use `./gescon`.
+**"MSDIALOG: requer o modo web"** — o executável foi compilado sem
+`--gui` (ou é anterior ao AdvPP 2.0.7). Recompile com `scripts/build.sh`,
+ou contorne rodando por `./gescon`, que exporta `ADVPP_FORCE_GUI=1`.
 
 **Acentos aparecem trocados** — algum fonte voltou a CP-1252.
 `scripts/check.sh` acusa qual. Os fontes deste projeto são UTF-8; a

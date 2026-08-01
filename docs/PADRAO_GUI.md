@@ -103,14 +103,26 @@ causa não é o seu código.
 ## 4. Como executar
 
 ```bash
-scripts/build.sh          # gera GesConApp
-./gescon                  # abre a janela (exporta ADVPP_FORCE_GUI=1)
+scripts/build.sh          # gera GesConApp (advplc build --gui)
+./gescon                  # abre a janela
+./GesConApp               # idem — o binário já sabe que é app desktop
 ```
 
-`ADVPP_FORCE_GUI=1` é obrigatório. Sem ele, o executável lançado de um
-terminal detecta o TTY e escolhe a UI de terminal (`TerminalUIProvider`), que
-**não implementa diálogos** — os menus funcionam, os formulários quebram.
-Por isso o launcher existe; não chame `./GesConApp` direto.
+`scripts/build.sh` compila com `advplc build --gui`. A flag marca o programa
+como app desktop e resolve duas coisas de uma vez:
+
+- **A janela abre sempre**, mesmo lançado de um terminal. Sem ela o
+  executável detecta o TTY e escolhe a UI de terminal
+  (`TerminalUIProvider`), que **não implementa diálogos** — os menus
+  funcionam e os formulários quebram com "MSDIALOG: requer o modo web".
+- **No Windows o `.exe` sai no subsistema GUI** (`-ldflags -H=windowsgui`).
+  Sem isso ele é um executável de console: o duplo-clique aloca um console,
+  o `stdin` passa a parecer um TTY e cai exatamente na mesma armadilha — só
+  que lá não há como exportar variável de ambiente antes de clicar.
+
+O launcher `./gescon` continua existindo por conveniência e ainda exporta
+`ADVPP_FORCE_GUI=1`, que é o mesmo efeito por variável de ambiente — cinto de
+segurança para binário antigo, compilado antes da flag existir.
 
 Modos alternativos, para desenvolvimento:
 
