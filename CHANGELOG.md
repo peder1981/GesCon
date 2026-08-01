@@ -2,6 +2,16 @@
 
 Mudanças notáveis do GesCon.
 
+## [1.0.2] — 2026-08-01
+
+### Corrigido
+
+- **Cabeçalhos de coluna colidiam nas grades.** Em Despesas lia-se
+  `CompetênciaData Lançamento`; em Unidades, `Fração Ideal` encostava em
+  `Cód. Condômino`. A largura da coluna vinha só do `X3_TAMANHO`, que
+  descreve o dado e não o título. Corrigido no compilador (AdvPP 2.0.8): a
+  largura passa a ser o maior entre os dois.
+
 ## [1.0.1] — 2026-08-01
 
 Release corretivo. Duas falhas do 1.0.0 que só apareciam em uso real.
