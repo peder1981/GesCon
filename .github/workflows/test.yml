@@ -54,6 +54,11 @@ jobs:
           cd GesCon
           sqlite3 "$ADVPP_DB" < schema.sql
 
+      # `advplc build` gera um executavel Fyne, que precisa dos headers de
+      # OpenGL e X11 para compilar o stub com CGO.
+      - name: Dependencias do Fyne
+        run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev xorg-dev
+
       - name: Sintaxe de todos os fontes
         run: GesCon/scripts/check.sh
 
