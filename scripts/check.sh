@@ -30,6 +30,31 @@ done
 [ "$falhas" -eq 0 ] && echo "  ok"
 echo
 
+# schema.sql tem que poder ser reaplicado. Alem de reprovar erro de SQL, isto
+# pega os dois defeitos que ja escaparam: SX3 duplicado (o DELETE parcial que
+# so cobria 11 das 24 tabelas) e titulo com byte nao-UTF-8 (que o Fyne
+# renderiza como losango na grade toda).
+echo "schema.sql (idempotente, SX3 unico e UTF-8):"
+tmpdb=$(mktemp -u --suffix=.db)
+if ! sqlite3 -bail "$tmpdb" < schema.sql 2>&1 | sed 's/^/  /' \
+   || ! sqlite3 -bail "$tmpdb" < schema.sql 2>&1 | sed 's/^/  /'; then
+    echo "  FALHA schema.sql nao e idempotente"
+    falhas=$((falhas + 1))
+else
+    dups=$(sqlite3 "$tmpdb" "SELECT COUNT(*) FROM (SELECT 1 FROM SX3 GROUP BY X3_ARQUIVO,X3_CAMPO HAVING COUNT(*)>1);")
+    if [ "$dups" != "0" ]; then
+        printf '  FALHA %s campos SX3 duplicados\n' "$dups"
+        falhas=$((falhas + 1))
+    elif ! sqlite3 "$tmpdb" "SELECT X3_TITULO FROM SX3;" | iconv -f UTF-8 -t UTF-8 >/dev/null 2>&1; then
+        echo "  FALHA titulo SX3 com byte nao-UTF-8"
+        falhas=$((falhas + 1))
+    else
+        echo "  ok"
+    fi
+fi
+rm -f "$tmpdb" "$tmpdb"-wal "$tmpdb"-shm
+echo
+
 
 for f in gescon.prw src/*.prw tests/*.prw; do
     [ -f "$f" ] || continue
