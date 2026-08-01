@@ -59,6 +59,11 @@ terminal, e no Windows o `.exe` sai no subsistema GUI, sem console atrás.
 O launcher `./gescon` ficou como conveniência. O porquê está em
 [docs/PADRAO_GUI.md](docs/PADRAO_GUI.md), seção 4.
 
+No Windows, o release publica um **zip** — `GesConApp-windows-amd64.zip` —
+com o `.exe`, a pasta `mesa\` e o `GesCon-modo-compativel.bat`. Extraia tudo
+para a mesma pasta e execute o `.exe`. O `.bat` só é necessário em máquina
+sem driver de vídeo; veja a seção 7.
+
 ---
 
 ## 5. Verificação
@@ -98,6 +103,26 @@ vez cada.
 **"MSDIALOG: requer o modo web"** — o executável foi compilado sem
 `--gui` (ou é anterior ao AdvPP 2.0.7). Recompile com `scripts/build.sh`,
 ou contorne rodando por `./gescon`, que exporta `ADVPP_FORCE_GUI=1`.
+
+**"Fyne error: window creation error / WGL: The driver does not appear to
+support OpenGL"** (Windows) — o Windows está sem driver de vídeo real:
+máquina recém-instalada, ou máquina virtual sem aceleração. Nesse estado o
+sistema oferece só OpenGL 1.1 pelo *Microsoft Basic Display Adapter*, e o
+Fyne exige 2.0+. O programa não consegue se defender disso — o Fyne chama
+`os.Exit(1)` dentro do próprio driver, antes de qualquer código nosso rodar.
+
+Duas saídas, nesta ordem:
+
+1. **Instale o driver de vídeo** (Windows Update → *Drivers opcionais*, ou o
+   site do fabricante). É a melhor: mantém a aceleração por hardware.
+2. **Rode `GesCon-modo-compativel.bat`**, incluído no zip do Windows. Ele
+   copia o Mesa3D da pasta `mesa\` para junto do `.exe` e abre o programa —
+   desenho por software na CPU, suficiente para as grades e formulários
+   deste sistema. É a única saída no Hyper-V, que não oferece OpenGL nenhum.
+
+O Mesa fica em `mesa\` e não na raiz justamente porque o `opengl32.dll` dele
+substitui o driver em vez de encadear: na raiz, todo usuário perderia a placa
+de vídeo, inclusive quem tem uma boa.
 
 **Acentos aparecem trocados** — algum fonte voltou a CP-1252.
 `scripts/check.sh` acusa qual. Os fontes deste projeto são UTF-8; a
