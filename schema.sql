@@ -584,3 +584,52 @@ ALTER TABLE GCT_TOKEN ADD COLUMN TOK_PERFIL TEXT;
 -- Metadados SX3 para TOK_PERFIL
 INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
 ('GCT_TOKEN', 8, 'TOK_PERFIL', 'C', 20, 0, 'Perfil do Token');
+
+
+-- ============================================================================
+-- Metadados SX3 das tabelas de auditoria (Portal v3)
+-- Sem estas linhas o FWMBrowse abre ANOMALIA_LOG, ALERTA e DASHBOARD_CACHE
+-- sem coluna nenhuma -- as telas do menu Auditoria dependem disto.
+-- ============================================================================
+
+DELETE FROM SX3 WHERE X3_ARQUIVO IN ('ANOMALIA_LOG','ALERTA','DASHBOARD_CACHE');
+
+INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
+('ANOMALIA_LOG', 1, 'ANL_ID',            'N', 10, 0, 'ID'),
+('ANOMALIA_LOG', 2, 'ANL_TIPO',          'C', 40, 0, 'Tipo'),
+('ANOMALIA_LOG', 3, 'ANL_PERIODO',       'C',  7, 0, 'Período'),
+('ANOMALIA_LOG', 4, 'ANL_UNIDADE',       'C', 20, 0, 'Unidade'),
+('ANOMALIA_LOG', 5, 'ANL_VALOR',         'N', 14, 2, 'Valor'),
+('ANOMALIA_LOG', 6, 'ANL_DESCRICAO',     'C',255, 0, 'Descrição'),
+('ANOMALIA_LOG', 7, 'ANL_LANCAMENTO_ID', 'N', 10, 0, 'Lançamento'),
+('ANOMALIA_LOG', 8, 'ANL_COBRANCA_ID',   'N', 10, 0, 'Cobrança'),
+('ANOMALIA_LOG', 9, 'ANL_CRIADO_EM',     'C', 19, 0, 'Detectada em'),
+('ANOMALIA_LOG',10, 'ANL_RESOLVIDO_EM',  'C', 19, 0, 'Resolvida em'),
+('ANOMALIA_LOG',11, 'ANL_STATUS',        'C', 20, 0, 'Status');
+
+INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
+('ALERTA', 1, 'ALT_ID',          'N', 10, 0, 'ID'),
+('ALERTA', 2, 'ALT_TIPO',        'C', 20, 0, 'Tipo'),
+('ALERTA', 3, 'ALT_ANOMALIA_ID', 'N', 10, 0, 'Anomalia'),
+('ALERTA', 4, 'ALT_MENSAGEM',    'C',255, 0, 'Mensagem'),
+('ALERTA', 5, 'ALT_CRIADO_EM',   'C', 19, 0, 'Criado em'),
+('ALERTA', 6, 'ALT_VISTO',       'N',  1, 0, 'Visto'),
+('ALERTA', 7, 'ALT_VISTO_EM',    'C', 19, 0, 'Visto em');
+
+INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
+('DASHBOARD_CACHE', 1, 'DSH_ID',                  'N', 10, 0, 'ID'),
+('DASHBOARD_CACHE', 2, 'DSH_DATA',                'C', 10, 0, 'Data'),
+('DASHBOARD_CACHE', 3, 'DSH_PERIODO',             'C',  7, 0, 'Período'),
+('DASHBOARD_CACHE', 4, 'DSH_ANOMALIAS_TOTAL',     'N', 10, 0, 'Total'),
+('DASHBOARD_CACHE', 5, 'DSH_DESEQUILIBRIO_COUNT', 'N', 10, 0, 'Desequilíbrio'),
+('DASHBOARD_CACHE', 6, 'DSH_LAN_ORFAO_COUNT',     'N', 10, 0, 'Lanç. órfãos'),
+('DASHBOARD_CACHE', 7, 'DSH_COB_ORFAO_COUNT',     'N', 10, 0, 'Cobr. órfãs'),
+('DASHBOARD_CACHE', 8, 'DSH_RATEIO_INVALID_COUNT','N', 10, 0, 'Rateio inválido'),
+('DASHBOARD_CACHE', 9, 'DSH_TIMING_COUNT',        'N', 10, 0, 'Timing'),
+('DASHBOARD_CACHE',10, 'DSH_USUARIO_COUNT',       'N', 10, 0, 'Usuário'),
+('DASHBOARD_CACHE',11, 'DSH_ATUALIZADO_EM',       'C', 19, 0, 'Atualizado em');
+
+-- USR_LOGIN faltava: o browse de usuarios abria com uma coluna so.
+-- USR_SENHA fica fora de proposito -- hash nao se mostra em tela.
+INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
+('USR', 1, 'USR_LOGIN', 'C', 50, 0, 'Login');
