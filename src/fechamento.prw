@@ -5,7 +5,6 @@
 // registrada na spec: valor travado no fechamento, nunca recalculado
 // retroativamente.
 #include "totvs.ch"
-#include "db.prw"
 
 /*/{Protheus.doc} GcFecharMes
     Fecha uma competência: soma as despesas, rateia por fração ideal de

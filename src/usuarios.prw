@@ -1,7 +1,6 @@
 // src/usuarios.prw � gest�o de usu�rios e tokens tempor�rios do GesCon.
 // Menu "Usu�rios" com: Gerar Token, Revogar Token, Criar Usu�rio, Voltar.
 #include "totvs.ch"
-#include "db.prw"
 
 /*/{Protheus.doc} GcMenuUsuarios
     Menu de gest�o de usu�rios. Abre submenu com op��es: gerar token,
@@ -36,7 +35,7 @@ Return
 User Function GcGerarToken()
     Local aCond := TCSqlQuery("SELECT CON_CODIGO, CON_NOME, UNI_CODIGO, CON_EMAIL " + ;
         "FROM CON " + ;
-        "INNER JOIN UNI ON UNI_CODIGO = CON_UNI " + ;
+        "INNER JOIN UNI ON UNI.UNI_CONDOMINO = CON.CON_CODIGO " + ;
         "WHERE CON.D_E_L_E_T_ = ' ' " + ;
         "ORDER BY CON_NOME")
 
@@ -67,14 +66,17 @@ User Function GcGerarToken()
     // Gera token (UUID36 simplificado)
     Local cToken := GcGerarTokenId()
 
-    // Calcula validade +48h � armazena em ISO format (YYYY-MM-DD HH:MM:SS)
-    // para compara��o nativa com SQLite datetime('now')
-    Local dValidade := Date() + 2
-    Local cValidadeIso := GcDateToIso(dValidade) + " " + Left(Time(), 8)
-
-    // Grava CRIPTADO (data de cria��o) em ISO tamb�m
-    Local cLoginAtual := GetEnv("USER")
-    Local cCriadoIso  := GcDateToIso(Date()) + " " + Left(Time(), 8)
+    // Validade +48h em ISO (YYYY-MM-DD HH:MM:SS), para comparar direto com
+    // datetime('now') do SQLite.
+    //
+    // A conta de dias fica com o SQLite de proposito: no AdvPP, `Date() + 2`
+    // perde o tipo data e DtoS() devolve string vazia, o que gravava
+    // VALIDO_ATE = "-- 10:23:45" e fazia TODO token nascer invalido -- o
+    // portal do condomino nunca autenticava.
+    Local aDatas := TCSqlQuery("SELECT datetime('now') as CRIADO, datetime('now', '+2 days') as VALIDADE")
+    Local cCriadoIso   := aDatas[1]:CRIADO
+    Local cValidadeIso := aDatas[1]:VALIDADE
+    Local cLoginAtual  := GetEnv("USER")
 
     TCSqlExec("INSERT INTO GCT_TOKEN (TOKEN, USR_LOGIN, CON_CODIGO, UNI_CODIGO, CRIPTADO, VALIDO_ATE, USADO) " + ;
         "VALUES ('" + GcSqlLit(cToken) + "', '" + GcSqlLit(cLoginAtual) + "', '" + GcSqlLit(cConCod) + "', " + ;

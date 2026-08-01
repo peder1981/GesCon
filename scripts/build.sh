@@ -31,4 +31,4 @@ advplc build gescon.prw -o "$SAIDA"
 
 echo
 echo "build: $SAIDA gerado ($(du -h "$SAIDA" | cut -f1))"
-echo "Execute com ./gescon -- nunca ./$SAIDA direto (ver docs/PADRAO_GUI.md)."
+echo "Execute com ./gescon -- nunca o executavel direto (ver docs/PADRAO_GUI.md)."

@@ -6,7 +6,6 @@
 // login gate) — safe to call from a stateless REST handler: no
 // MsgInfo/MsgStop/MsgYesNo, no globals.
 #include "totvs.ch"
-#include "db.prw"
 
 /*/{Protheus.doc} GcValidarToken
     Valida um token da tabela GCT_TOKEN sem nenhuma interação com o

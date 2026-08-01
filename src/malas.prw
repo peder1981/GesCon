@@ -12,7 +12,6 @@
     @return nEnviados, numeric, quantidade de e-mails enviados com sucesso
 */
 #include "totvs.ch"
-#include "db.prw"
 
 User Function GcMalaDireta(cCompetencia)
     Local cHost := GetEnv("GESCON_SMTP_HOST", "")
