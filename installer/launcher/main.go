@@ -23,9 +23,11 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"unsafe"
 )
@@ -62,8 +64,16 @@ func main() {
 		ambiente = append(ambiente, "ADVPP_DB="+bancoCompartilhado)
 	}
 
+	// A saída do filho é capturada, não descartada. exec.Command sem Stdout
+	// definido joga tudo fora, e foi assim que a primeira versão deste
+	// lançador conseguiu produzir exatamente o silêncio que ela existia para
+	// eliminar: o programa morria, escrevia o motivo, e ninguém via.
+	var saida bytes.Buffer
+
 	cmd := exec.Command(alvo, os.Args[1:]...)
 	cmd.Env = ambiente
+	cmd.Stdout = &saida
+	cmd.Stderr = &saida
 	// Diretório de trabalho na pasta do programa. O app não depende mais
 	// disso desde o AdvPP 2.0.11, mas um diretório herdado de onde o atalho
 	// foi clicado não serve para nada e só cria surpresa.
@@ -72,7 +82,35 @@ func main() {
 	if err := cmd.Start(); err != nil {
 		fatal("Não foi possível iniciar o GesCon:\n" + alvo + "\n\n" + err.Error())
 	}
-	// Sem Wait: o lançador encerra e deixa o programa rodando sozinho.
+
+	// Espera de propósito, apesar de custar um processo parado na memória: é
+	// o que permite transformar "não abre e não diz nada" numa mensagem. Um
+	// programa que falha no carregamento (DLL ausente, OpenGL indisponível)
+	// morre em menos de um segundo e nunca chega a desenhar janela.
+	err = cmd.Wait()
+	if err == nil {
+		return
+	}
+
+	relato := "O GesCon encerrou com erro.\n\n" +
+		"Programa: " + alvo + "\n" +
+		"Banco: " + os.Getenv("ADVPP_DB") + "\n" +
+		"Código: " + err.Error() + "\n\n"
+	if texto := strings.TrimSpace(saida.String()); texto != "" {
+		relato += "Saída do programa:\n" + texto
+	} else {
+		relato += "O programa não escreveu nada. Encerrar sem mensagem, logo " +
+			"depois de iniciar, costuma ser falha no carregamento de DLL — " +
+			"no caso deste programa, quase sempre o OpenGL. Reinstale marcando " +
+			"\"Renderização por software\"."
+	}
+	// Grava também em arquivo: a caixa de diálogo não dá para copiar direito,
+	// e um relato que não pode ser colado numa conversa não ajuda ninguém.
+	if log := filepath.Join(filepath.Dir(bancoCompartilhado), "gescon-erro.txt"); log != "" {
+		_ = os.WriteFile(log, []byte(relato), 0o666)
+		relato += "\n\n(Também gravado em " + log + ")"
+	}
+	fatal(relato)
 }
 
 // fatal mostra uma caixa de diálogo do Windows e encerra. Chamada por
