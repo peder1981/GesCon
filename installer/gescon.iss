@@ -5,11 +5,14 @@
 ;
 ; Tres coisas que o zip solto nao resolvia:
 ;
-;  1. Pasta de dados gravavel. O executavel cria advpp.db no diretorio de
-;     trabalho. Extraido em Program Files, o banco nao teria onde nascer. Os
-;     atalhos apontam o WorkingDir para {commonappdata}\GesCon, com permissao
-;     de escrita para todos os usuarios -- de proposito compartilhado: sindico
-;     e gestor tem que ver o mesmo banco, nao um banco por conta do Windows.
+;  1. Banco compartilhado entre as contas do Windows. Desde o AdvPP 2.0.11 o
+;     banco de um app distribuido mora em %AppData%\advpp\<app>\, que e POR
+;     USUARIO -- estavel, mas errado para este caso: o banco e do condominio,
+;     nao da conta do Windows. Os atalhos rodam GesCon.cmd, que define
+;     ADVPP_DB apontando para {commonappdata}\GesCon, pasta com permissao de
+;     escrita para todos. A variavel fica no processo do lancador; definida no
+;     ambiente da maquina ela sequestraria tambem advplc/adveditor/advpp-ide,
+;     que devem seguir usando o banco do diretorio de projeto.
 ;
 ;  2. Mesa3D como opcao de instalacao, nao como copia manual de DLL. O
 ;     opengl32.dll do Mesa substitui o driver em vez de encadear, entao so
@@ -54,6 +57,7 @@ Name: "mesa"; Description: "Renderizacao por software (maquina virtual ou sem dr
 
 [Files]
 Source: "GesConApp-windows-amd64.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "installer\GesCon.cmd"; DestDir: "{app}"; Flags: ignoreversion
 ; Os DLLs vao para a pasta do executavel porque e la que o Windows procura
 ; DLL antes do System32 -- o diretorio de trabalho nao entra nessa busca.
 Source: "mesa\opengl32.dll"; DestDir: "{app}"; Tasks: mesa; Flags: ignoreversion
@@ -63,12 +67,19 @@ Source: "mesa\libgallium_wgl.dll"; DestDir: "{app}"; Tasks: mesa; Flags: ignorev
 Name: "{commonappdata}\GesCon"; Permissions: users-modify
 
 [Icons]
-Name: "{group}\GesCon"; Filename: "{app}\GesConApp-windows-amd64.exe"; WorkingDir: "{commonappdata}\GesCon"
+; Apontam para o .cmd, nao para o .exe, porque e o .cmd que define ADVPP_DB.
+; runminimized + o "start" de dentro dele: o cmd devolve na hora e encerra,
+; entao o console nao chega a aparecer. IconFilename tira o icone de terminal
+; e devolve o do proprio programa.
+Name: "{group}\GesCon"; Filename: "{app}\GesCon.cmd"; WorkingDir: "{app}"; \
+    IconFilename: "{app}\GesConApp-windows-amd64.exe"; Flags: runminimized
 Name: "{group}\Desinstalar o GesCon"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\GesCon"; Filename: "{app}\GesConApp-windows-amd64.exe"; WorkingDir: "{commonappdata}\GesCon"; Tasks: desktopicon
+Name: "{autodesktop}\GesCon"; Filename: "{app}\GesCon.cmd"; WorkingDir: "{app}"; \
+    IconFilename: "{app}\GesConApp-windows-amd64.exe"; Flags: runminimized; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\GesConApp-windows-amd64.exe"; WorkingDir: "{commonappdata}\GesCon"; Description: "Abrir o GesCon agora"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\GesCon.cmd"; WorkingDir: "{app}"; Description: "Abrir o GesCon agora"; \
+    Flags: nowait postinstall skipifsilent runminimized
 
 [UninstallDelete]
 ; So o que o instalador colocou. {commonappdata}\GesCon guarda o banco do
