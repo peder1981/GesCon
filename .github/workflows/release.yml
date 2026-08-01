@@ -39,10 +39,22 @@ jobs:
         with:
           path: GesCon
 
+      # Versao FIXA, lida de ADVPP_VERSION. Sem isto o checkout pegava o
+      # master do AdvPP no instante do build: reconstruir uma tag antiga
+      # produziria um binario diferente do publicado, e um commit no
+      # compilador mudaria o proximo release do GesCon sem passar por
+      # revisao deste lado. Para adotar um AdvPP novo, edite o arquivo --
+      # a mudanca fica no historico do GesCon, como qualquer dependencia.
+      - name: Le a versao do AdvPP
+        id: advpp
+        shell: bash
+        run: echo "versao=v$(tr -d ' \n\r' < GesCon/ADVPP_VERSION)" >> "$GITHUB_OUTPUT"
+
       - name: Checkout AdvPP (compilador)
         uses: actions/checkout@v4
         with:
           repository: peder1981/AdvPP
+          ref: ${{ steps.advpp.outputs.versao }}
           path: AdvPP
 
       - uses: actions/setup-go@v5
