@@ -1,12 +1,11 @@
-// src/portal.prw ó autenticaÁ„o do condÙmino via token + portal de leitura.
-// O condÙmino cola o token recebido do admin, acessa apenas as cobranÁas
+// src/portal.prw ‚Äî autentica√ß√£o do cond√¥mino via token + portal de leitura.
+// O cond√¥mino cola o token recebido do admin, acessa apenas as cobran√ßas
 // da sua unidade em modo read-only.
 #include "totvs.ch"
-#include "db.prw"
 
 /*/{Protheus.doc} GcPortalCondmino
-    Gateway do portal do condÙmino. Pede o token, valida, autentica e
-    abre o browse limitado de cobranÁas da unidade vinculada.
+    Gateway do portal do cond√¥mino. Pede o token, valida, autentica e
+    abre o browse limitado de cobran√ßas da unidade vinculada.
     @type User Function
     @author GesCon
     @since 2026-07-24
@@ -20,7 +19,7 @@ User Function GcPortalCondmino()
 
     Local lAutenticado := GcAuthPortalToken(cToken)
     If !lAutenticado
-        MsgStop("Token inv·lido, expirado ou j· utilizado.", "Portal CondÙmino")
+        MsgStop("Token inv√°lido, expirado ou j√° utilizado.", "Portal Cond√¥mino")
         Return .F.
     EndIf
 
@@ -30,7 +29,7 @@ Return .T.
 /*/{Protheus.doc} GcAuthPortalToken
     Autentica um token na tabela GCT_TOKEN.
     Verifica: TOKEN existente, D_E_L_E_T_=' ', VALIDO_ATE > agora, USADO=0.
-    Se v·lido: marca USADO=1, busca uni_codigo pela tabela, retorna .T.
+    Se v√°lido: marca USADO=1, busca uni_codigo pela tabela, retorna .T.
     @type User Function
     @author GesCon
     @since 2026-07-24
@@ -52,16 +51,16 @@ User Function GcAuthPortalToken(cToken)
     // Marca como usado
     TCSqlExec("UPDATE GCT_TOKEN SET USADO = 1 WHERE TOKEN = '" + GcSqlLit(cToken) + "' AND D_E_L_E_T_ = ' '")
 
-    // Salva unidade e condÙmino no escopo da sess„o
+    // Salva unidade e cond√¥mino no escopo da sess√£o
     g_cUniPortal := aToken[1]:UNI_CODIGO
     g_cConPortal := aToken[1]:CON_CODIGO
     g_lAutoPortal := .T.
 
-    MsgInfo("Autenticado como condÙmino " + g_cConPortal + ". Bem-vindo!", "Portal CondÙmino")
+    MsgInfo("Autenticado como cond√¥mino " + g_cConPortal + ". Bem-vindo!", "Portal Cond√¥mino")
 Return .T.
 
 /*/{Protheus.doc} GcPortalBrowse
-    Abre browse limitado: apenas cobranÁas da unidade do condÙmino autenticado.
+    Abre browse limitado: apenas cobran√ßas da unidade do cond√¥mino autenticado.
     Recalcula RPT_COND_COBRANCAS antes do browse.
     @type User Function
     @author GesCon
@@ -70,13 +69,13 @@ Return .T.
 User Function GcPortalBrowse()
     // Recalcula o snapshot da unidade atual
     Local nQtd := GcPortalCalcCobrancas()
-    Local cMsg := "CobranÁas encontradas: " + Str(nQtd)
+    Local cMsg := "Cobran√ßas encontradas: " + Str(nQtd)
 
-    MsgInfo(cMsg + Chr(10) + "Selecione 'Sair' no menu para encerrar.", "Portal CondÙmino")
+    MsgInfo(cMsg + Chr(10) + "Selecione 'Sair' no menu para encerrar.", "Portal Cond√¥mino")
 
     Local oBrowse := FWMBrowse():New()
     oBrowse:SetAlias("RPT_COND_COBRANCAS")
-    oBrowse:SetDescription("Minhas CobranÁas ó " + g_cConPortal + " (Portal CondÙmino)")
+    oBrowse:SetDescription("Minhas Cobran√ßas ‚Äî " + g_cConPortal + " (Portal Cond√¥mino)")
     oBrowse:Activate()
 Return
 
@@ -111,5 +110,5 @@ User Function GcSairPortal()
     g_cUniPortal := ""
     g_cConPortal := ""
     g_lAutoPortal := .F.
-    MsgInfo("Sess„o do portal encerrada.", "Portal CondÙmino")
+    MsgInfo("Sess√£o do portal encerrada.", "Portal Cond√¥mino")
 Return

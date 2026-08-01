@@ -1,18 +1,17 @@
-// src/usuarios.prw � gest�o de usu�rios e tokens tempor�rios do GesCon.
-// Menu "Usu�rios" com: Gerar Token, Revogar Token, Criar Usu�rio, Voltar.
+// src/usuarios.prw — gestão de usuários e tokens temporários do GesCon.
+// Menu "Usuários" com: Gerar Token, Revogar Token, Criar Usuário, Voltar.
 #include "totvs.ch"
-#include "db.prw"
 
 /*/{Protheus.doc} GcMenuUsuarios
-    Menu de gest�o de usu�rios. Abre submenu com op��es: gerar token,
-    revogar token, criar usu�rio, voltar.
+    Menu de gestão de usuários. Abre submenu com opções: gerar token,
+    revogar token, criar usuário, voltar.
     @type User Function
     @author GesCon
     @since 2026-07-24
 */
 User Function GcMenuUsuarios()
-    Local aMenu := {"Gerar Token", "Revogar Token", "Criar Usu�rio", "Voltar"}
-    Local nOpcao := FWMenuSelect(aMenu, "Usu�rios")
+    Local aMenu := {"Gerar Token", "Revogar Token", "Criar Usuário", "Voltar"}
+    Local nOpcao := FWMenuSelect(aMenu, "Usuários")
 
     Do Case
         Case nOpcao == 1
@@ -25,23 +24,23 @@ User Function GcMenuUsuarios()
 Return
 
 /*/{Protheus.doc} GcGerarToken
-    Gera token tempor�rio para um cond�mino acessar o portal.
-    Lista cond�minos (JOIN CON-UNI), admin seleciona, sistema gera
+    Gera token temporário para um condômino acessar o portal.
+    Lista condôminos (JOIN CON-UNI), admin seleciona, sistema gera
     token + validade +48h e grava em GCT_TOKEN.
     @type User Function
     @author GesCon
     @since 2026-07-24
-    @obs Token � v�lido por 48 horas a partir da gera��o
+    @obs Token — válido por 48 horas a partir da geração
 */
 User Function GcGerarToken()
     Local aCond := TCSqlQuery("SELECT CON_CODIGO, CON_NOME, UNI_CODIGO, CON_EMAIL " + ;
         "FROM CON " + ;
-        "INNER JOIN UNI ON UNI_CODIGO = CON_UNI " + ;
+        "INNER JOIN UNI ON UNI.UNI_CONDOMINO = CON.CON_CODIGO " + ;
         "WHERE CON.D_E_L_E_T_ = ' ' " + ;
         "ORDER BY CON_NOME")
 
     If Len(aCond) == 0
-        MsgStop("Nenhum cond�mino cadastrado.", "Gerar Token")
+        MsgStop("Nenhum condômino cadastrado.", "Gerar Token")
         Return
     EndIf
 
@@ -51,13 +50,13 @@ User Function GcGerarToken()
     For nJ := 1 To Len(aCond)
         cLista += Str(nJ, 3) + ". " + aCond[nJ]:CON_NOME + " (Uni: " + aCond[nJ]:UNI_CODIGO + ")" + Chr(10)
     Next
-    cLista += "\nSelecione o n�mero:"
+    cLista += "\nSelecione o número:"
 
     Local cSel := FWGetText(cLista, "")
     Local nIdx := Val(cSel)
 
     If nIdx < 1 .Or. nIdx > Len(aCond)
-        MsgStop("�ndice inv�lido.", "Gerar Token")
+        MsgStop("Índice inválido.", "Gerar Token")
         Return
     EndIf
 
@@ -67,14 +66,17 @@ User Function GcGerarToken()
     // Gera token (UUID36 simplificado)
     Local cToken := GcGerarTokenId()
 
-    // Calcula validade +48h � armazena em ISO format (YYYY-MM-DD HH:MM:SS)
-    // para compara��o nativa com SQLite datetime('now')
-    Local dValidade := Date() + 2
-    Local cValidadeIso := GcDateToIso(dValidade) + " " + Left(Time(), 8)
-
-    // Grava CRIPTADO (data de cria��o) em ISO tamb�m
-    Local cLoginAtual := GetEnv("USER")
-    Local cCriadoIso  := GcDateToIso(Date()) + " " + Left(Time(), 8)
+    // Validade +48h em ISO (YYYY-MM-DD HH:MM:SS), para comparar direto com
+    // datetime('now') do SQLite.
+    //
+    // A conta de dias fica com o SQLite de proposito: no AdvPP, `Date() + 2`
+    // perde o tipo data e DtoS() devolve string vazia, o que gravava
+    // VALIDO_ATE = "-- 10:23:45" e fazia TODO token nascer invalido -- o
+    // portal do condomino nunca autenticava.
+    Local aDatas := TCSqlQuery("SELECT datetime('now') as CRIADO, datetime('now', '+2 days') as VALIDADE")
+    Local cCriadoIso   := aDatas[1]:CRIADO
+    Local cValidadeIso := aDatas[1]:VALIDADE
+    Local cLoginAtual  := GetEnv("USER")
 
     TCSqlExec("INSERT INTO GCT_TOKEN (TOKEN, USR_LOGIN, CON_CODIGO, UNI_CODIGO, CRIPTADO, VALIDO_ATE, USADO) " + ;
         "VALUES ('" + GcSqlLit(cToken) + "', '" + GcSqlLit(cLoginAtual) + "', '" + GcSqlLit(cConCod) + "', " + ;
@@ -83,14 +85,14 @@ User Function GcGerarToken()
     // Mostra token ao admin
     MsgInfo("Token gerado:" + Chr(10) + ;
         "Token: " + cToken + Chr(10) + ;
-        "Cond�mino: " + cConCod + " - " + aCond[nIdx]:CON_NOME + Chr(10) + ;
+        "Condômino: " + cConCod + " - " + aCond[nIdx]:CON_NOME + Chr(10) + ;
         "Unidade: " + cUniCod + Chr(10) + ;
-        "V�lido at�: " + cValidadeIso, "GesCon � Token Gerado")
+        "Válido até: " + cValidadeIso, "GesCon — Token Gerado")
 Return
 
 /*/{Protheus.doc} GcRevogarToken
-    Revoga token ativo. Lista tokens v�lidos (n�o expirados, n�o usados).
-    Admin seleciona e faz DELETE l�gico na GCT_TOKEN.
+    Revoga token ativo. Lista tokens válidos (não expirados, não usados).
+    Admin seleciona e faz DELETE lógico na GCT_TOKEN.
     @type User Function
     @author GesCon
     @since 2026-07-24
@@ -114,17 +116,17 @@ User Function GcRevogarToken()
         cLista += Str(nJ, 3) + ". " + Left(aTokens[nJ]:TOKEN, 8) + "... Uni:" + aTokens[nJ]:UNI_CODIGO + ;
             " Con:" + aTokens[nJ]:CON_CODIGO + " Val:" + aTokens[nJ]:VALIDO_ATE + Chr(10)
     Next
-    cLista += "\nSelecione o n�mero para revogar:"
+    cLista += "\nSelecione o número para revogar:"
 
     Local cSel := FWGetText(cLista, "")
     Local nIdx := Val(cSel)
 
     If nIdx < 1 .Or. nIdx > Len(aTokens)
-        MsgStop("�ndice inv�lido.", "Revogar Token")
+        MsgStop("Índice inválido.", "Revogar Token")
         Return
     EndIf
 
-    // DELETE l�gico
+    // DELETE lógico
     Local cTokenSelecionado := aTokens[nIdx]:TOKEN
     TCSqlExec("UPDATE GCT_TOKEN SET D_E_L_E_T_ = '*' WHERE TOKEN = '" + GcSqlLit(cTokenSelecionado) + "' AND D_E_L_E_T_ = ' '")
 
@@ -132,16 +134,16 @@ User Function GcRevogarToken()
 Return
 
 /*/{Protheus.doc} GcCriarUsuario
-    Cria novo usu�rio: Admin (login/senha).
-    Cond�minos acessam via token tempor�rio (n�o possuem login direto).
+    Cria novo usuário: Admin (login/senha).
+    Condôminos acessam via token temporário (não possuem login direto).
     @type User Function
     @author GesCon
     @since 2026-07-24
-    @obs Acesso de cond�minos � exclusivamente via token � perfil CONDOMINO ser� implementado no Plano 3
+    @obs Acesso de condôminos — exclusivamente via token — perfil CONDOMINO será implementado no Plano 3
 */
 User Function GcCriarUsuario()
     Local aTipo := {"Admin"}
-    Local nTipo := FWMenuSelect(aTipo, "Tipo de usu�rio")
+    Local nTipo := FWMenuSelect(aTipo, "Tipo de usuário")
 
     Do Case
         Case nTipo == 1
@@ -173,22 +175,9 @@ User Function GcCriarAdminNovo()
     MsgInfo("Administrador '" + cLogin + "' criado.", "GesCon")
 Return .T.
 
-/*/{Protheus.doc} GcDateToIso
-    Converte data Protheus para formato ISO 8601 (YYYY-MM-DD).
-    Usa DtoS (YYYYMMDD) com inser��o de h�fens.
-    @type Static Function
-    @author GesCon
-    @since 2026-07-24
-    @param dData, date, Data a converter
-    @return cIso, character, Data em formato YYYY-MM-DD
-*/
-Static Function GcDateToIso(dData)
-    Local cDtos := DtoS(dData)
-Return SubStr(cDtos, 1, 4) + "-" + SubStr(cDtos, 5, 2) + "-" + SubStr(cDtos, 7, 2)
-
 /*/{Protheus.doc} GcGerarTokenId
-    Gera identificador �nico de 36 chars (formato UUID-like) para tokens.
-    Usa timestamp + random em AdvPL puro (n�o h� gen uuid nativo do AdvPP v1).
+    Gera identificador único de 36 chars (formato UUID-like) para tokens.
+    Usa timestamp + random em AdvPL puro (não há gen uuid nativo do AdvPP v1).
     @type User Function
     @author GesCon
     @since 2026-07-24
@@ -197,6 +186,6 @@ Return SubStr(cDtos, 1, 4) + "-" + SubStr(cDtos, 5, 2) + "-" + SubStr(cDtos, 7, 
 User Function GcGerarTokenId()
     Local cSeed := DTOC(Date()) + Time() + Str(Random(999999999), 9)
     Local cHash := FWHash(cSeed)
-    // Usa os primeiros 32 chars hex + formata��o UUID-like = 36
+    // Usa os primeiros 32 chars hex + formatação UUID-like = 36
     Local cToken := Left(cHash, 8) + "-" + SubStr(cHash, 9, 4) + "-" + SubStr(cHash, 13, 4) + "-" + SubStr(cHash, 17, 4) + "-" + SubStr(cHash, 21, 12)
 Return cToken

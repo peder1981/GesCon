@@ -319,16 +319,21 @@ User Function GcAuditarPeriodoCompleto(cPeriodo as character) as logical
 
   GcAtualizarDashboardCache(cPeriodo)
 
+  // Desequilibrio contabil e o unico achado que nao pode esperar revisao:
+  // debitos != creditos invalida o balancete inteiro do periodo. Vira
+  // alerta CRITICO, visivel em Auditoria > Alertas.
+  If GcValidarDesequilibrioContabil(cPeriodo)
+    GcCriarAlertaCritico("CRITICO", "Desequilibrio contabil no periodo " + cPeriodo + ;
+      ": a soma dos debitos difere da soma dos creditos.")
+  EndIf
+
 Return lAnomaliaEncontrada
 
 /*{Protheus.doc}
 Cria um alerta (ALERTA) para consumo do portal/dashboard. Tipos aceitos por
 constraint de banco (ver schema.sql, CHECK ALT_TIPO): 'CRITICO', 'AVISO',
-'INFO'. O broadcast via WebSocket fica como stub comentado nesta task --
-o frontend (Task 7+) consome ALERTA por polling em
-GcAuditoriaAlertasRestEndpoint (src/auditoria-rest.prw); nao ha ainda
-infraestrutura de WebSocket neste projeto para efetivamente empurrar o
-evento, entao a chamada fica documentada mas nao implementada.
+'INFO'. Os alertas gravados aqui sao lidos pelo menu Auditoria da GUI
+(browse sobre ALERTA).
 @type Function
 @author Claude
 @since 2026-07-31
@@ -347,11 +352,6 @@ User Function GcCriarAlertaCritico(cTipo as character, cMsg as character) as log
             "VALUES ('" + GcSqlLit(cTipo) + "', '" + GcSqlLit(cMsg) + "', datetime('now'), 0, ' ')"
 
   TCSqlExec(cQuery)
-
-  // Broadcast via WebSocket -- stub: sem infra de WebSocket neste projeto
-  // ainda, o frontend consome ALERTA por polling via
-  // GcAuditoriaAlertasRestEndpoint (src/auditoria-rest.prw).
-  // GcEnviarWebSocketBroadcast("/auditoria/alertas", {tipo: cTipo, msg: cMsg})
 
 Return .T.
 

@@ -6,7 +6,6 @@
 // Senha nunca é gravada em texto puro — sempre via FWHash
 // (SHA-256, AdvPP v1.23.5+).
 #include "totvs.ch"
-#include "db.prw"
 
 /*/{Protheus.doc} GcLogin
     Gate de autenticação. Se não houver nenhum usuário cadastrado,

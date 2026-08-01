@@ -1,18 +1,12 @@
-# Binário gerado por `advplc build gescon.prw -o GesConApp` — 37MB,
-# reproduzível a qualquer momento, não pertence ao git.
-/GesConApp
+# Executáveis gerados por `scripts/build.sh` — dezenas de MB, reproduzíveis
+# a qualquer momento, não pertencem ao git.
+GesConApp
+GesConApp-*
 
-# Node.js / Frontend infrastructure (Tasks 7-12)
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.env
-.env.local
-dist/
-build/
-*.tsbuildinfo
+# Worktrees do superpowers
+.worktrees/
 
 # IDE
 .vscode/
 .idea/
+node_modules/
