@@ -2,6 +2,29 @@
 
 Mudanças notáveis do GesCon.
 
+## [1.0.7] — 2026-08-01
+
+### Corrigido
+
+- **O Mesa3D instalado junto do executável era o motivo de nada abrir.**
+  `opengl32.dll` é import **estático** do binário: o Windows o carrega na
+  criação do processo, antes de qualquer código nosso. Numa VM QEMU/QXL o
+  Mesa não inicializa e o processo morre no carregador — sem janela, sem
+  saída, sem log.
+
+  A pista estava nos dados desde o começo e eu li na ordem errada: o único
+  executável que abriu nessa máquina foi `app\GesConApp-windows-amd64.exe`
+  chamado direto, e é justamente o que **não** tinha o Mesa ao lado. O
+  sintoma mudou de erro visível para silêncio total exatamente na 1.0.3, que
+  foi onde o Mesa entrou.
+
+  Agora ele é instalado em `{app}\mesa\`, fora do caminho de busca de DLL, e
+  só entra em jogo por `Ativar-renderizacao-por-software.bat` — com o script
+  que desfaz ao lado, porque a falha desse caminho é justamente aquela em que
+  nada abre para explicar o que houve. A heurística que adivinhava pelo
+  registro se havia driver OpenGL foi removida: ela errou nessa VM, e o preço
+  do erro era "não abre e não diz nada".
+
 ## [1.0.6] — 2026-08-01
 
 ### Corrigido
