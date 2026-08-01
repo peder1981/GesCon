@@ -2,6 +2,25 @@
 
 Mudanças notáveis do GesCon.
 
+## [1.0.6] — 2026-08-01
+
+### Corrigido
+
+- **O lançador engolia a saída do programa.** `exec.Command` sem `Stdout`
+  definido descarta tudo. O binário existia para acabar com o "não abre e não
+  diz nada" e produzia exatamente isso: o programa escrevia o motivo da falha
+  e ninguém via — inclusive no `diagnostico.bat`, que por isso registrou saída
+  vazia e `ERRORLEVEL=0` (o código do lançador, não o do programa).
+
+  Agora captura `stdout` e `stderr`, espera o filho terminar e, em falha,
+  mostra o código de saída e o texto capturado numa caixa de diálogo,
+  gravando também em `C:\ProgramData\GesCon\gescon-erro.txt` — relato que não
+  dá para colar numa conversa não ajuda ninguém. Saída vazia com morte
+  imediata ganha mensagem própria apontando falha de carregamento de DLL: o
+  `opengl32.dll` é import **estático** do executável (confirmado na tabela de
+  imports do binário publicado), então o Windows o carrega antes de qualquer
+  código nosso rodar.
+
 ## [1.0.5] — 2026-08-01
 
 ### Corrigido
