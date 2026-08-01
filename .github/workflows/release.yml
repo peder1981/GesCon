@@ -23,12 +23,15 @@ jobs:
           - os: ubuntu-latest
             plataforma: linux-amd64
             ext: ""
+            pacote: GesConApp-linux-amd64
           - os: windows-latest
             plataforma: windows-amd64
             ext: ".exe"
+            pacote: GesConApp-windows-amd64.zip
           - os: macos-latest
             plataforma: darwin-arm64
             ext: ""
+            pacote: GesConApp-darwin-arm64
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout GesCon
@@ -66,10 +69,35 @@ jobs:
           "$RUNNER_TEMP/advplc${{ matrix.ext }}" build gescon.prw \
             -o "GesConApp-${{ matrix.plataforma }}${{ matrix.ext }}" --gui
 
+      # Windows recem-instalado -- e toda VM sem aceleracao -- so tem o
+      # Microsoft Basic Display Adapter, que oferece OpenGL 1.1. O Fyne exige
+      # 2.0+ e morre em os.Exit(1) dentro do proprio driver glfw
+      # (internal/driver/glfw/driver.go:148, initFailed), sem chance de o
+      # programa cair na TUI. O zip leva o Mesa3D em mesa\ para esses casos.
+      #
+      # Em mesa\ e nao na raiz de proposito: o opengl32.dll do Mesa nao
+      # repassa nada para o driver real, ele substitui. Na raiz do zip ele
+      # tiraria a aceleracao por hardware de todo mundo. Sao dois arquivos --
+      # desde a 21.3 o opengl32.dll e so um loader (139 KB) e o driver de
+      # verdade e o libgallium_wgl.dll (61 MB).
+      - name: Empacota o Windows com o Mesa3D de reserva
+        if: runner.os == 'Windows'
+        shell: bash
+        env:
+          MESA_VERSAO: 26.1.4
+        run: |
+          cd GesCon
+          curl -fsSL -o mesa.7z \
+            "https://github.com/pal1000/mesa-dist-win/releases/download/${MESA_VERSAO}/mesa3d-${MESA_VERSAO}-release-msvc.7z"
+          7z e -y mesa.7z x64/opengl32.dll x64/libgallium_wgl.dll -omesa
+          cp scripts/windows/GesCon-modo-compativel.bat .
+          7z a -tzip "${{ matrix.pacote }}" \
+            GesConApp-windows-amd64.exe GesCon-modo-compativel.bat mesa/
+
       - uses: actions/upload-artifact@v4
         with:
           name: GesConApp-${{ matrix.plataforma }}
-          path: GesCon/GesConApp-${{ matrix.plataforma }}${{ matrix.ext }}
+          path: GesCon/${{ matrix.pacote }}
 
   release:
     needs: build

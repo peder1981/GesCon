@@ -2,6 +2,23 @@
 
 Mudanças notáveis do GesCon.
 
+## [1.0.3] — 2026-08-01
+
+### Corrigido
+
+- **O `.exe` não abria em Windows sem driver de vídeo.** Em um Windows 10
+  recém-instalado o programa morria com *"Fyne error: window creation error
+  — WGL: The driver does not appear to support OpenGL"*. Sem driver real, o
+  Windows usa o *Microsoft Basic Display Adapter*, que oferece OpenGL 1.1; o
+  Fyne exige 2.0+. Não dá para o programa se defender: o Fyne chama
+  `os.Exit(1)` dentro do próprio driver glfw, antes de qualquer código nosso.
+
+  O release do Windows passa a ser um **zip** com o `.exe`, a pasta `mesa\`
+  (Mesa3D) e `GesCon-modo-compativel.bat`, que copia o Mesa para junto do
+  executável e abre o programa em renderização por software. O Mesa fica
+  fora da raiz de propósito: o `opengl32.dll` dele substitui o driver em vez
+  de encadear, então na raiz tiraria a aceleração por hardware de todo mundo.
+
 ## [1.0.2] — 2026-08-01
 
 ### Corrigido
