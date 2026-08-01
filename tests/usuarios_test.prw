@@ -1,6 +1,6 @@
-// tests/usuarios_test.prw ó testes da gest„o de usu·rios e tokens.
+// tests/usuarios_test.prw ‚Äî testes da gest√£o de usu√°rios e tokens.
 // Usa FWMBrowse Free CRUD para cada sub-tela (GcUnidades, GcCondominos, etc.)
-// e simula a operaÁ„o via dados em banco SQLite.
+// e simula a opera√ß√£o via dados em banco SQLite.
 #include "totvs.ch"
 
 // Os #include dos modulos ficam no FIM do arquivo, de proposito.
@@ -29,16 +29,16 @@ User Function RunUsuariosTests()
 Return
 
 /*/{Protheus.doc} TestaGcGerarToken
-    Gera um token para o primeiro condÙmino listado e verifica que
+    Gera um token para o primeiro cond√¥mino listado e verifica que
     o registro foi criado na tabela GCT_TOKEN.
 */
 User Function AT05GerarToken()
     Local lOk := .T.
-    // Cria unidade de teste se n„o existir
-    // Cria condÙmino de teste vinculado ‡ unidade
-    // Chama GcGerarToken com Ìndice 1
+    // Cria unidade de teste se n√£o existir
+    // Cria cond√¥mino de teste vinculado √† unidade
+    // Chama GcGerarToken com √≠ndice 1
     // Verifica contagem em GCT_TOKEN
-    MsgInfo("Teste GcGerarToken ó verifique manualmente a criaÁ„o do token no banco.", "Usuarios Test")
+    MsgInfo("Teste GcGerarToken ‚Äî verifique manualmente a cria√ß√£o do token no banco.", "Usuarios Test")
 Return lOk
 
 /*/{Protheus.doc} TestaGcRevogarToken
@@ -48,22 +48,22 @@ Return lOk
 User Function AT05RevogarToken()
     Local lOk := .T.
     // Gera token (ver AT05GerarToken)
-    // Chama GcRevogarToken com Ìndice 1
+    // Chama GcRevogarToken com √≠ndice 1
     // Verifica D_E_L_E_T_ = '*' na GCT_TOKEN
-    MsgInfo("Teste GcRevogarToken ó verifique manualmente a revogaÁ„o no banco.", "Usuarios Test")
+    MsgInfo("Teste GcRevogarToken ‚Äî verifique manualmente a revoga√ß√£o no banco.", "Usuarios Test")
 Return lOk
 
 /*/{Protheus.doc} TestaGcCriarAdminNovo
-    Cria um admin tempor·rio de teste e verifica que a entrada foi
+    Cria um admin tempor√°rio de teste e verifica que a entrada foi
     gravada com USR_PERFIL = 'ADMIN'.
 */
 User Function AT05CriarAdmin()
     Local lOk := .T.
-    // Insere condÙmino se n„o existir
+    // Insere cond√¥mino se n√£o existir
     // Chama GcCriarAdminNovo com login/senha de teste
     // Verifica USR_PERFIL = 'ADMIN' na tabela USR
     // Limpa registro de teste
-    MsgInfo("Teste GcCriarAdminNovo ó verifique manualmente a criaÁ„o no banco.", "Usuarios Test")
+    MsgInfo("Teste GcCriarAdminNovo ‚Äî verifique manualmente a cria√ß√£o no banco.", "Usuarios Test")
 Return lOk
 
 #include "../src/db.prw"

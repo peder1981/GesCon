@@ -1,6 +1,6 @@
 // src/boleto.prw - geracao de boleto bancario FEBRABAN (Itau 341 e Bradesco 237).
-// Retorna linha digitavel (formato bancario) e codigo de barras (num�rico agrupado).
-// Zero depend�ncias externas - tudo em AdvPL puro.
+// Retorna linha digitavel (formato bancario) e codigo de barras (numérico agrupado).
+// Zero dependências externas - tudo em AdvPL puro.
 #include "totvs.ch"
 
 /*/{Protheus.doc} GcBoletoLinhaDigitavel
@@ -426,7 +426,7 @@ User Function GcBoletoGera(nRecno)
         dVenc, nValor, cNumeroDoc)
 
     MsgInfo("Linha Digitavel:" + Chr(10) + cLinha + Chr(10) + ;
-        Chr(10) + "Codigo de Barras:" + Chr(10) + cCodBar, "Boleto � " + AllTrim(aCob[1]["COB_COMPET"]))
+        Chr(10) + "Codigo de Barras:" + Chr(10) + cCodBar, "Boleto — " + AllTrim(aCob[1]["COB_COMPET"]))
 Return .T.
 
 /*/{Protheus.doc} GcBoletoExibe

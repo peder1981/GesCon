@@ -1,7 +1,7 @@
--- GesCon ó schema v1. ConvenÁ„o de exclus„o lÛgica estilo Protheus
+-- GesCon ‚Äî schema v1. Conven√ß√£o de exclus√£o l√≥gica estilo Protheus
 -- (R_E_C_N_O_/D_E_L_E_T_/R_E_C_D_E_L_), mesma que o AdvEditor usa.
 
--- Tabela de metadados SX3 (tÌtulos/tipos de coluna pro FWMBrowse).
+-- Tabela de metadados SX3 (t√≠tulos/tipos de coluna pro FWMBrowse).
 CREATE TABLE IF NOT EXISTS SX3 (
     R_E_C_N_O_ INTEGER PRIMARY KEY AUTOINCREMENT,
     D_E_L_E_T_ TEXT DEFAULT ' ',
@@ -68,13 +68,13 @@ CREATE TABLE IF NOT EXISTS USR (
     USR_SENHA TEXT NOT NULL
 );
 
--- Tabelas de relatÛrio (Plano 2): snapshot recalculado do zero (DELETE +
--- INSERT) toda vez que o relatÛrio È aberto, mesmo padr„o que
--- GcFecharMes j· usa pra gravar CobranÁa ó FWMBrowse sÛ sabe abrir uma
--- tabela fÌsica por alias (SELECT rowid ..., UPDATE/DELETE ... WHERE
--- rowid = ?), n„o d· pra apontar pra uma query parametrizada ou VIEW sem
--- rowid direto. Read-only por convenÁ„o, mas tecnicamente edit·vel pela
--- mesma limitaÁ„o j· aceita na tela de CobranÁas (ver ARQUITETURA.md).
+-- Tabelas de relat√≥rio (Plano 2): snapshot recalculado do zero (DELETE +
+-- INSERT) toda vez que o relat√≥rio √© aberto, mesmo padr√£o que
+-- GcFecharMes j√° usa pra gravar Cobran√ßa ‚Äî FWMBrowse s√≥ sabe abrir uma
+-- tabela f√≠sica por alias (SELECT rowid ..., UPDATE/DELETE ... WHERE
+-- rowid = ?), n√£o d√° pra apontar pra uma query parametrizada ou VIEW sem
+-- rowid direto. Read-only por conven√ß√£o, mas tecnicamente edit√°vel pela
+-- mesma limita√ß√£o j√° aceita na tela de Cobran√ßas (ver ARQUITETURA.md).
 CREATE TABLE IF NOT EXISTS RPT_INADIM (
     R_E_C_N_O_ INTEGER PRIMARY KEY AUTOINCREMENT,
     D_E_L_E_T_ TEXT DEFAULT ' ',
@@ -105,8 +105,8 @@ CREATE TABLE IF NOT EXISTS RPT_DESCAT (
     RDC_TOTAL REAL
 );
 
--- GesCon ó CFG_BOLETO: configuraÁ„o do benefici·rio para geraÁ„o de boletos.
--- Uma ˙nica linha (estilo MV; INSERT/UPDATE direto).
+-- GesCon ‚Äî CFG_BOLETO: configura√ß√£o do benefici√°rio para gera√ß√£o de boletos.
+-- Uma √∫nica linha (estilo MV; INSERT/UPDATE direto).
 CREATE TABLE IF NOT EXISTS CFG_BOLETO (
     R_E_C_N_O_ INTEGER PRIMARY KEY AUTOINCREMENT,
     D_E_L_E_T_ TEXT DEFAULT ' ',
@@ -118,7 +118,7 @@ CREATE TABLE IF NOT EXISTS CFG_BOLETO (
     CFG_CARTEIRA TEXT NOT NULL
 );
 
--- GesCon ó GCT_TOKEN: tokens tempor·rios para acesso condÙmino.
+-- GesCon ‚Äî GCT_TOKEN: tokens tempor√°rios para acesso cond√¥mino.
 CREATE TABLE IF NOT EXISTS GCT_TOKEN (
     TOKEN TEXT PRIMARY KEY,
     USR_LOGIN TEXT NOT NULL,
@@ -131,8 +131,8 @@ CREATE TABLE IF NOT EXISTS GCT_TOKEN (
     R_E_C_D_E_L_ INTEGER DEFAULT 0
 );
 
--- GesCon ó RPT_COND_COBRANCAS: snapshot de cobranÁas filtrado por unidade
--- (para acesso read-only do condÙmino via portal).
+-- GesCon ‚Äî RPT_COND_COBRANCAS: snapshot de cobran√ßas filtrado por unidade
+-- (para acesso read-only do cond√¥mino via portal).
 CREATE TABLE IF NOT EXISTS RPT_COND_COBRANCAS (
     RCC_UNIDADE TEXT NOT NULL,
     RCC_COMPET TEXT NOT NULL,
@@ -145,13 +145,13 @@ CREATE TABLE IF NOT EXISTS RPT_COND_COBRANCAS (
     R_E_C_D_E_L_ INTEGER DEFAULT 0
 );
 
--- Metadados SX3 (tÌtulos/tipos de coluna pro FWMBrowse ó ver browseColumns
+-- Metadados SX3 (t√≠tulos/tipos de coluna pro FWMBrowse ‚Äî ver browseColumns
 -- em pkg/vm/browse.go do AdvPP: sem essas linhas, o browse cai no fallback
--- de mostrar toda coluna fÌsica como texto, sem tÌtulo amig·vel).
+-- de mostrar toda coluna f√≠sica como texto, sem t√≠tulo amig√°vel).
 DELETE FROM SX3 WHERE X3_ARQUIVO IN ('CON','UNI','DES','COB','USR','RPT_INADIM','RPT_EXTRATO','RPT_DESCAT','CFG_BOLETO','GCT_TOKEN','RPT_COND_COBRANCAS');
 
 INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
-('CON', 1, 'CON_CODIGO', 'C', 10, 0, 'CÛdigo'),
+('CON', 1, 'CON_CODIGO', 'C', 10, 0, 'C√≥digo'),
 ('CON', 2, 'CON_NOME',   'C', 60, 0, 'Nome'),
 ('CON', 3, 'CON_CPF',    'C', 14, 0, 'CPF'),
 ('CON', 4, 'CON_EMAIL',  'C', 60, 0, 'E-mail'),
@@ -159,29 +159,29 @@ INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL
 
 ('UNI', 1, 'UNI_CODIGO',    'C', 10, 0, 'Unidade'),
 ('UNI', 2, 'UNI_BLOCO',     'C', 10, 0, 'Bloco'),
-('UNI', 3, 'UNI_FRACAO',    'N', 8,  4, 'FraÁ„o Ideal'),
-('UNI', 4, 'UNI_CONDOMINO', 'C', 10, 0, 'CÛd. CondÙmino'),
+('UNI', 3, 'UNI_FRACAO',    'N', 8,  4, 'Fra√ß√£o Ideal'),
+('UNI', 4, 'UNI_CONDOMINO', 'C', 10, 0, 'C√≥d. Cond√¥mino'),
 
-('DES', 1, 'DES_DESCR',   'C', 80, 0, 'DescriÁ„o'),
+('DES', 1, 'DES_DESCR',   'C', 80, 0, 'Descri√ß√£o'),
 ('DES', 2, 'DES_CATEG',   'C', 30, 0, 'Categoria'),
 ('DES', 3, 'DES_VALOR',   'N', 14, 2, 'Valor'),
-('DES', 4, 'DES_COMPET',  'C', 7,  0, 'CompetÍncia'),
-('DES', 5, 'DES_DTLANC',  'C', 10, 0, 'Data LanÁamento'),
+('DES', 4, 'DES_COMPET',  'C', 7,  0, 'Compet√™ncia'),
+('DES', 5, 'DES_DTLANC',  'C', 10, 0, 'Data Lan√ßamento'),
 
 ('COB', 1, 'COB_UNIDADE', 'C', 10, 0, 'Unidade'),
-('COB', 2, 'COB_COMPET',  'C', 7,  0, 'CompetÍncia'),
+('COB', 2, 'COB_COMPET',  'C', 7,  0, 'Compet√™ncia'),
 ('COB', 3, 'COB_VALOR',   'N', 14, 2, 'Valor'),
 ('COB', 4, 'COB_VENCTO',  'C', 10, 0, 'Vencimento'),
 ('COB', 5, 'COB_STATUS',  'C', 10, 0, 'Status'),
 ('COB', 6, 'COB_DTPAG',   'C', 10, 0, 'Data Pagamento'),
 
 ('RPT_INADIM', 1, 'RIN_UNIDADE', 'C', 10, 0, 'Unidade'),
-('RPT_INADIM', 2, 'RIN_COMPET',  'C', 7,  0, 'CompetÍncia'),
+('RPT_INADIM', 2, 'RIN_COMPET',  'C', 7,  0, 'Compet√™ncia'),
 ('RPT_INADIM', 3, 'RIN_VALOR',   'N', 14, 2, 'Valor'),
 ('RPT_INADIM', 4, 'RIN_VENCTO',  'C', 10, 0, 'Vencimento'),
 ('RPT_INADIM', 5, 'RIN_ATRASO',  'N', 5,  0, 'Dias de Atraso'),
 
-('RPT_EXTRATO', 1, 'REX_COMPET', 'C', 7,  0, 'CompetÍncia'),
+('RPT_EXTRATO', 1, 'REX_COMPET', 'C', 7,  0, 'Compet√™ncia'),
 ('RPT_EXTRATO', 2, 'REX_VALOR',  'N', 14, 2, 'Valor'),
 ('RPT_EXTRATO', 3, 'REX_VENCTO', 'C', 10, 0, 'Vencimento'),
 ('RPT_EXTRATO', 4, 'REX_STATUS', 'C', 10, 0, 'Status'),
@@ -190,32 +190,32 @@ INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL
 ('RPT_DESCAT', 1, 'RDC_CATEG', 'C', 30, 0, 'Categoria'),
 ('RPT_DESCAT', 2, 'RDC_TOTAL', 'N', 14, 2, 'Total');
 
--- GesCon ó USR_PERFIL: perfil do usu·rio (Plano 2).
+-- GesCon ‚Äî USR_PERFIL: perfil do usu√°rio (Plano 2).
 -- Note: SQLite doesn't support IF NOT EXISTS for ADD COLUMN, so we ignore the error if column exists
 ALTER TABLE USR ADD COLUMN USR_PERFIL TEXT DEFAULT 'ADMIN';
 
 -- Metadados SX3 para CFG_BOLETO
 INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
-('CFG_BOLETO', 1, 'CFG_BANCO',    'C',  4, 0, 'CÛdigo do Banco'),
-('CFG_BOLETO', 2, 'CFG_AGENCIA',  'C', 10, 0, 'AgÍncia'),
+('CFG_BOLETO', 1, 'CFG_BANCO',    'C',  4, 0, 'C√≥digo do Banco'),
+('CFG_BOLETO', 2, 'CFG_AGENCIA',  'C', 10, 0, 'Ag√™ncia'),
 ('CFG_BOLETO', 3, 'CFG_CONTA',    'C', 15, 0, 'Conta Corrente'),
-('CFG_BOLETO', 4, 'CFG_COBRT',    'C', 15, 0, 'Carta/Cedente ou ConvÍnio'),
+('CFG_BOLETO', 4, 'CFG_COBRT',    'C', 15, 0, 'Carta/Cedente ou Conv√™nio'),
 ('CFG_BOLETO', 5, 'CFG_CARTEIRA', 'C', 10, 0, 'Carteira');
 
 -- Metadados SX3 para GCT_TOKEN
 INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
 ('GCT_TOKEN', 1, 'TOKEN',      'C', 36, 0, 'Token'),
 ('GCT_TOKEN', 2, 'USR_LOGIN',  'C', 40, 0, 'Gerado por'),
-('GCT_TOKEN', 3, 'CON_CODIGO', 'C', 10, 0, 'CondÙmino'),
+('GCT_TOKEN', 3, 'CON_CODIGO', 'C', 10, 0, 'Cond√¥mino'),
 ('GCT_TOKEN', 4, 'UNI_CODIGO', 'C', 10, 0, 'Unidade'),
 ('GCT_TOKEN', 5, 'CRIPTADO',   'C', 19, 0, 'Criado em'),
-('GCT_TOKEN', 6, 'VALIDO_ATE', 'C', 19, 0, 'V·lido atÈ'),
+('GCT_TOKEN', 6, 'VALIDO_ATE', 'C', 19, 0, 'V√°lido at√©'),
 ('GCT_TOKEN', 7, 'USADO',      'N',  1, 0, 'Usado');
 
 -- Metadados SX3 para RPT_COND_COBRANCAS
 INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
 ('RPT_COND_COBRANCAS', 1, 'RCC_UNIDADE', 'C', 10, 0, 'Unidade'),
-('RPT_COND_COBRANCAS', 2, 'RCC_COMPET',  'C',  7, 0, 'CompetÍncia'),
+('RPT_COND_COBRANCAS', 2, 'RCC_COMPET',  'C',  7, 0, 'Compet√™ncia'),
 ('RPT_COND_COBRANCAS', 3, 'RCC_VALOR',   'N', 14, 2, 'Valor'),
 ('RPT_COND_COBRANCAS', 4, 'RCC_VENCTO',  'C', 10, 0, 'Vencimento'),
 ('RPT_COND_COBRANCAS', 5, 'RCC_STATUS',  'C', 10, 0, 'Status'),
@@ -223,12 +223,12 @@ INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL
 
 -- Metadados SX3 para USR_PERFIL
 INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
-('USR', 3, 'USR_PERFIL', 'C', 20, 0, 'Perfil do Usu·rio');
+('USR', 3, 'USR_PERFIL', 'C', 20, 0, 'Perfil do Usu√°rio');
 
 -- ============================================================================
--- Sistema Cont·bil em Partida Dupla (v2.0)
--- 6 tabelas para suportar lanÁamentos manuais + autom·ticos, rateio,
--- fechamento de perÌodo com validaÁ„o D/C, e auditoria.
+-- Sistema Cont√°bil em Partida Dupla (v2.0)
+-- 6 tabelas para suportar lan√ßamentos manuais + autom√°ticos, rateio,
+-- fechamento de per√≠odo com valida√ß√£o D/C, e auditoria.
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS PLANO_CONTAS (
@@ -341,48 +341,48 @@ CREATE TABLE IF NOT EXISTS RPT_BALANCETE (
 DELETE FROM SX3 WHERE X3_ARQUIVO IN ('PLANO_CONTAS','REPARTICAO','EXERCICIO','LANCAMENTOS','RATEIO_DETALHE','AUDITORIA','RPT_BALANCETE');
 
 INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
-('PLANO_CONTAS', 1, 'PLA_CODIGO', 'C', 10, 0, 'CÛdigo Conta'),
+('PLANO_CONTAS', 1, 'PLA_CODIGO', 'C', 10, 0, 'C√≥digo Conta'),
 ('PLANO_CONTAS', 2, 'PLA_NOME',   'C', 80, 0, 'Nome Conta'),
 ('PLANO_CONTAS', 3, 'PLA_TIPO',   'C', 15, 0, 'Tipo'),
 ('PLANO_CONTAS', 4, 'PLA_ATIVO',  'N',  1, 0, 'Ativo'),
 
-('REPARTICAO', 1, 'REP_CODIGO',   'C', 20, 0, 'CÛdigo RepartiÁ„o'),
-('REPARTICAO', 2, 'REP_NOME',     'C', 80, 0, 'Nome RepartiÁ„o'),
+('REPARTICAO', 1, 'REP_CODIGO',   'C', 20, 0, 'C√≥digo Reparti√ß√£o'),
+('REPARTICAO', 2, 'REP_NOME',     'C', 80, 0, 'Nome Reparti√ß√£o'),
 ('REPARTICAO', 3, 'REP_ATIVO',    'N',  1, 0, 'Ativo'),
 ('REPARTICAO', 4, 'REP_DETALHE',  'C', 200, 0, 'Detalhes'),
 
-('EXERCICIO', 1, 'EXE_CODIGO',   'C',  7, 0, 'CÛdigo ExercÌcio'),
-('EXERCICIO', 2, 'EXE_INICIO',   'D', 10, 0, 'Data InÌcio'),
+('EXERCICIO', 1, 'EXE_CODIGO',   'C',  7, 0, 'C√≥digo Exerc√≠cio'),
+('EXERCICIO', 2, 'EXE_INICIO',   'D', 10, 0, 'Data In√≠cio'),
 ('EXERCICIO', 3, 'EXE_FIM',      'D', 10, 0, 'Data Fim'),
 ('EXERCICIO', 4, 'EXE_ATIVO',    'N',  1, 0, 'Ativo'),
 ('EXERCICIO', 5, 'EXE_FECHADO',  'N',  1, 0, 'Fechado'),
 
-('LANCAMENTOS', 1, 'LAN_DATA',       'D', 10, 0, 'Data LanÁamento'),
-('LANCAMENTOS', 2, 'LAN_CONTA_DEB',  'C', 10, 0, 'Conta DÈbito'),
-('LANCAMENTOS', 3, 'LAN_CONTA_CRED', 'C', 10, 0, 'Conta CrÈdito'),
+('LANCAMENTOS', 1, 'LAN_DATA',       'D', 10, 0, 'Data Lan√ßamento'),
+('LANCAMENTOS', 2, 'LAN_CONTA_DEB',  'C', 10, 0, 'Conta D√©bito'),
+('LANCAMENTOS', 3, 'LAN_CONTA_CRED', 'C', 10, 0, 'Conta Cr√©dito'),
 ('LANCAMENTOS', 4, 'LAN_VALOR',      'N', 14, 2, 'Valor'),
-('LANCAMENTOS', 5, 'LAN_DESCR',      'C', 200, 0, 'DescriÁ„o'),
-('LANCAMENTOS', 6, 'LAN_TIPO',       'C', 20, 0, 'Tipo LanÁamento'),
-('LANCAMENTOS', 7, 'LAN_EXERCICIO',  'C',  7, 0, 'ExercÌcio'),
+('LANCAMENTOS', 5, 'LAN_DESCR',      'C', 200, 0, 'Descri√ß√£o'),
+('LANCAMENTOS', 6, 'LAN_TIPO',       'C', 20, 0, 'Tipo Lan√ßamento'),
+('LANCAMENTOS', 7, 'LAN_EXERCICIO',  'C',  7, 0, 'Exerc√≠cio'),
 ('LANCAMENTOS', 8, 'LAN_DATA_HORA',  'C', 19, 0, 'Data/Hora'),
-('LANCAMENTOS', 9, 'LAN_USUARIO',    'C', 40, 0, 'Usu·rio'),
+('LANCAMENTOS', 9, 'LAN_USUARIO',    'C', 40, 0, 'Usu√°rio'),
 
-('RATEIO_DETALHE', 1, 'RAT_LANCAMENTO',  'N',  10, 0, 'ID LanÁamento'),
+('RATEIO_DETALHE', 1, 'RAT_LANCAMENTO',  'N',  10, 0, 'ID Lan√ßamento'),
 ('RATEIO_DETALHE', 2, 'RAT_UNIDADE',     'C',  10, 0, 'Unidade'),
 ('RATEIO_DETALHE', 3, 'RAT_VALOR',       'N',  14, 2, 'Valor Rateado'),
 ('RATEIO_DETALHE', 4, 'RAT_PERCENTUAL',  'N',   8, 4, 'Percentual'),
 
 ('AUDITORIA', 1, 'AUD_DATA_HORA',   'C', 19, 0, 'Data/Hora'),
 ('AUDITORIA', 2, 'AUD_TIPO',        'C', 25, 0, 'Tipo Anomalia'),
-('AUDITORIA', 3, 'AUD_DESCRICAO',   'C', 200, 0, 'DescriÁ„o'),
+('AUDITORIA', 3, 'AUD_DESCRICAO',   'C', 200, 0, 'Descri√ß√£o'),
 ('AUDITORIA', 4, 'AUD_SEVERIDADE',  'C', 10, 0, 'Severidade'),
-('AUDITORIA', 5, 'AUD_EXERCICIO',   'C',  7, 0, 'ExercÌcio'),
+('AUDITORIA', 5, 'AUD_EXERCICIO',   'C',  7, 0, 'Exerc√≠cio'),
 
-('RPT_BALANCETE', 1, 'RPT_EXERCICIO',      'C',  7, 0, 'ExercÌcio'),
+('RPT_BALANCETE', 1, 'RPT_EXERCICIO',      'C',  7, 0, 'Exerc√≠cio'),
 ('RPT_BALANCETE', 2, 'RPT_RECEITAS',       'N', 14, 2, 'Receitas'),
 ('RPT_BALANCETE', 3, 'RPT_DESPESAS',       'N', 14, 2, 'Despesas'),
 ('RPT_BALANCETE', 4, 'RPT_SALDO',          'N', 14, 2, 'Saldo'),
-('RPT_BALANCETE', 5, 'RPT_DATA_GERACAO',   'C', 19, 0, 'Data GeraÁ„o');
+('RPT_BALANCETE', 5, 'RPT_DATA_GERACAO',   'C', 19, 0, 'Data Gera√ß√£o');
 
 -- Seed data for accounting system
 INSERT OR IGNORE INTO PLANO_CONTAS (PLA_CODIGO, PLA_NOME, PLA_TIPO, PLA_ATIVO)
@@ -390,31 +390,31 @@ VALUES
   ('1000', 'Caixa',                    'ATIVO',     1),
   ('1100', 'Banco',                    'ATIVO',     1),
   ('2000', 'Contas a Pagar',           'PASSIVO',   1),
-  ('2100', 'DÈbitos Anteriores',       'PASSIVO',   1),
+  ('2100', 'D√©bitos Anteriores',       'PASSIVO',   1),
   ('3000', 'Receita Condominial',      'RECEITA',   1),
   ('3100', 'Multas e Juros',           'RECEITA',   1),
   ('4000', 'Despesa Comum',            'DESPESA',   1),
-  ('4100', 'Despesa Extraordin·ria',   'DESPESA',   1),
-  ('4200', '¡gua/Luz/CondomÌnio',      'DESPESA',   1),
+  ('4100', 'Despesa Extraordin√°ria',   'DESPESA',   1),
+  ('4200', '√Ågua/Luz/Condom√≠nio',      'DESPESA',   1),
   ('4300', 'Limpeza',                  'DESPESA',   1),
-  ('4400', 'SeguranÁa',                'DESPESA',   1),
-  ('4500', 'ManutenÁ„o',               'DESPESA',   1),
+  ('4400', 'Seguran√ßa',                'DESPESA',   1),
+  ('4500', 'Manuten√ß√£o',               'DESPESA',   1),
   ('4600', 'Seguros',                  'DESPESA',   1),
   ('4700', 'Impostos e Taxas',         'DESPESA',   1),
-  ('4800', 'DepreciaÁ„o',              'DESPESA',   1),
-  ('4900', 'Ajustes e CrÈditos',       'DESPESA',   1),
+  ('4800', 'Deprecia√ß√£o',              'DESPESA',   1),
+  ('4900', 'Ajustes e Cr√©ditos',       'DESPESA',   1),
   ('5000', 'Contas a Receber',         'ATIVO',     1),
-  ('6000', 'Capital/PatrimÙnio',       'PASSIVO',   1),
+  ('6000', 'Capital/Patrim√¥nio',       'PASSIVO',   1),
   ('6100', 'Lucros Acumulados',        'PASSIVO',   1),
   ('7000', 'Outras Contas',            'ATIVO',     1);
 
 INSERT OR IGNORE INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO)
 VALUES
-  ('2025-01', '2025-01-01', '2025-01-31', 1, 0);
+  ('2025-01', '20250101', '20250131', 1, 0);
 
 INSERT OR IGNORE INTO REPARTICAO (REP_CODIGO, REP_NOME, REP_ATIVO)
 VALUES
-  ('FRACAO', 'FraÁ„o Ideal', 1),
+  ('FRACAO', 'Fra√ß√£o Ideal', 1),
   ('METRAGEM', 'Por Metragem', 1),
   ('FIXO', 'Valor Fixo', 1);
 
@@ -443,10 +443,10 @@ VALUES
   ('120', 'J', 0.05);
 
 -- ============================================================================
--- Portal do CondÙmino v2 ó Tabelas de snapshot (avisos, extratos, agenda)
+-- Portal do Cond√¥mino v2 ‚Äî Tabelas de snapshot (avisos, extratos, agenda)
 -- ============================================================================
 
--- AVISOS: Mural de avisos (an˙ncios publicados pelos admin)
+-- AVISOS: Mural de avisos (an√∫ncios publicados pelos admin)
 CREATE TABLE IF NOT EXISTS AVISOS (
     AVI_ID INTEGER PRIMARY KEY AUTOINCREMENT,
     AVI_TITULO TEXT NOT NULL,
@@ -459,8 +459,8 @@ CREATE TABLE IF NOT EXISTS AVISOS (
 );
 CREATE INDEX IF NOT EXISTS IDX_AVISOS_ATIVO ON AVISOS(AVI_ATIVO, D_E_L_E_T_);
 
--- RPT_PORTAL_EXTRATOS: Snapshot de faturas por unidade/mÍs
--- Regenerado 100% (DELETE + INSERT) a cada fechamento de perÌodo
+-- RPT_PORTAL_EXTRATOS: Snapshot de faturas por unidade/m√™s
+-- Regenerado 100% (DELETE + INSERT) a cada fechamento de per√≠odo
 CREATE TABLE IF NOT EXISTS RPT_PORTAL_EXTRATOS (
     REX_ID INTEGER PRIMARY KEY AUTOINCREMENT,
     REX_COMPETENCIA TEXT NOT NULL,
@@ -479,8 +479,8 @@ CREATE INDEX IF NOT EXISTS IDX_RPT_PORTAL_EXTRATOS_UNIDADE ON RPT_PORTAL_EXTRATO
 CREATE INDEX IF NOT EXISTS IDX_RPT_PORTAL_EXTRATOS_COMPETENCIA ON RPT_PORTAL_EXTRATOS(REX_COMPETENCIA, D_E_L_E_T_);
 CREATE INDEX IF NOT EXISTS IDX_RPT_PORTAL_EXTRATOS_STATUS ON RPT_PORTAL_EXTRATOS(REX_STATUS, D_E_L_E_T_);
 
--- RPT_PORTAL_AGENDA: PrÛximos vencimentos (prÛximos 12 meses)
--- Regenerado 100% (DELETE + INSERT) a cada fechamento de perÌodo
+-- RPT_PORTAL_AGENDA: Pr√≥ximos vencimentos (pr√≥ximos 12 meses)
+-- Regenerado 100% (DELETE + INSERT) a cada fechamento de per√≠odo
 CREATE TABLE IF NOT EXISTS RPT_PORTAL_AGENDA (
     REA_ID INTEGER PRIMARY KEY AUTOINCREMENT,
     REA_UNIDADE TEXT NOT NULL,
@@ -498,15 +498,15 @@ CREATE INDEX IF NOT EXISTS IDX_RPT_PORTAL_AGENDA_VENCIMENTO ON RPT_PORTAL_AGENDA
 -- Metadados SX3 para AVISOS
 INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
 ('AVISOS', 1, 'AVI_ID',            'N',  10, 0, 'ID Aviso'),
-('AVISOS', 2, 'AVI_TITULO',        'C', 255, 0, 'TÌtulo'),
+('AVISOS', 2, 'AVI_TITULO',        'C', 255, 0, 'T√≠tulo'),
 ('AVISOS', 3, 'AVI_CORPO',         'M',   0, 0, 'Corpo'),
-('AVISOS', 4, 'AVI_DATA_CRIACAO',  'C',  19, 0, 'Data CriaÁ„o'),
+('AVISOS', 4, 'AVI_DATA_CRIACAO',  'C',  19, 0, 'Data Cria√ß√£o'),
 ('AVISOS', 5, 'AVI_ATIVO',         'N',   1, 0, 'Ativo');
 
 -- Metadados SX3 para RPT_PORTAL_EXTRATOS
 INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
 ('RPT_PORTAL_EXTRATOS', 1, 'REX_ID',              'N',  10, 0, 'ID Extrato'),
-('RPT_PORTAL_EXTRATOS', 2, 'REX_COMPETENCIA',    'C',   7, 0, 'CompetÍncia'),
+('RPT_PORTAL_EXTRATOS', 2, 'REX_COMPETENCIA',    'C',   7, 0, 'Compet√™ncia'),
 ('RPT_PORTAL_EXTRATOS', 3, 'REX_UNIDADE',        'C',  10, 0, 'Unidade'),
 ('RPT_PORTAL_EXTRATOS', 4, 'REX_VALOR',          'N',  14, 2, 'Valor'),
 ('RPT_PORTAL_EXTRATOS', 5, 'REX_VENCIMENTO',     'D',  10, 0, 'Vencimento'),
@@ -517,11 +517,11 @@ INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL
 INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
 ('RPT_PORTAL_AGENDA', 1, 'REA_ID',          'N',  10, 0, 'ID Agenda'),
 ('RPT_PORTAL_AGENDA', 2, 'REA_UNIDADE',     'C',  10, 0, 'Unidade'),
-('RPT_PORTAL_AGENDA', 3, 'REA_COMPETENCIA', 'C',   7, 0, 'CompetÍncia'),
+('RPT_PORTAL_AGENDA', 3, 'REA_COMPETENCIA', 'C',   7, 0, 'Compet√™ncia'),
 ('RPT_PORTAL_AGENDA', 4, 'REA_VENCIMENTO',  'D',  10, 0, 'Vencimento'),
 ('RPT_PORTAL_AGENDA', 5, 'REA_VALOR',       'N',  14, 2, 'Valor');
 
--- ANOMALIA_LOG: hist√≥rico de anomalias detectadas
+-- ANOMALIA_LOG: hist√É¬≥rico de anomalias detectadas
 CREATE TABLE IF NOT EXISTS ANOMALIA_LOG (
   ANL_ID INTEGER PRIMARY KEY AUTOINCREMENT,
   ANL_TIPO TEXT NOT NULL,
@@ -541,7 +541,7 @@ CREATE TABLE IF NOT EXISTS ANOMALIA_LOG (
 CREATE INDEX IDX_ANOMALIA_TIPO ON ANOMALIA_LOG(ANL_TIPO, D_E_L_E_T_);
 CREATE INDEX IDX_ANOMALIA_PERIODO ON ANOMALIA_LOG(ANL_PERIODO, D_E_L_E_T_);
 
--- ALERTA: notifica√ß√µes cr√≠ticas em tempo real
+-- ALERTA: notifica√É¬ß√É¬µes cr√É¬≠ticas em tempo real
 CREATE TABLE IF NOT EXISTS ALERTA (
   ALT_ID INTEGER PRIMARY KEY AUTOINCREMENT,
   ALT_TIPO TEXT NOT NULL CHECK(ALT_TIPO IN ('CRITICO', 'AVISO', 'INFO')),
@@ -557,7 +557,7 @@ CREATE TABLE IF NOT EXISTS ALERTA (
 );
 CREATE INDEX IDX_ALERTA_TIPO ON ALERTA(ALT_TIPO, ALT_VISTO, D_E_L_E_T_);
 
--- DASHBOARD_CACHE: snapshot di√°rio para performance
+-- DASHBOARD_CACHE: snapshot di√É¬°rio para performance
 CREATE TABLE IF NOT EXISTS DASHBOARD_CACHE (
   DSH_ID INTEGER PRIMARY KEY AUTOINCREMENT,
   DSH_DATA DATE NOT NULL,
@@ -597,12 +597,12 @@ DELETE FROM SX3 WHERE X3_ARQUIVO IN ('ANOMALIA_LOG','ALERTA','DASHBOARD_CACHE');
 INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
 ('ANOMALIA_LOG', 1, 'ANL_ID',            'N', 10, 0, 'ID'),
 ('ANOMALIA_LOG', 2, 'ANL_TIPO',          'C', 40, 0, 'Tipo'),
-('ANOMALIA_LOG', 3, 'ANL_PERIODO',       'C',  7, 0, 'PerÌodo'),
+('ANOMALIA_LOG', 3, 'ANL_PERIODO',       'C',  7, 0, 'Per√≠odo'),
 ('ANOMALIA_LOG', 4, 'ANL_UNIDADE',       'C', 20, 0, 'Unidade'),
 ('ANOMALIA_LOG', 5, 'ANL_VALOR',         'N', 14, 2, 'Valor'),
-('ANOMALIA_LOG', 6, 'ANL_DESCRICAO',     'C',255, 0, 'DescriÁ„o'),
-('ANOMALIA_LOG', 7, 'ANL_LANCAMENTO_ID', 'N', 10, 0, 'LanÁamento'),
-('ANOMALIA_LOG', 8, 'ANL_COBRANCA_ID',   'N', 10, 0, 'CobranÁa'),
+('ANOMALIA_LOG', 6, 'ANL_DESCRICAO',     'C',255, 0, 'Descri√ß√£o'),
+('ANOMALIA_LOG', 7, 'ANL_LANCAMENTO_ID', 'N', 10, 0, 'Lan√ßamento'),
+('ANOMALIA_LOG', 8, 'ANL_COBRANCA_ID',   'N', 10, 0, 'Cobran√ßa'),
 ('ANOMALIA_LOG', 9, 'ANL_CRIADO_EM',     'C', 19, 0, 'Detectada em'),
 ('ANOMALIA_LOG',10, 'ANL_RESOLVIDO_EM',  'C', 19, 0, 'Resolvida em'),
 ('ANOMALIA_LOG',11, 'ANL_STATUS',        'C', 20, 0, 'Status');
@@ -619,14 +619,14 @@ INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL
 INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
 ('DASHBOARD_CACHE', 1, 'DSH_ID',                  'N', 10, 0, 'ID'),
 ('DASHBOARD_CACHE', 2, 'DSH_DATA',                'C', 10, 0, 'Data'),
-('DASHBOARD_CACHE', 3, 'DSH_PERIODO',             'C',  7, 0, 'PerÌodo'),
+('DASHBOARD_CACHE', 3, 'DSH_PERIODO',             'C',  7, 0, 'Per√≠odo'),
 ('DASHBOARD_CACHE', 4, 'DSH_ANOMALIAS_TOTAL',     'N', 10, 0, 'Total'),
-('DASHBOARD_CACHE', 5, 'DSH_DESEQUILIBRIO_COUNT', 'N', 10, 0, 'DesequilÌbrio'),
-('DASHBOARD_CACHE', 6, 'DSH_LAN_ORFAO_COUNT',     'N', 10, 0, 'LanÁ. Ûrf„os'),
-('DASHBOARD_CACHE', 7, 'DSH_COB_ORFAO_COUNT',     'N', 10, 0, 'Cobr. Ûrf„s'),
-('DASHBOARD_CACHE', 8, 'DSH_RATEIO_INVALID_COUNT','N', 10, 0, 'Rateio inv·lido'),
+('DASHBOARD_CACHE', 5, 'DSH_DESEQUILIBRIO_COUNT', 'N', 10, 0, 'Desequil√≠brio'),
+('DASHBOARD_CACHE', 6, 'DSH_LAN_ORFAO_COUNT',     'N', 10, 0, 'Lan√ß. √≥rf√£os'),
+('DASHBOARD_CACHE', 7, 'DSH_COB_ORFAO_COUNT',     'N', 10, 0, 'Cobr. √≥rf√£s'),
+('DASHBOARD_CACHE', 8, 'DSH_RATEIO_INVALID_COUNT','N', 10, 0, 'Rateio inv√°lido'),
 ('DASHBOARD_CACHE', 9, 'DSH_TIMING_COUNT',        'N', 10, 0, 'Timing'),
-('DASHBOARD_CACHE',10, 'DSH_USUARIO_COUNT',       'N', 10, 0, 'Usu·rio'),
+('DASHBOARD_CACHE',10, 'DSH_USUARIO_COUNT',       'N', 10, 0, 'Usu√°rio'),
 ('DASHBOARD_CACHE',11, 'DSH_ATUALIZADO_EM',       'C', 19, 0, 'Atualizado em');
 
 -- USR_LOGIN faltava: o browse de usuarios abria com uma coluna so.
