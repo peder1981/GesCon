@@ -1,18 +1,18 @@
-// src/auth-primitives.prw ó Portal v2 auth primitives (Task 1.5, prerequisite
+// src/auth-primitives.prw ‚Äî Portal v2 auth primitives (Task 1.5, prerequisite
 // for Task 2's REST auth endpoints in src/auditoria-rest.prw).
 // Non-interactive equivalents of the interactive admin flows already in
 // src/usuarios.prw (GcGerarToken/GcRevogarToken, UI-driven, single condomino
 // picked from a list) and src/login.prw (GcCredenciaisValidas, admin-only
-// login gate) ó safe to call from a stateless REST handler: no
+// login gate) ‚Äî safe to call from a stateless REST handler: no
 // MsgInfo/MsgStop/MsgYesNo, no globals.
 #include "totvs.ch"
 
 /*/{Protheus.doc} GcValidarToken
-    Valida um token da tabela GCT_TOKEN sem nenhuma interaÁ„o com o
-    usu·rio. Perfil default 'CONDOMINO' quando TOK_PERFIL est· vazio ó
-    cobre os tokens j· emitidos pelo fluxo interativo GcGerarToken
-    (src/usuarios.prw), anterior ‡ coluna TOK_PERFIL, que sempre
-    representam acesso de condÙmino a uma ˙nica unidade.
+    Valida um token da tabela GCT_TOKEN sem nenhuma intera√ß√£o com o
+    usu√°rio. Perfil default 'CONDOMINO' quando TOK_PERFIL est√° vazio ‚Äî
+    cobre os tokens j√° emitidos pelo fluxo interativo GcGerarToken
+    (src/usuarios.prw), anterior √† coluna TOK_PERFIL, que sempre
+    representam acesso de cond√¥mino a uma √∫nica unidade.
     @type User Function
     @author Claude
     @since 2026-07-31
@@ -61,18 +61,18 @@ User Function GcValidarToken(cToken as character) as object
 Return oToken
 
 /*/{Protheus.doc} GcValidarLoginPortal
-    Valida usu·rio/senha (reaproveita GcCredenciaisValidas de
-    src/login.prw, que j· compara a senha por hash via FWHash ó nunca em
-    texto puro) e, se v·lidas, emite um novo token em GCT_TOKEN com o
-    perfil do usu·rio (USR_PERFIL, default 'ADMIN' se vazio) e validade
-    de 30 dias. Sem interaÁ„o com o usu·rio. Usado pelo endpoint REST
+    Valida usu√°rio/senha (reaproveita GcCredenciaisValidas de
+    src/login.prw, que j√° compara a senha por hash via FWHash ‚Äî nunca em
+    texto puro) e, se v√°lidas, emite um novo token em GCT_TOKEN com o
+    perfil do usu√°rio (USR_PERFIL, default 'ADMIN' se vazio) e validade
+    de 30 dias. Sem intera√ß√£o com o usu√°rio. Usado pelo endpoint REST
     POST /auth/login (src/auditoria-rest.prw::GcAuthLoginRestEndpoint).
     @type User Function
     @author Claude
     @since 2026-07-31
     @param cUsername, character, login (USR_LOGIN)
     @param cPassword, character, senha em texto puro (comparada por hash)
-    @return oResult, object, JsonObject {token, perfil, unidades_permitidas} ó ou .Null. se credenciais inv·lidas
+    @return oResult, object, JsonObject {token, perfil, unidades_permitidas} ‚Äî ou .Null. se credenciais inv√°lidas
 */
 User Function GcValidarLoginPortal(cUsername as character, cPassword as character) as object
     Local aPerfil as array
@@ -99,9 +99,9 @@ User Function GcValidarLoginPortal(cUsername as character, cPassword as characte
         cPerfil := aPerfil[1]:USR_PERFIL
     EndIf
 
-    // CON_CODIGO vazio: token de login admin n„o representa um condÙmino
-    // especÌfico. UNI_CODIGO '000': unidade sentinela usada como
-    // "todas as unidades" ó a mesma convenÁ„o j· adotada pela spec do
+    // CON_CODIGO vazio: token de login admin n√£o representa um cond√¥mino
+    // espec√≠fico. UNI_CODIGO '000': unidade sentinela usada como
+    // "todas as unidades" ‚Äî a mesma conven√ß√£o j√° adotada pela spec do
     // Task 2 (unidades_permitidas := {"000"}).
     cToken := GcGerarTokenUnico()
     cCriadoIso := GcDataHoraIso(Date())
@@ -119,15 +119,15 @@ User Function GcValidarLoginPortal(cUsername as character, cPassword as characte
 Return oResult
 
 /*/{Protheus.doc} GcInvalidarToken
-    Revoga um token (soft-delete D_E_L_E_T_='*'), vers„o n„o-interativa
+    Revoga um token (soft-delete D_E_L_E_T_='*'), vers√£o n√£o-interativa
     de GcRevogarToken (src/usuarios.prw, que lista tokens e pede
-    confirmaÁ„o ao admin). Usado pelo endpoint REST POST /auth/logout
+    confirma√ß√£o ao admin). Usado pelo endpoint REST POST /auth/logout
     (src/auditoria-rest.prw::GcAuthLogoutRestEndpoint).
     @type User Function
     @author Claude
     @since 2026-07-31
     @param cToken, character, valor do token
-    @return lOk, logical, .T. se revogado, .F. se o token n„o existe (ou j· estava revogado/expirado logicamente)
+    @return lOk, logical, .T. se revogado, .F. se o token n√£o existe (ou j√° estava revogado/expirado logicamente)
 */
 User Function GcInvalidarToken(cToken as character) as logical
     Local aResult as array
@@ -148,15 +148,15 @@ User Function GcInvalidarToken(cToken as character) as logical
 Return .T.
 
 /*/{Protheus.doc} GcGerarTokenUnico
-    Gera um token ˙nico. Thin wrapper sobre GcGerarTokenId
-    (src/usuarios.prw) ó mesma geraÁ„o timestamp+random+FWHash j· usada
+    Gera um token √∫nico. Thin wrapper sobre GcGerarTokenId
+    (src/usuarios.prw) ‚Äî mesma gera√ß√£o timestamp+random+FWHash j√° usada
     por GcGerarToken, exposta aqui com o nome pedido pelo Task 1.5 para
-    quem sÛ depende do primitivo de autenticaÁ„o e n„o quer acoplar em
+    quem s√≥ depende do primitivo de autentica√ß√£o e n√£o quer acoplar em
     src/usuarios.prw diretamente.
     @type User Function
     @author Claude
     @since 2026-07-31
-    @return cToken, character, token ˙nico de 36 chars (formato UUID-like)
+    @return cToken, character, token √∫nico de 36 chars (formato UUID-like)
 */
 User Function GcGerarTokenUnico() as character
 Return GcGerarTokenId()
@@ -180,9 +180,9 @@ Return SToD(cAno + cMes + cDia)
 
 /*/{Protheus.doc} GcDataHoraIso
     Converte Date para string ISO 8601 com a hora atual do sistema
-    ("YYYY-MM-DD HH:MM:SS") ó mesmo formato usado por GcGerarToken
+    ("YYYY-MM-DD HH:MM:SS") ‚Äî mesmo formato usado por GcGerarToken
     (src/usuarios.prw) para CRIPTADO/VALIDO_ATE, o que garante que a
-    comparaÁ„o lexicogr·fica de string continua v·lida.
+    compara√ß√£o lexicogr√°fica de string continua v√°lida.
     @type Static Function
     @author Claude
     @since 2026-07-31

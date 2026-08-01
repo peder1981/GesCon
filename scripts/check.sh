@@ -10,6 +10,26 @@ cd "$(dirname "$0")/.."
 falhas=0
 total=0
 
+# Encoding: o AdvPP le os fontes como UTF-8. Fonte em CP-1252 compila, mas
+# todo acento sai como mojibake na tela (menus, mensagens, titulos de
+# coluna). Isto ja aconteceu neste projeto -- "Condominos" virava
+# "Cond\xc3\xb4minos" no menu -- entao vira erro de build, nao surpresa em
+# producao. U+FFFD indica texto ja destruido por uma conversao anterior.
+echo "encoding (UTF-8, sem U+FFFD):"
+for f in gescon.prw src/*.prw tests/*.prw schema.sql; do
+    [ -f "$f" ] || continue
+    if ! iconv -f UTF-8 -t UTF-8 "$f" >/dev/null 2>&1; then
+        printf '  FALHA %s nao e UTF-8 valido\n' "$f"
+        falhas=$((falhas + 1))
+    elif grep -q $'\xef\xbf\xbd' "$f"; then
+        printf '  FALHA %s contem U+FFFD (texto perdido)\n' "$f"
+        falhas=$((falhas + 1))
+    fi
+done
+[ "$falhas" -eq 0 ] && echo "  ok"
+echo
+
+
 for f in gescon.prw src/*.prw tests/*.prw; do
     [ -f "$f" ] || continue
     total=$((total + 1))

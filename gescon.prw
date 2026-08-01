@@ -20,6 +20,8 @@
 #include "src/auditoria-validacoes.prw"
 #include "src/auth-primitives.prw"
 #include "src/boleto.prw"
+#include "src/plano-contas.prw"
+#include "src/exercicios.prw"
 
 /*/{Protheus.doc} GesCon
     Ponto de entrada do GesCon — sobe com `advplc serve gescon.prw`,
@@ -162,7 +164,8 @@ Return
     @since 2026-07-30
 */
 User Function GcMenuContabilidade()
-    Local aMenu := {"Validar Integridade", "Gerar Balancete", "Auditar Período", "Fechar Período", "Voltar"}
+    Local aMenu := {"Validar Integridade", "Gerar Balancete", "Auditar Período", "Fechar Período", ;
+        "Plano de Contas", "Tipos de Repartição", "Exercícios", "Abrir Exercício", "Voltar"}
     Local nOpcao := FWMenuSelect(aMenu, "Contabilidade")
     Local cExercicio
     Local lRet
@@ -214,5 +217,13 @@ User Function GcMenuContabilidade()
                     MsgAlert("Não foi possível fechar período " + cExercicio + ".", "Fechamento")
                 EndIf
             EndIf
+        Case nOpcao == 5
+            GcPlanoContas()
+        Case nOpcao == 6
+            GcReparticao()
+        Case nOpcao == 7
+            GcExercicios()
+        Case nOpcao == 8
+            GcAbrirExercicio()
     EndCase
 Return

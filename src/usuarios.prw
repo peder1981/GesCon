@@ -1,17 +1,17 @@
-// src/usuarios.prw � gest�o de usu�rios e tokens tempor�rios do GesCon.
-// Menu "Usu�rios" com: Gerar Token, Revogar Token, Criar Usu�rio, Voltar.
+// src/usuarios.prw — gestão de usuários e tokens temporários do GesCon.
+// Menu "Usuários" com: Gerar Token, Revogar Token, Criar Usuário, Voltar.
 #include "totvs.ch"
 
 /*/{Protheus.doc} GcMenuUsuarios
-    Menu de gest�o de usu�rios. Abre submenu com op��es: gerar token,
-    revogar token, criar usu�rio, voltar.
+    Menu de gestão de usuários. Abre submenu com opções: gerar token,
+    revogar token, criar usuário, voltar.
     @type User Function
     @author GesCon
     @since 2026-07-24
 */
 User Function GcMenuUsuarios()
-    Local aMenu := {"Gerar Token", "Revogar Token", "Criar Usu�rio", "Voltar"}
-    Local nOpcao := FWMenuSelect(aMenu, "Usu�rios")
+    Local aMenu := {"Gerar Token", "Revogar Token", "Criar Usuário", "Voltar"}
+    Local nOpcao := FWMenuSelect(aMenu, "Usuários")
 
     Do Case
         Case nOpcao == 1
@@ -24,13 +24,13 @@ User Function GcMenuUsuarios()
 Return
 
 /*/{Protheus.doc} GcGerarToken
-    Gera token tempor�rio para um cond�mino acessar o portal.
-    Lista cond�minos (JOIN CON-UNI), admin seleciona, sistema gera
+    Gera token temporário para um condômino acessar o portal.
+    Lista condôminos (JOIN CON-UNI), admin seleciona, sistema gera
     token + validade +48h e grava em GCT_TOKEN.
     @type User Function
     @author GesCon
     @since 2026-07-24
-    @obs Token � v�lido por 48 horas a partir da gera��o
+    @obs Token — válido por 48 horas a partir da geração
 */
 User Function GcGerarToken()
     Local aCond := TCSqlQuery("SELECT CON_CODIGO, CON_NOME, UNI_CODIGO, CON_EMAIL " + ;
@@ -40,7 +40,7 @@ User Function GcGerarToken()
         "ORDER BY CON_NOME")
 
     If Len(aCond) == 0
-        MsgStop("Nenhum cond�mino cadastrado.", "Gerar Token")
+        MsgStop("Nenhum condômino cadastrado.", "Gerar Token")
         Return
     EndIf
 
@@ -50,13 +50,13 @@ User Function GcGerarToken()
     For nJ := 1 To Len(aCond)
         cLista += Str(nJ, 3) + ". " + aCond[nJ]:CON_NOME + " (Uni: " + aCond[nJ]:UNI_CODIGO + ")" + Chr(10)
     Next
-    cLista += "\nSelecione o n�mero:"
+    cLista += "\nSelecione o número:"
 
     Local cSel := FWGetText(cLista, "")
     Local nIdx := Val(cSel)
 
     If nIdx < 1 .Or. nIdx > Len(aCond)
-        MsgStop("�ndice inv�lido.", "Gerar Token")
+        MsgStop("Índice inválido.", "Gerar Token")
         Return
     EndIf
 
@@ -85,14 +85,14 @@ User Function GcGerarToken()
     // Mostra token ao admin
     MsgInfo("Token gerado:" + Chr(10) + ;
         "Token: " + cToken + Chr(10) + ;
-        "Cond�mino: " + cConCod + " - " + aCond[nIdx]:CON_NOME + Chr(10) + ;
+        "Condômino: " + cConCod + " - " + aCond[nIdx]:CON_NOME + Chr(10) + ;
         "Unidade: " + cUniCod + Chr(10) + ;
-        "V�lido at�: " + cValidadeIso, "GesCon � Token Gerado")
+        "Válido até: " + cValidadeIso, "GesCon — Token Gerado")
 Return
 
 /*/{Protheus.doc} GcRevogarToken
-    Revoga token ativo. Lista tokens v�lidos (n�o expirados, n�o usados).
-    Admin seleciona e faz DELETE l�gico na GCT_TOKEN.
+    Revoga token ativo. Lista tokens válidos (não expirados, não usados).
+    Admin seleciona e faz DELETE lógico na GCT_TOKEN.
     @type User Function
     @author GesCon
     @since 2026-07-24
@@ -116,17 +116,17 @@ User Function GcRevogarToken()
         cLista += Str(nJ, 3) + ". " + Left(aTokens[nJ]:TOKEN, 8) + "... Uni:" + aTokens[nJ]:UNI_CODIGO + ;
             " Con:" + aTokens[nJ]:CON_CODIGO + " Val:" + aTokens[nJ]:VALIDO_ATE + Chr(10)
     Next
-    cLista += "\nSelecione o n�mero para revogar:"
+    cLista += "\nSelecione o número para revogar:"
 
     Local cSel := FWGetText(cLista, "")
     Local nIdx := Val(cSel)
 
     If nIdx < 1 .Or. nIdx > Len(aTokens)
-        MsgStop("�ndice inv�lido.", "Revogar Token")
+        MsgStop("Índice inválido.", "Revogar Token")
         Return
     EndIf
 
-    // DELETE l�gico
+    // DELETE lógico
     Local cTokenSelecionado := aTokens[nIdx]:TOKEN
     TCSqlExec("UPDATE GCT_TOKEN SET D_E_L_E_T_ = '*' WHERE TOKEN = '" + GcSqlLit(cTokenSelecionado) + "' AND D_E_L_E_T_ = ' '")
 
@@ -134,16 +134,16 @@ User Function GcRevogarToken()
 Return
 
 /*/{Protheus.doc} GcCriarUsuario
-    Cria novo usu�rio: Admin (login/senha).
-    Cond�minos acessam via token tempor�rio (n�o possuem login direto).
+    Cria novo usuário: Admin (login/senha).
+    Condôminos acessam via token temporário (não possuem login direto).
     @type User Function
     @author GesCon
     @since 2026-07-24
-    @obs Acesso de cond�minos � exclusivamente via token � perfil CONDOMINO ser� implementado no Plano 3
+    @obs Acesso de condôminos — exclusivamente via token — perfil CONDOMINO será implementado no Plano 3
 */
 User Function GcCriarUsuario()
     Local aTipo := {"Admin"}
-    Local nTipo := FWMenuSelect(aTipo, "Tipo de usu�rio")
+    Local nTipo := FWMenuSelect(aTipo, "Tipo de usuário")
 
     Do Case
         Case nTipo == 1
@@ -177,7 +177,7 @@ Return .T.
 
 /*/{Protheus.doc} GcDateToIso
     Converte data Protheus para formato ISO 8601 (YYYY-MM-DD).
-    Usa DtoS (YYYYMMDD) com inser��o de h�fens.
+    Usa DtoS (YYYYMMDD) com inserção de hífens.
     @type Static Function
     @author GesCon
     @since 2026-07-24
@@ -189,8 +189,8 @@ Static Function GcDateToIso(dData)
 Return SubStr(cDtos, 1, 4) + "-" + SubStr(cDtos, 5, 2) + "-" + SubStr(cDtos, 7, 2)
 
 /*/{Protheus.doc} GcGerarTokenId
-    Gera identificador �nico de 36 chars (formato UUID-like) para tokens.
-    Usa timestamp + random em AdvPL puro (n�o h� gen uuid nativo do AdvPP v1).
+    Gera identificador único de 36 chars (formato UUID-like) para tokens.
+    Usa timestamp + random em AdvPL puro (não há gen uuid nativo do AdvPP v1).
     @type User Function
     @author GesCon
     @since 2026-07-24
@@ -199,6 +199,6 @@ Return SubStr(cDtos, 1, 4) + "-" + SubStr(cDtos, 5, 2) + "-" + SubStr(cDtos, 7, 
 User Function GcGerarTokenId()
     Local cSeed := DTOC(Date()) + Time() + Str(Random(999999999), 9)
     Local cHash := FWHash(cSeed)
-    // Usa os primeiros 32 chars hex + formata��o UUID-like = 36
+    // Usa os primeiros 32 chars hex + formatação UUID-like = 36
     Local cToken := Left(cHash, 8) + "-" + SubStr(cHash, 9, 4) + "-" + SubStr(cHash, 13, 4) + "-" + SubStr(cHash, 17, 4) + "-" + SubStr(cHash, 21, 12)
 Return cToken

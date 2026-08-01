@@ -122,7 +122,27 @@ Modos alternativos, para desenvolvimento:
 
 ---
 
-## 5. Limitações conhecidas do layout
+## 5. Encoding: UTF-8, não CP-1252
+
+Os fontes do GesCon são **UTF-8**. O AdvPP é escrito em Go e lê os fontes
+como UTF-8; um `.prw` em CP-1252 compila normalmente, mas todo acento sai
+como mojibake na tela — menus, mensagens e títulos de coluna.
+
+Isto já aconteceu aqui: `Condôminos` aparecia como `Cond&#244;minos` no menu,
+e `Título` como `T&#237;tulo` no cabeçalho dos browses (o SX3 vem de
+`schema.sql`, que também precisa ser UTF-8).
+
+A regra vale para `.prw` **e** para `schema.sql`. `scripts/check.sh` recusa
+qualquer fonte que não seja UTF-8 válido, ou que contenha U+FFFD — sinal de
+texto já destruído por uma conversão anterior, que nenhuma reconversão
+recupera.
+
+> A convenção CP-1252 do Protheus real (RPO) **não se aplica** a este
+> projeto. É uma exigência do compilador da TOTVS, não do AdvPP.
+
+---
+
+## 6. Limitações conhecidas do layout
 
 As coordenadas `@ linha,coluna` **não** posicionam em pixel no Fyne. O VM
 agrupa os controles em linhas por proximidade de `y` (tolerância de 8px,
