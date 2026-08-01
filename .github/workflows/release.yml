@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  GO_VERSION: "1.24"
+
+jobs:
+  # O GesCon e um app Fyne: o executavel embute bytecode num stub Go e
+  # compila com CGO. Cross-compilar de Linux para Windows esbarra em
+  # conflito de headers do mingw, entao cada plataforma e compilada no seu
+  # proprio runner.
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            plataforma: linux-amd64
+            ext: ""
+          - os: windows-latest
+            plataforma: windows-amd64
+            ext: ".exe"
+          - os: macos-latest
+            plataforma: darwin-arm64
+            ext: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout GesCon
+        uses: actions/checkout@v4
+        with:
+          path: GesCon
+
+      - name: Checkout AdvPP (compilador)
+        uses: actions/checkout@v4
+        with:
+          repository: peder1981/AdvPP
+          path: AdvPP
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Dependencias do Fyne (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev xorg-dev
+
+      - name: Build advplc
+        shell: bash
+        run: |
+          cd AdvPP
+          go build -o "$RUNNER_TEMP/advplc${{ matrix.ext }}" ./cmd/advplc
+
+      - name: Build GesCon
+        shell: bash
+        env:
+          ADVPP_SRC: ${{ github.workspace }}/AdvPP
+        run: |
+          cd GesCon
+          VERSAO="${GITHUB_REF_NAME#v}"
+          "$RUNNER_TEMP/advplc${{ matrix.ext }}" build gescon.prw \
+            -o "GesConApp-${{ matrix.plataforma }}${{ matrix.ext }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GesConApp-${{ matrix.plataforma }}
+          path: GesCon/GesConApp-${{ matrix.plataforma }}${{ matrix.ext }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artefatos
+      - name: Publica os binarios no release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artefatos/**/*
+          generate_release_notes: true
