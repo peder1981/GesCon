@@ -122,23 +122,38 @@ Modos alternativos, para desenvolvimento:
 
 ---
 
-## 5. Encoding: UTF-8, não CP-1252
+## 5. Encoding
 
-Os fontes do GesCon são **UTF-8**. O AdvPP é escrito em Go e lê os fontes
-como UTF-8; um `.prw` em CP-1252 compila normalmente, mas todo acento sai
-como mojibake na tela — menus, mensagens e títulos de coluna.
+O projeto inteiro é **UTF-8**, mas por motivos diferentes em cada tipo de
+arquivo — e só um deles é obrigatório.
 
-Isto já aconteceu aqui: `Condôminos` aparecia como `Cond&#244;minos` no menu,
-e `Título` como `T&#237;tulo` no cabeçalho dos browses (o SX3 vem de
-`schema.sql`, que também precisa ser UTF-8).
+### `.prw` — convenção, não exigência
 
-A regra vale para `.prw` **e** para `schema.sql`. `scripts/check.sh` recusa
-qualquer fonte que não seja UTF-8 válido, ou que contenha U+FFFD — sinal de
-texto já destruído por uma conversão anterior, que nenhuma reconversão
-recupera.
+O `advplc` converte fontes CP-1252 para UTF-8 **antes de lexar**
+(`convertToUTF8` em `cmd/advplc/main.go`), então fonte nos dois encodings
+compila e renderiza acento corretamente. Verificado comparando a saída byte
+a byte: idêntica.
 
-> A convenção CP-1252 do Protheus real (RPO) **não se aplica** a este
-> projeto. É uma exigência do compilador da TOTVS, não do AdvPP.
+Padronizamos em UTF-8 por consistência, não porque CP-1252 quebre.
+
+> A regra CP-1252 do Protheus real (RPO) é exigência do compilador da TOTVS.
+> O AdvPP não a compartilha.
+
+### `schema.sql` — **obrigatoriamente** UTF-8
+
+Este arquivo não passa pelo `advplc`: o `sqlite3` grava os bytes literais no
+banco, e o Fyne renderiza esperando UTF-8. Com `schema.sql` em CP-1252, os
+títulos do SX3 entram no banco como bytes inválidos e **toda grade do
+sistema** mostra o cabeçalho corrompido — foi o que acontecia com `Título`.
+
+### U+FFFD é sempre defeito
+
+O caractere de substituição (`\uFFFD`) indica texto já destruído por uma
+conversão anterior; nenhuma reconversão recupera. Havia 88 deles neste
+projeto, reconstruídos palavra a palavra.
+
+`scripts/check.sh` recusa qualquer arquivo que não seja UTF-8 válido ou que
+contenha U+FFFD.
 
 ---
 

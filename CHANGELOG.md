@@ -51,9 +51,11 @@ foi procurada:
 
 ### Infraestrutura
 
-- **Encoding**: projeto inteiro em UTF-8. A convenção CP-1252 do Protheus
-  real não se aplica ao AdvPP; 88 caracteres já destruídos foram
-  reconstruídos
+- **Encoding**: `schema.sql` passou a UTF-8 — não passa pelo `advplc`, e em
+  CP-1252 os títulos do SX3 entravam corrompidos no banco, deixando o
+  cabeçalho ilegível em toda grade do sistema. Fontes `.prw` foram
+  uniformizados em UTF-8 por consistência (o `advplc` aceita os dois). 88
+  caracteres já destruídos foram reconstruídos
 - **Testes**: 13 suítes confiáveis, em banco descartável. Antes a suíte
   passava por não rodar — `portal-v2_test.prw` nunca havia executado uma
   linha e hoje roda 271
