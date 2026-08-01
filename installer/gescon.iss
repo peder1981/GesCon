@@ -1,34 +1,23 @@
 ; installer/gescon.iss -- instalador Windows do GesCon (Inno Setup 6).
 ;
-; Compilar:  ISCC.exe /DAppVersion=1.0.4 installer\gescon.iss
-; Espera, ao lado deste .iss:  GesConApp-windows-amd64.exe,  mesa\*.dll  e
-; GesCon.exe (o lancador, compilado de installer\launcher)
+; Compilar:  ISCC.exe /DAppVersion=1.0.9 installer\gescon.iss
+; Espera, ao lado deste .iss:  GesConApp-windows-amd64.exe  e  mesa\*.dll
 ;
-; Tres coisas que o zip solto nao resolvia:
+; Instalacao deliberadamente plana: o executavel, os DLLs do Mesa e os dois
+; scripts, todos em {app}. O icone aponta direto para o executavel.
 ;
-;  1. Banco compartilhado entre as contas do Windows. Desde o AdvPP 2.0.11 o
-;     banco de um app distribuido mora em %AppData%\advpp\<app>\, que e POR
-;     USUARIO -- estavel, mas errado para este caso: o banco e do condominio,
-;     nao da conta do Windows. Os atalhos rodam GesCon.cmd, que define
-;     ADVPP_DB apontando para {commonappdata}\GesCon, pasta com permissao de
-;     escrita para todos. A variavel fica no processo do lancador; definida no
-;     ambiente da maquina ela sequestraria tambem advplc/adveditor/advpp-ide,
-;     que devem seguir usando o banco do diretorio de projeto.
+; A versao anterior tinha um executavel lancador que definia ADVPP_DB e
+; chamava o programa numa subpasta app\. Ele existia para transportar uma
+; string e, em troca, trouxe processo intermediario, heranca de handles e
+; falhas que nao aconteciam sem ele -- inclusive relatar erro para um
+; programa que tinha aberto normalmente. Foi removido. O caminho do banco
+; agora vai num arquivo de texto que o proprio programa le (advpp-db.txt,
+; lido por shared.ResolveStandaloneDatabasePath no AdvPP 2.0.15+).
 ;
-;  2. Mesa3D FORA do caminho de carregamento. opengl32.dll e import ESTATICO
-;     do executavel: o Windows o carrega na criacao do processo, antes de
-;     qualquer codigo nosso. Um Mesa que nao inicializa nessa maquina --
-;     visto em VM QEMU/QXL, provavelmente instrucoes de CPU que o
-;     libgallium_wgl.dll usa e a vCPU nao tem -- mata o processo no
-;     carregador: sem janela, sem saida, sem log. Instalar o Mesa ao lado do
-;     executavel trocava um erro visivel ("WGL: driver does not support
-;     OpenGL") por silencio total.
-;
-;     Entao ele vai para {app}\mesa\, que nao esta no caminho de busca de
-;     DLL, e so entra em jogo se alguem rodar o .bat de ativacao. O padrao e
-;     sempre o OpenGL do sistema.
-;
-;  3. Desinstalacao de verdade, com o banco preservado.
+; O Mesa3D vem instalado por padrao, ao lado do executavel. Sem OpenGL de
+; verdade -- o caso de qualquer VM, e desta em particular, com QXL -- o Fyne
+; nao cria janela nenhuma. Desativar-renderizacao-por-software.bat desfaz,
+; para o caso raro de o Mesa nao inicializar na maquina.
 
 #ifndef AppVersion
   #define AppVersion "0.0.0-dev"
@@ -54,7 +43,7 @@ PrivilegesRequired=admin
 WizardStyle=modern
 DisableProgramGroupPage=yes
 UninstallDisplayName=GesCon {#AppVersion}
-UninstallDisplayIcon={app}\GesCon.exe
+UninstallDisplayIcon={app}\GesConApp-windows-amd64.exe
 
 [Languages]
 Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
@@ -63,45 +52,45 @@ Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortugue
 Name: "desktopicon"; Description: "Criar atalho na Area de Trabalho"; GroupDescription: "Atalhos:"
 
 [Files]
-Source: "GesCon.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "GesConApp-windows-amd64.exe"; DestDir: "{app}\app"; Flags: ignoreversion
-; Fora do caminho de busca de DLL. So o .bat abaixo os coloca junto do
-; executavel, e so quando o OpenGL do sistema nao serve.
-Source: "mesa\opengl32.dll"; DestDir: "{app}\mesa"; Flags: ignoreversion
-Source: "mesa\libgallium_wgl.dll"; DestDir: "{app}\mesa"; Flags: ignoreversion
-Source: "installer\Ativar-renderizacao-por-software.bat"; DestDir: "{app}"; Flags: ignoreversion
+Source: "GesConApp-windows-amd64.exe"; DestDir: "{app}"; Flags: ignoreversion
+; Ao lado do executavel porque opengl32.dll e import ESTATICO: o Windows
+; resolve pelo diretorio do .exe antes do System32, e nao ha como
+; redirecionar isso depois que o processo comeca.
+Source: "mesa\opengl32.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "mesa\libgallium_wgl.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "installer\Desativar-renderizacao-por-software.bat"; DestDir: "{app}"; Flags: ignoreversion
+Source: "installer\Ativar-renderizacao-por-software.bat"; DestDir: "{app}"; Flags: ignoreversion
 
 [Dirs]
+; Pasta do banco, compartilhada entre as contas do Windows: o banco e do
+; condominio, nao de quem abriu o programa.
 Name: "{commonappdata}\GesCon"; Permissions: users-modify
-; Gravavel pelo usuario comum de proposito: e onde o lancador copia o Mesa3D
-; quando descobre, em execucao, que a maquina nao tem OpenGL. Sem isto a
-; recuperacao automatica exigiria elevacao a cada tentativa.
-Name: "{app}\app"; Permissions: users-modify
 
 [Icons]
-; Apontam para o lancador, que e quem define ADVPP_DB. Ele e um binario do
-; subsistema GUI: nenhum console pisca.
-Name: "{group}\GesCon"; Filename: "{app}\GesCon.exe"
-Name: "{group}\Ativar renderizacao por software"; Filename: "{app}\Ativar-renderizacao-por-software.bat"; \
-    IconFilename: "{app}\GesCon.exe"
+Name: "{group}\GesCon"; Filename: "{app}\GesConApp-windows-amd64.exe"
 Name: "{group}\Desinstalar o GesCon"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\GesCon"; Filename: "{app}\GesCon.exe"; Tasks: desktopicon
+Name: "{autodesktop}\GesCon"; Filename: "{app}\GesConApp-windows-amd64.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\GesCon.exe"; Description: "Abrir o GesCon agora"; \
+Filename: "{app}\GesConApp-windows-amd64.exe"; Description: "Abrir o GesCon agora"; \
     Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
-; So o que o instalador colocou. {commonappdata}\GesCon guarda o banco do
-; condominio e fica -- apagar dado de cliente na desinstalacao seria perda
-; irreversivel por um clique.
-Type: filesandordirs; Name: "{app}\app"
+; Escritos em tempo de execucao, entao o desinstalador nao os conhece pelo
+; [Files]. O banco em {commonappdata}\GesCon fica: apagar dado de cliente
+; numa desinstalacao seria perda irreversivel por um clique.
+Type: files; Name: "{app}\advpp-db.txt"
+Type: files; Name: "{app}\opengl32.dll.off"
+Type: files; Name: "{app}\libgallium_wgl.dll.off"
 
 [Code]
-// Sem heuristica de driver OpenGL aqui. A versao anterior tentava adivinhar,
-// pelo registro, se a maquina tinha driver de verdade, e pre-marcava o Mesa
-// quando achava que nao. Errou numa VM QXL -- e o preco do erro nao era
-// "roda mais devagar", era "nao abre e nao diz nada". Agora o padrao e
-// sempre o OpenGL do sistema, e o Mesa e uma acao explicita de quem viu o
-// erro do Fyne na tela.
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+    // Uma linha, texto puro: e o que o programa le para saber onde fica o
+    // banco compartilhado. Substitui o lancador que definia ADVPP_DB.
+    SaveStringToFile(
+      ExpandConstant('{app}\advpp-db.txt'),
+      ExpandConstant('{commonappdata}\GesCon\GesCon.db'),
+      False);
+end;
