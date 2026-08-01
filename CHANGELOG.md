@@ -2,7 +2,7 @@
 
 Mudanças notáveis do GesCon.
 
-## [1.0.5] — 2026-08-01
+## [1.0.6] — 2026-08-01
 
 ### Corrigido
 
