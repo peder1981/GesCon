@@ -1,9 +1,26 @@
 // tests/portal_test.prw � testes do portal do cond�mino (token auth + browse limitado).
 // Os testes usam TCSqlQuery/TCSqlExec direto pois FWGetText � interativo.
 #include "totvs.ch"
-#include "../src/db.prw"
-#include "../src/portal.prw"
-#include "../src/usuarios.prw"
+
+// Os #include dos modulos ficam no FIM do arquivo, de proposito.
+// `advplc run` escolhe sozinho o ponto de entrada: a primeira User
+// Function cuja linha seja >= a primeira linha de codigo do arquivo raiz
+// (pkg/compiler/codegen.go). Como #include cola o texto incluido no lugar,
+// includes no topo empurram as funcoes dos modulos para antes do runner
+// deste arquivo -- e a suite inteira roda em silencio, executando algo
+// como GcSqlLit no lugar dos testes. Com os includes no fim, o runner
+// abaixo e sempre a primeira funcao do compilado. scripts/test.sh
+// confere isso a cada execucao.
+
+/*/{Protheus.doc} RunPortalTests
+    Ponto de entrada da suite do portal. Precisa ser a primeira User
+    Function do arquivo -- ver a nota sobre includes no topo.
+    @type Function
+    @author GesCon
+    @since 2026-07-31
+*/
+User Function RunPortalTests()
+Return PortalTest()
 
 /*/{Protheus.doc} TestaGcPortalAuthVazio
     Chamada com token vazio/n�o encontrado deve retornar .F.
@@ -37,7 +54,7 @@ User Function AT06TokenValido()
 
     Local aCon := TCSqlQuery("SELECT CON_CODIGO FROM CON WHERE CON_CODIGO = 'C999' AND D_E_L_E_T_ = ' '")
     If Len(aCon) == 0
-        TCSqlExec("INSERT INTO CON (CON_CODIGO, CON_NOME, CON_CPF, CON_EMAIL, CON_FONE, CON_UNI) VALUES ('C999', 'Cond�mino Teste', '000.000.000-00', 'teste@teste.com', '11111111', '99')")
+        TCSqlExec("INSERT INTO CON (CON_CODIGO, CON_NOME, CON_CPF, CON_EMAIL, CON_TEL) VALUES ('C999', 'Cond�mino Teste', '000.000.000-00', 'teste@teste.com', '11111111')")
     EndIf
 
     // Gera token v�lido com validade futura (data fixa para teste)
@@ -237,7 +254,7 @@ User Function PortalTest()
     // ========================================
     // Step 3: Criar condômino vinculado à unidade
     // ========================================
-    TCSqlExec("INSERT INTO CON (CON_CODIGO, CON_NOME, CON_CPF, CON_EMAIL, CON_UNI) VALUES ('CE2E99', 'Condômino E2E Teste', '000.000.000-00', 'e2e@teste.com', 'E2E99')")
+    TCSqlExec("INSERT INTO CON (CON_CODIGO, CON_NOME, CON_CPF, CON_EMAIL) VALUES ('CE2E99', 'Condômino E2E Teste', '000.000.000-00', 'e2e@teste.com')")
     Local aCon := TCSqlQuery("SELECT CON_CODIGO FROM CON WHERE CON_CODIGO = 'CE2E99' AND D_E_L_E_T_ = ' '")
     If Len(aCon) != 1
         lTodosOk := .F.
@@ -369,3 +386,7 @@ User Function PortalTest()
         ConOut("PORTAL_TEST_FAIL")
     EndIf
 Return lTodosOk
+
+#include "../src/db.prw"
+#include "../src/portal.prw"
+#include "../src/usuarios.prw"

@@ -1,11 +1,16 @@
 // tests/auditoria_test.prw? Testes das tabelas de auditoria e anomalias
 // Verifica criao e existncia das tabelas ANOMALIA_LOG, ALERTA e DASHBOARD_CACHE
 #include "totvs.ch"
-#include "../src/db.prw"
-#include "../src/login.prw"
-#include "../src/usuarios.prw"
-#include "../src/auth-primitives.prw"
-#include "../src/auditoria-validacoes.prw"
+
+// Os #include dos modulos ficam no FIM do arquivo, de proposito.
+// `advplc run` escolhe sozinho o ponto de entrada: a primeira User
+// Function cuja linha seja >= a primeira linha de codigo do arquivo raiz
+// (pkg/compiler/codegen.go). Como #include cola o texto incluido no lugar,
+// includes no topo empurram as funcoes dos modulos para antes do runner
+// deste arquivo -- e a suite inteira roda em silencio, executando algo
+// como GcSqlLit no lugar dos testes. Com os includes no fim, o runner
+// abaixo e sempre a primeira funcao do compilado. scripts/test.sh
+// confere isso a cada execucao.
 
 /*/{Protheus.doc} RunAuditoriaTests
     Driver de execucao: `advplc run tests/auditoria_test.prw` so executa a
@@ -902,3 +907,10 @@ User Function TestGcAtualizarDashboardCache()
     TCSqlExec("DELETE FROM DASHBOARD_CACHE WHERE DSH_PERIODO = '" + cPeriodo + "'")
     TCSqlExec("DELETE FROM ANOMALIA_LOG WHERE ANL_PERIODO = '" + cPeriodo + "'")
 Return lOk
+
+#include "../src/db.prw"
+#include "../src/login.prw"
+#include "../src/usuarios.prw"
+#include "../src/auth-primitives.prw"
+#include "../src/contabil.prw"
+#include "../src/auditoria-validacoes.prw"

@@ -23,8 +23,7 @@
 */
 User Function GcBoletoLinhaDigitavel(cBanco, cAgencia, cConta, nAgDv, cCobrta, cCarteira, nCartDv, dVenc, nValor, cNumeroDoc)
     Local cCampoLivre := GcBoletoCampoLivre(cBanco, cAgencia, cConta, nAgDv, cCobrta, cCarteira, nCartDv, cNumeroDoc)
-    Return GcBoletoCalculaLinha(cBanco, cCampoLivre, dVenc, nValor)
-Return
+Return GcBoletoCalculaLinha(cBanco, cCampoLivre, dVenc, nValor)
 
 /*/{Protheus.doc} GcBoletoCodigoBarras
     Gera codigo de barras em texto (48 digitos: 47 dados + 1 DV final).
@@ -46,8 +45,7 @@ Return
 */
 User Function GcBoletoCodigoBarras(cBanco, cAgencia, cConta, nAgDv, cCobrta, cCarteira, nCartDv, dVenc, nValor, cNumeroDoc)
     Local cCampoLivre := GcBoletoCampoLivre(cBanco, cAgencia, cConta, nAgDv, cCobrta, cCarteira, nCartDv, cNumeroDoc)
-    Return GcBoletoMontaCodigoBarras(cBanco, cCampoLivre, dVenc, nValor)
-Return
+Return GcBoletoMontaCodigoBarras(cBanco, cCampoLivre, dVenc, nValor)
 
 /*/{Protheus.doc} GcBoletoCalculaDv
     Calcula DV modulo 11 sobre string numerica. Pesos: 2,3,4,5,6,7 repetindo da direita para esquerda.

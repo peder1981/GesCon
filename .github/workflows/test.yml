@@ -53,7 +53,6 @@ jobs:
         run: |
           cd GesCon
           sqlite3 "$ADVPP_DB" < schema.sql
-          sqlite3 "$ADVPP_DB" < scripts/seed-contabil.sql
 
       - name: Sintaxe de todos os fontes
         run: GesCon/scripts/check.sh

@@ -1,8 +1,23 @@
 // src/portal-v2.prw — Portal v2 snapshot generators (billing, notices, schedule)
 #include "totvs.ch"
-#include "contabil.prw"
-#include "portal.prw"
 
+// Nota sobre `Begin Transaction`: no AdvPP o par Begin/End Transaction e
+// apenas um marcador de bloco, sem atomicidade real (o parser o trata como
+// sequencia simples -- pkg/parser/expressions.go:1350), e nao existe
+// Rollback(). As funcoes abaixo mantem os marcadores para documentar a
+// intencao, mas em caso de erro no meio de um snapshot os registros ja
+// gravados permanecem: quem chama deve reexecutar a geracao, que e
+// idempotente (DELETE + INSERT do periodo inteiro).
+
+/*/{Protheus.doc} GcGerarProximos12Meses
+    Gera as 12 competencias seguintes a partir de uma competencia inicial,
+    usada para montar a agenda de vencimentos do portal.
+    @type Static Function
+    @author GesCon
+    @since 2026-07-30
+    @param cCompetencia, character, competencia inicial no formato YYYY-MM
+    @return aMeses, array, 12 competencias consecutivas em ordem crescente
+    @example
         aMeses := GcGerarProximos12Meses("2025-01")
         // retorna {"2025-01", "2025-02", ..., "2025-12"}
 */
@@ -85,7 +100,7 @@ Return cRet
     @param cCorpo, character, corpo/conteúdo do aviso (obrigatório)
     @return lSucesso, logical, .T. se aviso criado com sucesso, .F. se erro
     @example
-        If U_GcCriarAviso("Manutenção Programada", "A manutenção ocorrerá no dia 15.")
+        If GcCriarAviso("Manutenção Programada", "A manutenção ocorrerá no dia 15.")
             ConOut("Aviso criado com sucesso")
         Else
             ConOut("[ERROR] " + "Erro ao criar aviso")
@@ -107,7 +122,7 @@ Return cRet
     @param cToken, character, token UUID 36 chars
     @return lOk, logical, .T. se autenticado e dados carregados, .F. caso contrário
     @example
-        If U_GcPortalCondominoV2("550e8400-e29b-41d4-a716-446655440000")
+        If GcPortalCondominoV2("550e8400-e29b-41d4-a716-446655440000")
             ConOut("Autenticado com sucesso, dados carregados")
         Else
             ConOut("Falha na autenticação")
@@ -190,7 +205,7 @@ Return .T.
     @param cCompetencia, character, competência no formato YYYY-MM (ex: "2025-01")
     @return nCount, numeric, quantidade de registros inseridos (ou -1 se erro)
     @example
-        nTotal := U_GcGerarPortalExtratos("2025-01")
+        nTotal := GcGerarPortalExtratos("2025-01")
         If nTotal >= 0
             ConOut("Snapshot gerado: " + cValToChar(nTotal) + " extratos")
         Else
@@ -205,7 +220,6 @@ User Function GcGerarPortalExtratos(cCompetencia as character) as numeric
     Local cVencimento := "" as character
     Local cDataPagamento := "" as character
     Local cStatus := "" as character
-    Local lTrans := .F. as logical
 
     // Validação de parâmetro
     If Empty(cCompetencia)
@@ -221,7 +235,6 @@ User Function GcGerarPortalExtratos(cCompetencia as character) as numeric
 
     // Inicia transação para consistência
     Begin Transaction
-    lTrans := .T.
 
     Try
         // Passo 1: Delete dos extratos antigos para esta competência (snapshot pattern)
@@ -238,8 +251,6 @@ User Function GcGerarPortalExtratos(cCompetencia as character) as numeric
 
         If Len(aCobrancas) = 0
             ConOut("No billing records found for competência: " + cCompetencia)
-            Rollback()
-            lTrans := .F.
             Return 0
         EndIf
 
@@ -283,7 +294,7 @@ User Function GcGerarPortalExtratos(cCompetencia as character) as numeric
             If cDataPagamento = "NULL"
                 cSql += "NULL"
             Else
-                cSql += GcSqlLit(cDataPagamento)
+                cSql += GcSqlVal(cDataPagamento)
             EndIf
             cSql += ", "
             cSql += "' '"
@@ -298,16 +309,12 @@ User Function GcGerarPortalExtratos(cCompetencia as character) as numeric
 
         // Commit da transação
         End Transaction
-        lTrans := .F.
         ConOut("GcGerarPortalExtratos completed: " + cValToChar(nCount) + " records inserted")
 
     Catch oError
         ConOut("[ERROR] " + "GcGerarPortalExtratos failed: " + oError:Description)
-        If lTrans
-            Rollback()
-        EndIf
         Return -1
-    End Try
+    EndTry
 
 Return nCount
 
@@ -333,7 +340,7 @@ Return nCount
     @param cCompetencia, character, competência inicial no formato YYYY-MM (ex: "2025-01")
     @return nCount, numeric, quantidade de registros inseridos (ou -1 se erro)
     @example
-        nTotal := U_GcGerarPortalAgenda("2025-01")
+        nTotal := GcGerarPortalAgenda("2025-01")
         If nTotal >= 0
             ConOut("Agenda gerada: " + cValToChar(nTotal) + " vencimentos")
         Else
@@ -349,7 +356,6 @@ User Function GcGerarPortalAgenda(cCompetencia as character) as numeric
     Local j := 0 as numeric
     Local cVencimento := "" as character
     Local cMesAtual := "" as character
-    Local lTrans := .F. as logical
 
     // Validação de parâmetro
     If Empty(cCompetencia)
@@ -365,7 +371,6 @@ User Function GcGerarPortalAgenda(cCompetencia as character) as numeric
 
     // Inicia transação para consistência
     Begin Transaction
-    lTrans := .T.
 
     Try
         // Passo 1: Delete da agenda antiga (snapshot pattern - delete 100%, sem filtro)
@@ -378,8 +383,6 @@ User Function GcGerarPortalAgenda(cCompetencia as character) as numeric
 
         If Len(aMeses) = 0
             ConOut("[ERROR] " + "Failed to generate 12-month list from " + cCompetencia)
-            Rollback()
-            lTrans := .F.
             Return -1
         EndIf
 
@@ -435,16 +438,12 @@ User Function GcGerarPortalAgenda(cCompetencia as character) as numeric
 
         // Commit da transação
         End Transaction
-        lTrans := .F.
         ConOut("GcGerarPortalAgenda completed: " + cValToChar(nCount) + " records inserted")
 
     Catch oError
         ConOut("[ERROR] " + "GcGerarPortalAgenda failed: " + oError:Description)
-        If lTrans
-            Rollback()
-        EndIf
         Return -1
-    End Try
+    EndTry
 
 Return nCount
 
@@ -463,7 +462,6 @@ Return nCount
 */
 User Function GcCriarAviso(cTitulo as character, cCorpo as character) as logical
     Local cSql := "" as character
-    Local lTrans := .F. as logical
 
     // Validação de parâmetros
     If Empty(cTitulo)
@@ -478,7 +476,6 @@ User Function GcCriarAviso(cTitulo as character, cCorpo as character) as logical
 
     // Inicia transação para consistência
     Begin Transaction
-    lTrans := .T.
 
     Try
         // Monta SQL de inserção em AVISOS
@@ -496,16 +493,12 @@ User Function GcCriarAviso(cTitulo as character, cCorpo as character) as logical
 
         // Commit da transação
         End Transaction
-        lTrans := .F.
         ConOut("GcCriarAviso completed: Título=" + cTitulo)
 
     Catch oError
         ConOut("[ERROR] " + "GcCriarAviso failed: " + oError:Description)
-        If lTrans
-            Rollback()
-        EndIf
         Return .F.
-    End Try
+    EndTry
 
 Return .T.
 
@@ -525,7 +518,7 @@ Return .T.
     @param nAvisoId, numeric, ID do aviso a arquivar (obrigatório)
     @return lSucesso, logical, .T. se aviso arquivado com sucesso, .F. se erro ou não encontrado
     @example
-        If U_GcArquivarAviso(5)
+        If GcArquivarAviso(5)
             ConOut("Aviso 5 arquivado com sucesso")
         Else
             ConOut("[ERROR] " + "Aviso 5 não encontrado ou erro ao arquivar")
@@ -534,7 +527,6 @@ Return .T.
 User Function GcArquivarAviso(nAvisoId as numeric) as logical
     Local cSql := "" as character
     Local aResult := {} as array
-    Local lTrans := .F. as logical
 
     // Validação de parâmetro
     If nAvisoId <= 0
@@ -544,7 +536,6 @@ User Function GcArquivarAviso(nAvisoId as numeric) as logical
 
     // Inicia transação para consistência
     Begin Transaction
-    lTrans := .T.
 
     Try
         // Passo 1: Verifica se o aviso existe
@@ -553,8 +544,6 @@ User Function GcArquivarAviso(nAvisoId as numeric) as logical
 
         If Len(aResult) = 0
             ConOut("[WARN] Aviso não encontrado: AVI_ID=" + cValToChar(nAvisoId))
-            Rollback()
-            lTrans := .F.
             Return .F.
         EndIf
 
@@ -564,15 +553,11 @@ User Function GcArquivarAviso(nAvisoId as numeric) as logical
 
         // Commit da transação
         End Transaction
-        lTrans := .F.
         ConOut("GcArquivarAviso completed: AVI_ID=" + cValToChar(nAvisoId))
 
     Catch oError
         ConOut("[ERROR] " + "GcArquivarAviso failed: " + oError:Description)
-        If lTrans
-            Rollback()
-        EndIf
         Return .F.
-    End Try
+    EndTry
 
 Return .T.

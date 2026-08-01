@@ -2,7 +2,6 @@
 // O condômino cola o token recebido do admin, acessa apenas as cobranças
 // da sua unidade em modo read-only.
 #include "totvs.ch"
-#include "db.prw"
 
 /*/{Protheus.doc} GcPortalCondmino
     Gateway do portal do condômino. Pede o token, valida, autentica e
