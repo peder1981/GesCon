@@ -1,9 +1,10 @@
 #!/bin/sh
 # gescon -- abre o GesCon em janela desktop (Fyne).
 #
-# ADVPP_FORCE_GUI=1 e obrigatorio: sem ele, o executavel lancado de um
-# terminal detecta o TTY e escolhe a UI de terminal, que nao implementa
-# dialogos -- os menus funcionam e os formularios quebram com
+# Desde que o build usa `advplc build --gui`, o proprio executavel ja abre a
+# janela -- este script virou conveniencia. ADVPP_FORCE_GUI=1 fica como cinto
+# de seguranca para binario antigo, compilado sem a flag, que lancado de um
+# terminal cairia na UI de terminal e quebraria todo formulario com
 # "MSDIALOG: requer o modo web". Ver docs/PADRAO_GUI.md, secao 4.
 set -e
 

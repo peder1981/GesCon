@@ -64,7 +64,7 @@ jobs:
           cd GesCon
           VERSAO="${GITHUB_REF_NAME#v}"
           "$RUNNER_TEMP/advplc${{ matrix.ext }}" build gescon.prw \
-            -o "GesConApp-${{ matrix.plataforma }}${{ matrix.ext }}"
+            -o "GesConApp-${{ matrix.plataforma }}${{ matrix.ext }}" --gui
 
       - uses: actions/upload-artifact@v4
         with:

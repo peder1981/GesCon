@@ -26,9 +26,13 @@ if [ "$1" = "-o" ] && [ -n "$2" ]; then
     SAIDA="$2"
 fi
 
+# --gui marca o programa como app desktop: a janela Fyne abre sempre, mesmo
+# lancado de um terminal, e no Windows o executavel sai no subsistema GUI
+# (sem console). Sem isso o .exe do Windows abre um console ao ser clicado,
+# o stub ve stdin como TTY e escolhe a UI de terminal, que nao tem MSDIALOG.
 echo "build: compilando gescon.prw (ADVPP_SRC=$ADVPP_SRC)"
-advplc build gescon.prw -o "$SAIDA"
+advplc build gescon.prw -o "$SAIDA" --gui
 
 echo
 echo "build: $SAIDA gerado ($(du -h "$SAIDA" | cut -f1))"
-echo "Execute com ./gescon -- nunca o executavel direto (ver docs/PADRAO_GUI.md)."
+echo "Execute com ./gescon ou direto -- o binario ja abre em janela."

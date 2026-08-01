@@ -2,6 +2,49 @@
 
 Mudanças notáveis do GesCon.
 
+## [1.0.1] — 2026-08-01
+
+Release corretivo. Duas falhas do 1.0.0 que só apareciam em uso real.
+
+### O executável Windows não mostrava formulário
+
+O `.exe` do 1.0.0 abria, exibia os menus e quebrava em toda tela de cadastro
+com "MSDIALOG: requer o modo web". A causa estava no subsistema do binário:
+o `advplc build` linkava um executável de console, e no Windows o
+duplo-clique num app de console aloca um console — então o programa via
+`stdin` como terminal, escolhia a interface de terminal (que não implementa
+diálogos) e nenhum formulário funcionava. Não havia contorno: a válvula de
+escape era a variável `ADVPP_FORCE_GUI`, e quem clica num `.exe` não tem
+shell para exportá-la.
+
+Corrigido no compilador (AdvPP 2.0.7) com `advplc build --gui`, que marca o
+programa como app desktop: a janela abre sempre, e no Windows o binário sai
+no subsistema GUI, sem console atrás. O launcher `./gescon` virou
+conveniência — `./GesConApp` direto também funciona, em qualquer plataforma.
+
+### Títulos de coluna corrompidos em todas as grades
+
+As grades mostravam `Fra??o Ideal` e `C?d. Cond?mino`. O `schema.sql` já
+estava correto em UTF-8; o problema era o banco. Os títulos do `SX3` vinham
+de um bootstrap antigo, de quando o arquivo estava em CP-1252, e nunca eram
+substituídos: o `DELETE` que precede o `INSERT` listava 11 dos 24
+`X3_ARQUIVO`, então as outras 13 tabelas mantinham o texto velho e ainda
+acumulavam uma cópia nova a cada execução — o banco de desenvolvimento tinha
+4 cópias de cada coluna de `AVISOS`.
+
+Trocado por `DELETE FROM SX3`: é metadado, o arquivo o reconstrói por
+inteiro. Reaplicar o schema também falhava em dois `ALTER TABLE ADD COLUMN`
+(o SQLite não aceita `IF NOT EXISTS` neles) e em quatro `CREATE INDEX` — as
+colunas foram para o `CREATE TABLE` e os índices ganharam a cláusula. O
+`bootstrap-db.sh` passou a usar `sqlite3 -bail`, que aborta no primeiro erro
+em vez de deixar o schema meio aplicado.
+
+O `check.sh` ganhou um guard: monta um banco descartável, aplica o schema
+duas vezes e reprova campo `SX3` duplicado ou título com byte não-UTF-8.
+
+**Ao atualizar, rode `scripts/bootstrap-db.sh`** — o banco existente precisa
+ser recarregado para os títulos saírem corretos.
+
 ## [1.0.0] — 2026-08-01
 
 Primeiro release formal. O sistema passa a ser **100% AdvPL com GUI
