@@ -2,6 +2,25 @@
 
 Mudanças notáveis do GesCon.
 
+## [1.0.10] — 2026-08-01
+
+### Corrigido
+
+- **A janela abria e o processo morria em seguida, com `0x80070057`.** No
+  Windows o Mesa3D tenta o driver d3d12 antes do llvmpipe, e em máquina
+  virtual o d3d12 inicializa pela metade e derruba o processo — depois de já
+  ter desenhado a janela e montado o menu.
+
+  O diagnóstico do usuário provou: mesma execução, mesmo binário, com
+  `GALLIUM_DRIVER=llvmpipe` e `LIBGL_ALWAYS_SOFTWARE=1` rodou inteira e
+  saiu com `ERRORLEVEL=0`; sem as variáveis, `0x80070057`.
+
+  Corrigido no compilador (AdvPP 2.0.16): quando há Mesa ao lado do
+  executável, o programa se relança uma vez com as duas variáveis definidas.
+  Tem de ser relançamento — o Mesa lê a variável pelo `getenv` do runtime C,
+  que trabalha sobre a cópia do ambiente feita na criação do processo, então
+  defini-la de dentro não teria efeito nenhum.
+
 ## [1.0.9] — 2026-08-01
 
 ### Removido
