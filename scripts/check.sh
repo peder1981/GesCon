@@ -55,6 +55,22 @@ fi
 rm -f "$tmpdb" "$tmpdb"-wal "$tmpdb"-shm
 echo
 
+# src/schema-embed.prw e schema.sql compilado para dentro do executavel: e o
+# que cria as tabelas no primeiro arranque, onde nao existe shell nem sqlite3
+# para rodar o bootstrap-db.sh. Se alguem mexer no schema.sql e esquecer de
+# regerar, o binario distribuido sai com o schema velho -- e nada acusa.
+echo "src/schema-embed.prw em sincronia com schema.sql:"
+tmpprw=$(mktemp --suffix=.prw)
+scripts/gen-schema-embed.sh "$tmpprw" >/dev/null
+if diff -q "$tmpprw" src/schema-embed.prw >/dev/null 2>&1; then
+    echo "  ok"
+else
+    echo "  FALHA desatualizado -- rode scripts/gen-schema-embed.sh"
+    falhas=$((falhas + 1))
+fi
+rm -f "$tmpprw"
+echo
+
 
 for f in gescon.prw src/*.prw tests/*.prw; do
     [ -f "$f" ] || continue

@@ -29,9 +29,18 @@ dados ficam num arquivo SQLite.
 
 ## 3. Instalação
 
+**No Windows, use o instalador.** O release publica
+`GesCon-Setup-<versão>.exe`: cria atalho no menu Iniciar, instala em pasta
+com permissão de escrita, e traz a opção de renderização por software para
+máquina sem driver de vídeo (seção 7). O `.zip` continua publicado para quem
+prefere descompactar e rodar.
+
+Para desenvolver, a partir do fonte:
+
 ```bash
-# 1. Banco de dados (cria as tabelas e semeia plano de contas,
-#    exercício, tipos de repartição e 20 unidades de exemplo)
+# 1. Banco de dados — opcional desde a 1.0.4: o executável aplica o schema
+#    sozinho no arranque. Este script continua útil para preparar um banco
+#    antes de rodar qualquer coisa.
 scripts/bootstrap-db.sh
 
 # 2. Executável
@@ -115,10 +124,13 @@ Duas saídas, nesta ordem:
 
 1. **Instale o driver de vídeo** (Windows Update → *Drivers opcionais*, ou o
    site do fabricante). É a melhor: mantém a aceleração por hardware.
-2. **Rode `GesCon-modo-compativel.bat`**, incluído no zip do Windows. Ele
-   copia o Mesa3D da pasta `mesa\` para junto do `.exe` e abre o programa —
-   desenho por software na CPU, suficiente para as grades e formulários
-   deste sistema. É a única saída no Hyper-V, que não oferece OpenGL nenhum.
+2. **Renderização por software** com o Mesa3D — CPU pura, suficiente para as
+   grades e formulários deste sistema, e a única saída no Hyper-V, que não
+   oferece OpenGL nenhum. Pelo instalador, marque *Renderização por software*
+   (ele já vem marcado quando não encontra driver registrado); se o GesCon já
+   estiver instalado, rode o instalador de novo e marque a opção. Pelo zip,
+   execute `GesCon-modo-compativel.bat`, que copia os DLLs de `mesa\` para
+   junto do `.exe`.
 
 O Mesa fica em `mesa\` e não na raiz justamente porque o `opengl32.dll` dele
 substitui o driver em vez de encadear: na raiz, todo usuário perderia a placa

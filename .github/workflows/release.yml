@@ -94,10 +94,30 @@ jobs:
           7z a -tzip "${{ matrix.pacote }}" \
             GesConApp-windows-amd64.exe GesCon-modo-compativel.bat mesa/
 
+      # O zip serve para quem so quer descompactar e rodar. O instalador
+      # resolve o que o zip nao resolve: pasta de dados gravavel (o banco
+      # nasce no diretorio de trabalho, e Program Files nao aceita escrita),
+      # atalho no menu Iniciar, desinstalacao, e o Mesa como opcao marcada na
+      # instalacao em vez de copia manual de DLL.
+      - name: Instalador Windows (Inno Setup)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          cd GesCon
+          choco install innosetup --no-progress -y
+          cp installer/gescon.iss .
+          # // e o escape do MSYS: com /D simples o bash converteria o
+          # argumento num caminho do Windows antes do ISCC ver.
+          "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" \
+            //DAppVersion="${GITHUB_REF_NAME#v}" gescon.iss
+          ls -la GesCon-Setup-*.exe
+
       - uses: actions/upload-artifact@v4
         with:
           name: GesConApp-${{ matrix.plataforma }}
-          path: GesCon/${{ matrix.pacote }}
+          path: |
+            GesCon/${{ matrix.pacote }}
+            GesCon/GesCon-Setup-*.exe
 
   release:
     needs: build
