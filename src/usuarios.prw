@@ -175,19 +175,6 @@ User Function GcCriarAdminNovo()
     MsgInfo("Administrador '" + cLogin + "' criado.", "GesCon")
 Return .T.
 
-/*/{Protheus.doc} GcDateToIso
-    Converte data Protheus para formato ISO 8601 (YYYY-MM-DD).
-    Usa DtoS (YYYYMMDD) com inserção de hífens.
-    @type Static Function
-    @author GesCon
-    @since 2026-07-24
-    @param dData, date, Data a converter
-    @return cIso, character, Data em formato YYYY-MM-DD
-*/
-Static Function GcDateToIso(dData)
-    Local cDtos := DtoS(dData)
-Return SubStr(cDtos, 1, 4) + "-" + SubStr(cDtos, 5, 2) + "-" + SubStr(cDtos, 7, 2)
-
 /*/{Protheus.doc} GcGerarTokenId
     Gera identificador único de 36 chars (formato UUID-like) para tokens.
     Usa timestamp + random em AdvPL puro (não há gen uuid nativo do AdvPP v1).
