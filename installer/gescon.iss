@@ -15,9 +15,18 @@
 ;     ambiente da maquina ela sequestraria tambem advplc/adveditor/advpp-ide,
 ;     que devem seguir usando o banco do diretorio de projeto.
 ;
-;  2. Mesa3D como opcao de instalacao, nao como copia manual de DLL. O
-;     opengl32.dll do Mesa substitui o driver em vez de encadear, entao so
-;     entra em quem precisa.
+;  2. Mesa3D FORA do caminho de carregamento. opengl32.dll e import ESTATICO
+;     do executavel: o Windows o carrega na criacao do processo, antes de
+;     qualquer codigo nosso. Um Mesa que nao inicializa nessa maquina --
+;     visto em VM QEMU/QXL, provavelmente instrucoes de CPU que o
+;     libgallium_wgl.dll usa e a vCPU nao tem -- mata o processo no
+;     carregador: sem janela, sem saida, sem log. Instalar o Mesa ao lado do
+;     executavel trocava um erro visivel ("WGL: driver does not support
+;     OpenGL") por silencio total.
+;
+;     Entao ele vai para {app}\mesa\, que nao esta no caminho de busca de
+;     DLL, e so entra em jogo se alguem rodar o .bat de ativacao. O padrao e
+;     sempre o OpenGL do sistema.
 ;
 ;  3. Desinstalacao de verdade, com o banco preservado.
 
@@ -52,18 +61,16 @@ Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortugue
 
 [Tasks]
 Name: "desktopicon"; Description: "Criar atalho na Area de Trabalho"; GroupDescription: "Atalhos:"
-; Sem "checkedonce": em reinstalacao o estado default e recalculado por
-; InitializeWizard, que e o que queremos -- a maquina pode ter ganhado driver.
-Name: "mesa"; Description: "Renderizacao por software (maquina virtual ou sem driver de video)"; GroupDescription: "Compatibilidade:"; Flags: unchecked
 
 [Files]
 Source: "GesCon.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "GesConApp-windows-amd64.exe"; DestDir: "{app}\app"; Flags: ignoreversion
-; Os DLLs vao para a pasta do EXECUTAVEL, nao a do lancador: e la que o
-; Windows procura DLL antes do System32, e o diretorio de trabalho nao entra
-; nessa busca.
-Source: "mesa\opengl32.dll"; DestDir: "{app}\app"; Tasks: mesa; Flags: ignoreversion
-Source: "mesa\libgallium_wgl.dll"; DestDir: "{app}\app"; Tasks: mesa; Flags: ignoreversion
+; Fora do caminho de busca de DLL. So o .bat abaixo os coloca junto do
+; executavel, e so quando o OpenGL do sistema nao serve.
+Source: "mesa\opengl32.dll"; DestDir: "{app}\mesa"; Flags: ignoreversion
+Source: "mesa\libgallium_wgl.dll"; DestDir: "{app}\mesa"; Flags: ignoreversion
+Source: "installer\Ativar-renderizacao-por-software.bat"; DestDir: "{app}"; Flags: ignoreversion
+Source: "installer\Desativar-renderizacao-por-software.bat"; DestDir: "{app}"; Flags: ignoreversion
 
 [Dirs]
 Name: "{commonappdata}\GesCon"; Permissions: users-modify
@@ -72,6 +79,8 @@ Name: "{commonappdata}\GesCon"; Permissions: users-modify
 ; Apontam para o lancador, que e quem define ADVPP_DB. Ele e um binario do
 ; subsistema GUI: nenhum console pisca.
 Name: "{group}\GesCon"; Filename: "{app}\GesCon.exe"
+Name: "{group}\Ativar renderizacao por software"; Filename: "{app}\Ativar-renderizacao-por-software.bat"; \
+    IconFilename: "{app}\GesCon.exe"
 Name: "{group}\Desinstalar o GesCon"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\GesCon"; Filename: "{app}\GesCon.exe"; Tasks: desktopicon
 
@@ -86,29 +95,9 @@ Filename: "{app}\GesCon.exe"; Description: "Abrir o GesCon agora"; \
 Type: filesandordirs; Name: "{app}\app"
 
 [Code]
-// Heuristica para o estado inicial da caixa "Renderizacao por software".
-// Um driver de video WDDM real registra OpenGLDriverName na chave da classe
-// Display; o Microsoft Basic Display Adapter, nao. So define o default -- o
-// usuario marca ou desmarca por cima, entao um palpite errado nao custa nada.
-function TemDriverOpenGL(): Boolean;
-var
-  I: Integer;
-  Chave, Valor: String;
-begin
-  Result := False;
-  for I := 0 to 7 do
-  begin
-    Chave := Format('SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\%.4d', [I]);
-    if RegQueryStringValue(HKEY_LOCAL_MACHINE, Chave, 'OpenGLDriverName', Valor) and (Valor <> '') then
-    begin
-      Result := True;
-      Exit;
-    end;
-  end;
-end;
-
-procedure InitializeWizard();
-begin
-  if not TemDriverOpenGL() then
-    WizardSelectTasks('mesa');
-end;
+// Sem heuristica de driver OpenGL aqui. A versao anterior tentava adivinhar,
+// pelo registro, se a maquina tinha driver de verdade, e pre-marcava o Mesa
+// quando achava que nao. Errou numa VM QXL -- e o preco do erro nao era
+// "roda mais devagar", era "nao abre e nao diz nada". Agora o padrao e
+// sempre o OpenGL do sistema, e o Mesa e uma acao explicita de quem viu o
+// erro do Fyne na tela.

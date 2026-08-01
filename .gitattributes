@@ -1,2 +1,3 @@
 scripts/windows/*.bat text eol=crlf
 installer/*.cmd text eol=crlf
+installer/*.bat text eol=crlf
