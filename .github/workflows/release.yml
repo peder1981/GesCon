@@ -105,6 +105,12 @@ jobs:
         run: |
           cd GesCon
           choco install innosetup --no-progress -y
+          # Lancador: modulo Go proprio, sem CGO. -H=windowsgui para nao
+          # piscar console. Ele e o unico icone clicavel da instalacao -- o
+          # programa vai para app\ e so sobe por aqui, com ADVPP_DB definida.
+          (cd installer/launcher && \
+            GOOS=windows GOARCH=amd64 CGO_ENABLED=0 \
+            go build -trimpath -ldflags "-s -w -H=windowsgui" -o ../../GesCon.exe .)
           cp installer/gescon.iss .
           # // e o escape do MSYS: com /D simples o bash converteria o
           # argumento num caminho do Windows antes do ISCC ver.

@@ -36,9 +36,10 @@ porque o banco é do condomínio e não da conta de quem abriu —, e traz a op�
 de renderização por software para máquina sem driver de vídeo (seção 7). O
 `.zip` continua publicado para quem prefere descompactar e rodar.
 
-**Abra sempre pelo atalho.** Quem define o caminho do banco compartilhado é o
-`GesCon.cmd` que o atalho executa. Chamar o `.exe` direto pula esse passo e o
-programa usa um banco por usuário, em `%AppData%\advpp\GesCon\`.
+O atalho executa `GesCon.exe`, um lançador que aponta o banco compartilhado
+antes de subir o programa — que fica em `app\` justamente para não haver
+ícone que pule esse passo. Para usar outro banco (teste, pasta de rede),
+defina `ADVPP_DB`: o lançador respeita o que já estiver definido.
 
 Para desenvolver, a partir do fonte:
 

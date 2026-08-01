@@ -31,21 +31,31 @@ Mudanças notáveis do GesCon.
 
 - **O banco instalado voltou a ser compartilhado entre as contas do Windows.**
   O AdvPP 2.0.11 passou a guardar o banco de um app distribuído em
-  `%AppData%\advpp\<app>\` — estável, mas por usuário, e o banco é do
-  condomínio e não da conta do Windows. Os atalhos agora executam
-  `GesCon.cmd`, que define `ADVPP_DB` apontando para
-  `C:\ProgramData\GesCon\GesCon.db`, pasta com permissão de escrita para
-  todos.
+  `%AppData%\advpp\<app>\` — estável, e errado aqui: o banco é do condomínio,
+  não da conta de quem abriu.
 
-  Um `.cmd` e não uma variável de ambiente da máquina porque `ADVPP_DB` vale
-  para toda ferramenta AdvPP: definida no sistema, sequestraria também
-  `advplc`, `adveditor` e `advpp-ide`, que devem seguir usando o banco do
-  diretório de projeto onde são chamados. No `.cmd` a variável existe só
-  dentro daquele processo.
+  Quem resolve é um **lançador compilado**, `GesCon.exe`
+  (`installer/launcher/`, Go puro sem CGO, subsistema GUI). Ele aponta
+  `ADVPP_DB` para `C:\ProgramData\GesCon\GesCon.db`, cria a pasta e sobe o
+  programa. Uma variável de ambiente da máquina não serviria: `ADVPP_DB` vale
+  para toda ferramenta AdvPP e sequestraria também `advplc`, `adveditor` e
+  `advpp-ide`, que devem seguir usando o banco do diretório de projeto.
+  `ADVPP_DB` já definida é respeitada — quem apontou para outro banco de
+  propósito não é sobrescrito.
 
-  O atalho roda minimizado e o `.cmd` encerra assim que dispara o programa,
-  então o console não chega a aparecer. **Use sempre o atalho**: abrir o
-  `.exe` direto pula o `.cmd` e cai no banco por usuário.
+  O programa passa a ser instalado em `{app}\app\`, então **não existe ícone
+  clicável que pule o lançador** — o furo que a primeira tentativa, com um
+  `.cmd` ao lado do `.exe`, deixava aberto. Os DLLs do Mesa acompanham o
+  programa nessa subpasta, porque o Windows procura DLL na pasta do
+  executável.
+
+  Falha do lançador vira caixa de diálogo, não silêncio: ele nasceu para
+  consertar um caso de "não abre e não diz nada".
+
+- `scripts/check-installer.py` confere que o caminho compilado no lançador e o
+  `[Files]` do instalador concordam, e que nenhum atalho aponta direto para o
+  programa. São dois arquivos que ninguém edita junto, e a divergência só
+  apareceria numa máquina Windows.
 
 ## [1.0.4] — 2026-08-01
 
