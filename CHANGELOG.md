@@ -27,12 +27,25 @@ Mudanças notáveis do GesCon.
   (única forma de ver o stderr de um app GUI), execução com a janela Fyne
   desligada e com o Mesa forçado, e os erros de aplicativo do log do Windows.
 
-### Atenção
+### Alterado
 
-- O banco agora fica em `%AppData%\advpp\GesCon\advpp.db`, que é **por
-  usuário do Windows**. Numa máquina onde síndico e gestor usam contas
-  diferentes, cada um veria o seu. Para banco compartilhado, defina
-  `ADVPP_DB` apontando para um caminho comum.
+- **O banco instalado voltou a ser compartilhado entre as contas do Windows.**
+  O AdvPP 2.0.11 passou a guardar o banco de um app distribuído em
+  `%AppData%\advpp\<app>\` — estável, mas por usuário, e o banco é do
+  condomínio e não da conta do Windows. Os atalhos agora executam
+  `GesCon.cmd`, que define `ADVPP_DB` apontando para
+  `C:\ProgramData\GesCon\GesCon.db`, pasta com permissão de escrita para
+  todos.
+
+  Um `.cmd` e não uma variável de ambiente da máquina porque `ADVPP_DB` vale
+  para toda ferramenta AdvPP: definida no sistema, sequestraria também
+  `advplc`, `adveditor` e `advpp-ide`, que devem seguir usando o banco do
+  diretório de projeto onde são chamados. No `.cmd` a variável existe só
+  dentro daquele processo.
+
+  O atalho roda minimizado e o `.cmd` encerra assim que dispara o programa,
+  então o console não chega a aparecer. **Use sempre o atalho**: abrir o
+  `.exe` direto pula o `.cmd` e cai no banco por usuário.
 
 ## [1.0.4] — 2026-08-01
 

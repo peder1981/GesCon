@@ -30,10 +30,15 @@ dados ficam num arquivo SQLite.
 ## 3. Instalação
 
 **No Windows, use o instalador.** O release publica
-`GesCon-Setup-<versão>.exe`: cria atalho no menu Iniciar, instala em pasta
-com permissão de escrita, e traz a opção de renderização por software para
-máquina sem driver de vídeo (seção 7). O `.zip` continua publicado para quem
-prefere descompactar e rodar.
+`GesCon-Setup-<versão>.exe`: cria atalho no menu Iniciar, aponta o banco para
+`C:\ProgramData\GesCon\GesCon.db` — compartilhado entre as contas do Windows,
+porque o banco é do condomínio e não da conta de quem abriu —, e traz a opção
+de renderização por software para máquina sem driver de vídeo (seção 7). O
+`.zip` continua publicado para quem prefere descompactar e rodar.
+
+**Abra sempre pelo atalho.** Quem define o caminho do banco compartilhado é o
+`GesCon.cmd` que o atalho executa. Chamar o `.exe` direto pula esse passo e o
+programa usa um banco por usuário, em `%AppData%\advpp\GesCon\`.
 
 Para desenvolver, a partir do fonte:
 
