@@ -2,6 +2,29 @@
 
 Mudanças notáveis do GesCon.
 
+## [1.0.9] — 2026-08-01
+
+### Removido
+
+- **O executável lançador.** Ele existia para transportar uma string — o
+  caminho do banco compartilhado — e em troca trouxe processo intermediário,
+  herança de handles e falhas próprias. A última delas: mostrar caixa de erro
+  `0x80070057` para um programa que tinha aberto normalmente, com a janela na
+  tela e o menu esperando clique.
+
+  O caminho do banco passa a ir em `advpp-db.txt`, um arquivo de texto ao lado
+  do executável que o próprio programa lê (AdvPP 2.0.15). Ler um arquivo não
+  falha pela metade.
+
+### Alterado
+
+- **Instalação plana e Mesa3D ativo por padrão.** Executável, DLLs do Mesa e
+  scripts todos em `{app}`; o ícone aponta direto para o executável, sem
+  intermediário. Sem OpenGL de verdade — o caso de qualquer VM, e desta com
+  QXL em particular — o Fyne não cria janela nenhuma, então o Mesa é o padrão
+  e não a exceção. `Desativar-renderizacao-por-software.bat` renomeia os DLLs
+  para `.off` e o `Ativar` desfaz, reversível nos dois sentidos.
+
 ## [1.0.8] — 2026-08-01
 
 ### Corrigido

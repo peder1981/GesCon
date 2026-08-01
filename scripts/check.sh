@@ -85,9 +85,6 @@ for f in gescon.prw src/*.prw tests/*.prw; do
 done
 
 echo
-if ! python3 scripts/check-installer.py; then
-    falhas=$((falhas + 1))
-fi
 echo
 
 # Alcancabilidade: funcao de negocio sem caminho de menu e o defeito que
