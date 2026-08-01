@@ -10,11 +10,12 @@ cd "$(dirname "$0")/.."
 falhas=0
 total=0
 
-# Encoding: o AdvPP le os fontes como UTF-8. Fonte em CP-1252 compila, mas
-# todo acento sai como mojibake na tela (menus, mensagens, titulos de
-# coluna). Isto ja aconteceu neste projeto -- "Condominos" virava
-# "Cond\xc3\xb4minos" no menu -- entao vira erro de build, nao surpresa em
-# producao. U+FFFD indica texto ja destruido por uma conversao anterior.
+# Encoding. O advplc converte fonte CP-1252 para UTF-8 antes de lexar, entao
+# .prw nos dois encodings compila igual -- aqui UTF-8 e convencao do projeto.
+# Ja schema.sql nao passa pelo advplc: o sqlite3 grava os bytes literais e o
+# Fyne renderiza esperando UTF-8, entao em CP-1252 os titulos do SX3 saem
+# corrompidos em TODA grade do sistema. U+FFFD e sempre defeito: indica texto
+# ja destruido por uma conversao anterior, que nenhuma reconversao recupera.
 echo "encoding (UTF-8, sem U+FFFD):"
 for f in gescon.prw src/*.prw tests/*.prw schema.sql; do
     [ -f "$f" ] || continue
