@@ -65,7 +65,8 @@ CREATE TABLE IF NOT EXISTS USR (
     D_E_L_E_T_ TEXT DEFAULT ' ',
     R_E_C_D_E_L_ INTEGER DEFAULT 0,
     USR_LOGIN TEXT NOT NULL,
-    USR_SENHA TEXT NOT NULL
+    USR_SENHA TEXT NOT NULL,
+    USR_PERFIL TEXT DEFAULT 'ADMIN'
 );
 
 -- Tabelas de relatório (Plano 2): snapshot recalculado do zero (DELETE +
@@ -127,6 +128,7 @@ CREATE TABLE IF NOT EXISTS GCT_TOKEN (
     CRIPTADO TEXT NOT NULL,
     VALIDO_ATE TEXT NOT NULL,
     USADO INTEGER DEFAULT 0,
+    TOK_PERFIL TEXT,
     D_E_L_E_T_ TEXT DEFAULT ' ',
     R_E_C_D_E_L_ INTEGER DEFAULT 0
 );
@@ -148,7 +150,11 @@ CREATE TABLE IF NOT EXISTS RPT_COND_COBRANCAS (
 -- Metadados SX3 (títulos/tipos de coluna pro FWMBrowse — ver browseColumns
 -- em pkg/vm/browse.go do AdvPP: sem essas linhas, o browse cai no fallback
 -- de mostrar toda coluna física como texto, sem título amigável).
-DELETE FROM SX3 WHERE X3_ARQUIVO IN ('CON','UNI','DES','COB','USR','RPT_INADIM','RPT_EXTRATO','RPT_DESCAT','CFG_BOLETO','GCT_TOKEN','RPT_COND_COBRANCAS');
+-- Limpa TUDO antes de reinserir: o SX3 e metadado, reconstruido por inteiro
+-- por este arquivo. A lista de X3_ARQUIVO que existia aqui cobria 11 das 24
+-- tabelas, entao cada bootstrap repetido duplicava as outras 13 -- o banco de
+-- desenvolvimento chegou a ter 4 copias de cada coluna de AVISOS.
+DELETE FROM SX3;
 
 INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
 ('CON', 1, 'CON_CODIGO', 'C', 10, 0, 'Código'),
@@ -190,9 +196,10 @@ INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL
 ('RPT_DESCAT', 1, 'RDC_CATEG', 'C', 30, 0, 'Categoria'),
 ('RPT_DESCAT', 2, 'RDC_TOTAL', 'N', 14, 2, 'Total');
 
--- GesCon — USR_PERFIL: perfil do usuário (Plano 2).
--- Note: SQLite doesn't support IF NOT EXISTS for ADD COLUMN, so we ignore the error if column exists
-ALTER TABLE USR ADD COLUMN USR_PERFIL TEXT DEFAULT 'ADMIN';
+-- USR_PERFIL e TOK_PERFIL nasceram como ALTER TABLE ADD COLUMN. O SQLite nao
+-- tem IF NOT EXISTS para ADD COLUMN, entao reaplicar o schema abortava com
+-- "duplicate column name" -- e o bootstrap saia 1 sem que ninguem visse.
+-- Agora as colunas moram no CREATE TABLE das proprias tabelas.
 
 -- Metadados SX3 para CFG_BOLETO
 INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
@@ -538,8 +545,8 @@ CREATE TABLE IF NOT EXISTS ANOMALIA_LOG (
   D_E_L_E_T_ TEXT DEFAULT ' ',
   R_E_C_D_E_L_ NUMERIC
 );
-CREATE INDEX IDX_ANOMALIA_TIPO ON ANOMALIA_LOG(ANL_TIPO, D_E_L_E_T_);
-CREATE INDEX IDX_ANOMALIA_PERIODO ON ANOMALIA_LOG(ANL_PERIODO, D_E_L_E_T_);
+CREATE INDEX IF NOT EXISTS IDX_ANOMALIA_TIPO ON ANOMALIA_LOG(ANL_TIPO, D_E_L_E_T_);
+CREATE INDEX IF NOT EXISTS IDX_ANOMALIA_PERIODO ON ANOMALIA_LOG(ANL_PERIODO, D_E_L_E_T_);
 
 -- ALERTA: notificaÃ§Ãµes crÃ­ticas em tempo real
 CREATE TABLE IF NOT EXISTS ALERTA (
@@ -555,7 +562,7 @@ CREATE TABLE IF NOT EXISTS ALERTA (
   R_E_C_D_E_L_ NUMERIC,
   FOREIGN KEY(ALT_ANOMALIA_ID) REFERENCES ANOMALIA_LOG(ANL_ID)
 );
-CREATE INDEX IDX_ALERTA_TIPO ON ALERTA(ALT_TIPO, ALT_VISTO, D_E_L_E_T_);
+CREATE INDEX IF NOT EXISTS IDX_ALERTA_TIPO ON ALERTA(ALT_TIPO, ALT_VISTO, D_E_L_E_T_);
 
 -- DASHBOARD_CACHE: snapshot diÃ¡rio para performance
 CREATE TABLE IF NOT EXISTS DASHBOARD_CACHE (
@@ -575,11 +582,8 @@ CREATE TABLE IF NOT EXISTS DASHBOARD_CACHE (
   D_E_L_E_T_ TEXT DEFAULT ' ',
   R_E_C_D_E_L_ NUMERIC
 );
-CREATE UNIQUE INDEX IDX_DASHBOARD_DATA_PERIODO ON DASHBOARD_CACHE(DSH_DATA, DSH_PERIODO, D_E_L_E_T_);
+CREATE UNIQUE INDEX IF NOT EXISTS IDX_DASHBOARD_DATA_PERIODO ON DASHBOARD_CACHE(DSH_DATA, DSH_PERIODO, D_E_L_E_T_);
 
--- GesCon -- TOK_PERFIL: perfil do token (Task 1.5, Portal v3 auth primitives).
--- Note: SQLite doesn't support IF NOT EXISTS for ADD COLUMN, so we ignore the error if column exists
-ALTER TABLE GCT_TOKEN ADD COLUMN TOK_PERFIL TEXT;
 
 -- Metadados SX3 para TOK_PERFIL
 INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
