@@ -386,15 +386,15 @@ User Function GcBoletoConfigurar()
     DEFINE MSDIALOG oDlg TITLE "Configuração de Boleto" FROM 0,0 TO 260,440 PIXEL
 
     @ 10, 10 SAY "Banco (341=Itaú, 237=Bradesco):" PIXEL
-    @ 10,140 GET cBanco                            PIXEL
+    @ 10,140 GET cBanco SIZE 50,10                            PIXEL
     @ 30, 10 SAY "Agência:"                        PIXEL
-    @ 30,140 GET cAgencia                          PIXEL
+    @ 30,140 GET cAgencia SIZE 70,10                          PIXEL
     @ 50, 10 SAY "Conta corrente:"                 PIXEL
-    @ 50,140 GET cConta                            PIXEL
+    @ 50,140 GET cConta SIZE 90,10                            PIXEL
     @ 70, 10 SAY "Cedente / Convênio:"             PIXEL
-    @ 70,140 GET cCobrta                           PIXEL
+    @ 70,140 GET cCobrta SIZE 90,10                           PIXEL
     @ 90, 10 SAY "Carteira:"                       PIXEL
-    @ 90,140 GET cCarteira                         PIXEL
+    @ 90,140 GET cCarteira SIZE 50,10                         PIXEL
     @125, 10 BUTTON "Confirmar" ACTION (lOk := .T.) SIZE 40,12 PIXEL
     @125,140 BUTTON "Cancelar"                      SIZE 40,12 PIXEL
 

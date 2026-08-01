@@ -538,15 +538,15 @@ User Function GcNovoLancamento()
     DEFINE MSDIALOG oDlg TITLE "Novo Lançamento — " + cExercicio FROM 0,0 TO 260,460 PIXEL
 
     @ 10, 10 SAY "Data (AAAAMMDD):"  PIXEL
-    @ 10,120 GET cData               PIXEL
+    @ 10,120 GET cData SIZE 70,10               PIXEL
     @ 30, 10 SAY "Conta débito:"     PIXEL
-    @ 30,120 GET cContaDeb           PIXEL
+    @ 30,120 GET cContaDeb SIZE 60,10           PIXEL
     @ 50, 10 SAY "Conta crédito:"    PIXEL
-    @ 50,120 GET cContaCred          PIXEL
+    @ 50,120 GET cContaCred SIZE 60,10          PIXEL
     @ 70, 10 SAY "Valor:"            PIXEL
-    @ 70,120 GET cValor              PIXEL
+    @ 70,120 GET cValor SIZE 80,10              PIXEL
     @ 90, 10 SAY "Histórico:"        PIXEL
-    @ 90,120 GET cDescr              PIXEL
+    @ 90,120 GET cDescr SIZE 220,10              PIXEL
     @125, 10 BUTTON "Confirmar" ACTION (lOk := .T.) SIZE 40,12 PIXEL
     @125,120 BUTTON "Cancelar"                      SIZE 40,12 PIXEL
 
@@ -1024,13 +1024,13 @@ User Function GcLancarDespesaUI()
     DEFINE MSDIALOG oDlg TITLE "Lançar Despesa — rateio " + cRepart FROM 0,0 TO 250,460 PIXEL
 
     @ 10, 10 SAY "Data (AAAAMMDD):"        PIXEL
-    @ 10,140 GET cData                     PIXEL
+    @ 10,140 GET cData SIZE 70,10                     PIXEL
     @ 30, 10 SAY "Descrição:"              PIXEL
-    @ 30,140 GET cDescr                    PIXEL
+    @ 30,140 GET cDescr SIZE 220,10                    PIXEL
     @ 50, 10 SAY "Valor total:"            PIXEL
-    @ 50,140 GET cValor                    PIXEL
+    @ 50,140 GET cValor SIZE 80,10                    PIXEL
     @ 70, 10 SAY "Dia de vencimento (1-28):" PIXEL
-    @ 70,140 GET cDiaVenc                  PIXEL
+    @ 70,140 GET cDiaVenc SIZE 40,10                  PIXEL
     @105, 10 BUTTON "Confirmar" ACTION (lOk := .T.) SIZE 40,12 PIXEL
     @105,140 BUTTON "Cancelar"                      SIZE 40,12 PIXEL
 

@@ -43,11 +43,11 @@ User Function GcAbrirExercicio()
     DEFINE MSDIALOG oDlg TITLE "Abrir Exercício" FROM 0,0 TO 220,420 PIXEL
 
     @ 10, 10 SAY "Código (AAAA-MM):"   PIXEL
-    @ 10, 90 GET cCodigo               PIXEL
+    @ 10, 90 GET cCodigo SIZE 60,10               PIXEL
     @ 30, 10 SAY "Início (AAAAMMDD):"  PIXEL
-    @ 30, 90 GET cInicio               PIXEL
+    @ 30, 90 GET cInicio SIZE 70,10               PIXEL
     @ 50, 10 SAY "Fim (AAAAMMDD):"     PIXEL
-    @ 50, 90 GET cFim                  PIXEL
+    @ 50, 90 GET cFim SIZE 70,10                  PIXEL
     @ 85, 10 BUTTON "Confirmar" ACTION (lOk := .T.) SIZE 40,12 PIXEL
     @ 85, 90 BUTTON "Cancelar"                      SIZE 40,12 PIXEL
 
