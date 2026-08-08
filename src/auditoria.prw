@@ -56,7 +56,7 @@ User Function GcRegistrarAnomalia(cTipo, cDescricao, cSeveridade, cExercicio, nR
 
     // Monta SQL de inserção
     cSql := "INSERT INTO AUDITORIA ("
-    cSql += "AUD_DATA_HORA, AUD_TIPO, AUD_DESCRICAO, AUD_SEVERIDADE, AUD_EXERCICIO, AUD_RECNO_LAN, AUD_RECNO_COB, D_E_L_E_T_"
+    cSql += "AUD_DATA_HORA, AUD_TIPO, AUD_DESCRICAO, AUD_SEVERIDADE, AUD_EXERCICIO, AUD_RECNO_LAN, AUD_RECNO_COB, D_E_L_E_T_, FILIAL"
     cSql += ") VALUES ("
     cSql += "datetime('now'), "
     cSql += GcSqlVal(cTipo) + ", "
@@ -65,7 +65,8 @@ User Function GcRegistrarAnomalia(cTipo, cDescricao, cSeveridade, cExercicio, nR
     cSql += GcSqlVal(cExercicio) + ", "
     cSql += cValToChar(nRecnoLan) + ", "
     cSql += cValToChar(nRecnoCob) + ", "
-    cSql += GcSqlVal(" ")
+    cSql += GcSqlVal(" ") + ", "
+    cSql += GcSqlVal(FWxFilial('AUDITORIA'))
     cSql += ")"
 
     // Executa inserção
@@ -129,8 +130,8 @@ User Function GcAuditoriaFecharPeriodo(cExercicio)
     // 2. Busca lançamentos órfãos (AUTOMATICO_RATEIO sem cobrança correspondente)
     // Lançamento de rateio deveriam ter uma cobrança relacionada em COB
     aLanOrfaos := TCSqlQuery("SELECT L.LAN_ID, L.R_E_C_N_O_, L.LAN_DESCR, L.LAN_VALOR FROM LANCAMENTOS L " +
-        "WHERE L.LAN_EXERCICIO = " + GcSqlVal(cExercicio) + " AND L.LAN_TIPO = 'AUTOMATICO_RATEIO' AND L.D_E_L_E_T_ = ' ' " +
-        "AND NOT EXISTS (SELECT 1 FROM COB WHERE COB_COMPET = " + GcSqlVal(cExercicio) + " AND COB_VALOR = L.LAN_VALOR AND D_E_L_E_T_ = ' ')")
+        "WHERE L.LAN_EXERCICIO = " + GcSqlVal(cExercicio) + " AND L.LAN_TIPO = 'AUTOMATICO_RATEIO' AND L.D_E_L_E_T_ = ' ' AND L.FILIAL = " + GcSqlVal(FWxFilial('LANCAMENTOS')) + " " +
+        "AND NOT EXISTS (SELECT 1 FROM COB WHERE COB_COMPET = " + GcSqlVal(cExercicio) + " AND COB_VALOR = L.LAN_VALOR AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('COB')) + ")")
 
     For nI := 1 To Len(aLanOrfaos)
         nRecnoLan := aLanOrfaos[nI]:R_E_C_N_O_
@@ -142,8 +143,8 @@ User Function GcAuditoriaFecharPeriodo(cExercicio)
 
     // 3. Busca cobranças órfãs (COB sem lançamento contábil relacionado)
     aCobOrfaos := TCSqlQuery("SELECT C.R_E_C_N_O_, C.COB_UNIDADE, C.COB_COMPET, C.COB_VALOR FROM COB C " +
-        "WHERE C.COB_COMPET = " + GcSqlVal(cExercicio) + " AND C.D_E_L_E_T_ = ' ' " +
-        "AND NOT EXISTS (SELECT 1 FROM LANCAMENTOS WHERE LAN_EXERCICIO = C.COB_COMPET AND LAN_VALOR = C.COB_VALOR AND D_E_L_E_T_ = ' ')")
+        "WHERE C.COB_COMPET = " + GcSqlVal(cExercicio) + " AND C.D_E_L_E_T_ = ' ' AND C.FILIAL = " + GcSqlVal(FWxFilial('COB')) + " " +
+        "AND NOT EXISTS (SELECT 1 FROM LANCAMENTOS WHERE LAN_EXERCICIO = C.COB_COMPET AND LAN_VALOR = C.COB_VALOR AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('LANCAMENTOS')) + ")")
 
     For nI := 1 To Len(aCobOrfaos)
         nRecnoCob := aCobOrfaos[nI]:R_E_C_N_O_

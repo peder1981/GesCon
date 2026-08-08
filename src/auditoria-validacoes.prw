@@ -40,9 +40,9 @@ User Function GcValidarDesequilibrioContabil(cPeriodo as character) as logical
 
   cQuery := "SELECT COUNT(*) as CNT, COALESCE(SUM(ABS(L.LAN_VALOR - IFNULL(R.SOMA, 0))), 0) as DIFF " + ;
             "FROM LANCAMENTOS L LEFT JOIN " + ;
-            "(SELECT RAT_LANCAMENTO, SUM(RAT_VALOR) as SOMA FROM RATEIO_DETALHE WHERE D_E_L_E_T_ = ' ' GROUP BY RAT_LANCAMENTO) R " + ;
+            "(SELECT RAT_LANCAMENTO, SUM(RAT_VALOR) as SOMA FROM RATEIO_DETALHE WHERE D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('RATEIO_DETALHE')) + "' GROUP BY RAT_LANCAMENTO) R " + ;
             "ON R.RAT_LANCAMENTO = L.LAN_ID " + ;
-            "WHERE L.LAN_EXERCICIO = '" + GcSqlLit(cPeriodo) + "' AND L.LAN_TIPO = 'AUTOMATICO_RATEIO' AND L.D_E_L_E_T_ = ' ' " + ;
+            "WHERE L.LAN_EXERCICIO = '" + GcSqlLit(cPeriodo) + "' AND L.LAN_TIPO = 'AUTOMATICO_RATEIO' AND L.D_E_L_E_T_ = ' ' AND L.FILIAL = '" + GcSqlLit(FWxFilial('LANCAMENTOS')) + "' " + ;
             "AND ABS(L.LAN_VALOR - IFNULL(R.SOMA, 0)) > 0.01"
 
   aResult := TCSqlQuery(cQuery)
@@ -57,10 +57,10 @@ User Function GcValidarDesequilibrioContabil(cPeriodo as character) as logical
       " lancamento(s) de rateio cuja soma em RATEIO_DETALHE nao fecha com LAN_VALOR, diferenca total=" + ;
       AllTrim(Str(nDiferenca, 15, 2))
     cQuery := "INSERT INTO ANOMALIA_LOG (ANL_TIPO, ANL_PERIODO, ANL_VALOR, ANL_DESCRICAO, " + ;
-              "ANL_CRIADO_EM, ANL_STATUS, D_E_L_E_T_) VALUES (" + ;
+              "ANL_CRIADO_EM, ANL_STATUS, D_E_L_E_T_, FILIAL) VALUES (" + ;
               "'DESEQUILIBRIO_CONTABIL', '" + GcSqlLit(cPeriodo) + "', " + AllTrim(Str(nDiferenca, 15, 2)) + ", " + ;
               "'" + GcSqlLit(cDescricao) + "', " + ;
-              "datetime('now'), 'ABERTO', ' ')"
+              "datetime('now'), 'ABERTO', ' ', '" + GcSqlLit(FWxFilial('ANOMALIA_LOG')) + "')"
     TCSqlExec(cQuery)
     Return .T.
   EndIf
@@ -85,8 +85,8 @@ User Function GcValidarLancamentosOrfaos(cPeriodo as character) as logical
   Local cDescricao as character
 
   cQuery := "SELECT COUNT(*) as CNT FROM LANCAMENTOS L " + ;
-            "WHERE L.LAN_EXERCICIO = '" + GcSqlLit(cPeriodo) + "' AND L.LAN_TIPO = 'AUTOMATICO_RATEIO' AND L.D_E_L_E_T_ = ' ' " + ;
-            "AND NOT EXISTS (SELECT 1 FROM COB C WHERE C.COB_COMPET = L.LAN_EXERCICIO AND C.COB_VALOR = L.LAN_VALOR AND C.D_E_L_E_T_ = ' ')"
+            "WHERE L.LAN_EXERCICIO = '" + GcSqlLit(cPeriodo) + "' AND L.LAN_TIPO = 'AUTOMATICO_RATEIO' AND L.D_E_L_E_T_ = ' ' AND L.FILIAL = '" + GcSqlLit(FWxFilial('LANCAMENTOS')) + "' " + ;
+            "AND NOT EXISTS (SELECT 1 FROM COB C WHERE C.COB_COMPET = L.LAN_EXERCICIO AND C.COB_VALOR = L.LAN_VALOR AND C.D_E_L_E_T_ = ' ' AND C.FILIAL = '" + GcSqlLit(FWxFilial('COB')) + "')"
 
   aResult := TCSqlQuery(cQuery)
 
@@ -97,10 +97,10 @@ User Function GcValidarLancamentosOrfaos(cPeriodo as character) as logical
   If nQtd > 0
     cDescricao := "Lancamentos orfaos (sem cobranca correspondente): " + AllTrim(Str(nQtd, 10, 0))
     cQuery := "INSERT INTO ANOMALIA_LOG (ANL_TIPO, ANL_PERIODO, ANL_VALOR, ANL_DESCRICAO, " + ;
-              "ANL_CRIADO_EM, ANL_STATUS, D_E_L_E_T_) VALUES (" + ;
+              "ANL_CRIADO_EM, ANL_STATUS, D_E_L_E_T_, FILIAL) VALUES (" + ;
               "'LAN_ORFAO', '" + GcSqlLit(cPeriodo) + "', " + AllTrim(Str(nQtd, 10, 0)) + ", " + ;
               "'" + GcSqlLit(cDescricao) + "', " + ;
-              "datetime('now'), 'ABERTO', ' ')"
+              "datetime('now'), 'ABERTO', ' ', '" + GcSqlLit(FWxFilial('ANOMALIA_LOG')) + "')"
     TCSqlExec(cQuery)
     Return .T.
   EndIf
@@ -124,8 +124,8 @@ User Function GcValidarCobrancasOrfaos(cPeriodo as character) as logical
   Local cDescricao as character
 
   cQuery := "SELECT COUNT(*) as CNT FROM COB C " + ;
-            "WHERE C.COB_COMPET = '" + GcSqlLit(cPeriodo) + "' AND C.D_E_L_E_T_ = ' ' " + ;
-            "AND NOT EXISTS (SELECT 1 FROM LANCAMENTOS L WHERE L.LAN_EXERCICIO = C.COB_COMPET AND L.LAN_VALOR = C.COB_VALOR AND L.LAN_TIPO = 'AUTOMATICO_RATEIO' AND L.D_E_L_E_T_ = ' ')"
+            "WHERE C.COB_COMPET = '" + GcSqlLit(cPeriodo) + "' AND C.D_E_L_E_T_ = ' ' AND C.FILIAL = '" + GcSqlLit(FWxFilial('COB')) + "' " + ;
+            "AND NOT EXISTS (SELECT 1 FROM LANCAMENTOS L WHERE L.LAN_EXERCICIO = C.COB_COMPET AND L.LAN_VALOR = C.COB_VALOR AND L.LAN_TIPO = 'AUTOMATICO_RATEIO' AND L.D_E_L_E_T_ = ' ' AND L.FILIAL = '" + GcSqlLit(FWxFilial('LANCAMENTOS')) + "')"
 
   aResult := TCSqlQuery(cQuery)
 
@@ -136,10 +136,10 @@ User Function GcValidarCobrancasOrfaos(cPeriodo as character) as logical
   If nQtd > 0
     cDescricao := "Cobrancas orfas (sem lancamento correspondente): " + AllTrim(Str(nQtd, 10, 0))
     cQuery := "INSERT INTO ANOMALIA_LOG (ANL_TIPO, ANL_PERIODO, ANL_VALOR, ANL_DESCRICAO, " + ;
-              "ANL_CRIADO_EM, ANL_STATUS, D_E_L_E_T_) VALUES (" + ;
+              "ANL_CRIADO_EM, ANL_STATUS, D_E_L_E_T_, FILIAL) VALUES (" + ;
               "'COB_ORFAO', '" + GcSqlLit(cPeriodo) + "', " + AllTrim(Str(nQtd, 10, 0)) + ", " + ;
               "'" + GcSqlLit(cDescricao) + "', " + ;
-              "datetime('now'), 'ABERTO', ' ')"
+              "datetime('now'), 'ABERTO', ' ', '" + GcSqlLit(FWxFilial('ANOMALIA_LOG')) + "')"
     TCSqlExec(cQuery)
     Return .T.
   EndIf
@@ -164,8 +164,8 @@ User Function GcValidarRateioValido(cPeriodo as character) as logical
 
   cQuery := "SELECT COUNT(*) as CNT FROM (" + ;
             "SELECT L.LAN_ID, SUM(COALESCE(R.RAT_PERCENTUAL, 0)) as SOMA " + ;
-            "FROM LANCAMENTOS L JOIN RATEIO_DETALHE R ON R.RAT_LANCAMENTO = L.LAN_ID AND R.D_E_L_E_T_ = ' ' " + ;
-            "WHERE L.LAN_EXERCICIO = '" + GcSqlLit(cPeriodo) + "' AND L.LAN_TIPO = 'AUTOMATICO_RATEIO' AND L.D_E_L_E_T_ = ' ' " + ;
+            "FROM LANCAMENTOS L JOIN RATEIO_DETALHE R ON R.RAT_LANCAMENTO = L.LAN_ID AND R.D_E_L_E_T_ = ' ' AND R.FILIAL = '" + GcSqlLit(FWxFilial('RATEIO_DETALHE')) + "' " + ;
+            "WHERE L.LAN_EXERCICIO = '" + GcSqlLit(cPeriodo) + "' AND L.LAN_TIPO = 'AUTOMATICO_RATEIO' AND L.D_E_L_E_T_ = ' ' AND L.FILIAL = '" + GcSqlLit(FWxFilial('LANCAMENTOS')) + "' " + ;
             "GROUP BY L.LAN_ID " + ;
             "HAVING ABS(SOMA - 100) > 0.5" + ;
             ")"
@@ -179,10 +179,10 @@ User Function GcValidarRateioValido(cPeriodo as character) as logical
   If nQtd > 0
     cDescricao := "Rateio invalido: " + AllTrim(Str(nQtd, 10, 0)) + " lancamento(s) cuja soma de RAT_PERCENTUAL nao fecha em 100%"
     cQuery := "INSERT INTO ANOMALIA_LOG (ANL_TIPO, ANL_PERIODO, ANL_VALOR, ANL_DESCRICAO, " + ;
-              "ANL_CRIADO_EM, ANL_STATUS, D_E_L_E_T_) VALUES (" + ;
+              "ANL_CRIADO_EM, ANL_STATUS, D_E_L_E_T_, FILIAL) VALUES (" + ;
               "'RATEIO_INVALIDO', '" + GcSqlLit(cPeriodo) + "', " + AllTrim(Str(nQtd, 10, 0)) + ", " + ;
               "'" + GcSqlLit(cDescricao) + "', " + ;
-              "datetime('now'), 'ABERTO', ' ')"
+              "datetime('now'), 'ABERTO', ' ', '" + GcSqlLit(FWxFilial('ANOMALIA_LOG')) + "')"
     TCSqlExec(cQuery)
     Return .T.
   EndIf
@@ -210,8 +210,8 @@ User Function GcValidarTimingLancamentos(cPeriodo as character) as logical
   Local cDescricao as character
 
   cQuery := "SELECT COUNT(*) as CNT FROM LANCAMENTOS L " + ;
-            "JOIN COB C ON C.COB_COMPET = L.LAN_EXERCICIO AND C.COB_VALOR = L.LAN_VALOR AND C.D_E_L_E_T_ = ' ' " + ;
-            "WHERE L.LAN_EXERCICIO = '" + GcSqlLit(cPeriodo) + "' AND L.D_E_L_E_T_ = ' ' " + ;
+            "JOIN COB C ON C.COB_COMPET = L.LAN_EXERCICIO AND C.COB_VALOR = L.LAN_VALOR AND C.D_E_L_E_T_ = ' ' AND C.FILIAL = '" + GcSqlLit(FWxFilial('COB')) + "' " + ;
+            "WHERE L.LAN_EXERCICIO = '" + GcSqlLit(cPeriodo) + "' AND L.D_E_L_E_T_ = ' ' AND L.FILIAL = '" + GcSqlLit(FWxFilial('LANCAMENTOS')) + "' " + ;
             "AND (substr(L.LAN_DATA, 1, 4) || '-' || substr(L.LAN_DATA, 5, 2) || '-' || substr(L.LAN_DATA, 7, 2)) > C.COB_VENCTO"
 
   aResult := TCSqlQuery(cQuery)
@@ -223,10 +223,10 @@ User Function GcValidarTimingLancamentos(cPeriodo as character) as logical
   If nQtd > 0
     cDescricao := "Timing anomalo: " + AllTrim(Str(nQtd, 10, 0)) + " lancamento(s) com data posterior ao vencimento da cobranca correspondente"
     cQuery := "INSERT INTO ANOMALIA_LOG (ANL_TIPO, ANL_PERIODO, ANL_VALOR, ANL_DESCRICAO, " + ;
-              "ANL_CRIADO_EM, ANL_STATUS, D_E_L_E_T_) VALUES (" + ;
+              "ANL_CRIADO_EM, ANL_STATUS, D_E_L_E_T_, FILIAL) VALUES (" + ;
               "'TIMING_ANOMALIA', '" + GcSqlLit(cPeriodo) + "', " + AllTrim(Str(nQtd, 10, 0)) + ", " + ;
               "'" + GcSqlLit(cDescricao) + "', " + ;
-              "datetime('now'), 'ABERTO', ' ')"
+              "datetime('now'), 'ABERTO', ' ', '" + GcSqlLit(FWxFilial('ANOMALIA_LOG')) + "')"
     TCSqlExec(cQuery)
     Return .T.
   EndIf
@@ -254,8 +254,8 @@ User Function GcValidarAlteracoesEmPeriodoFechado(cPeriodo as character) as logi
   Local cDescricao as character
 
   cQuery := "SELECT COUNT(*) as CNT FROM LANCAMENTOS L " + ;
-            "JOIN EXERCICIO E ON E.EXE_CODIGO = L.LAN_EXERCICIO AND E.D_E_L_E_T_ = ' ' " + ;
-            "WHERE L.LAN_EXERCICIO = '" + GcSqlLit(cPeriodo) + "' AND E.EXE_FECHADO = 1 AND L.D_E_L_E_T_ <> ' '"
+            "JOIN EXERCICIO E ON E.EXE_CODIGO = L.LAN_EXERCICIO AND E.D_E_L_E_T_ = ' ' AND E.FILIAL = '" + GcSqlLit(FWxFilial('EXERCICIO')) + "' " + ;
+            "WHERE L.LAN_EXERCICIO = '" + GcSqlLit(cPeriodo) + "' AND E.EXE_FECHADO = 1 AND L.D_E_L_E_T_ <> ' ' AND L.FILIAL = '" + GcSqlLit(FWxFilial('LANCAMENTOS')) + "'"
 
   aResult := TCSqlQuery(cQuery)
 
@@ -266,10 +266,10 @@ User Function GcValidarAlteracoesEmPeriodoFechado(cPeriodo as character) as logi
   If nQtd > 0
     cDescricao := "Alteracao em periodo fechado: " + AllTrim(Str(nQtd, 10, 0)) + " lancamento(s) removido(s) apos o fechamento do exercicio"
     cQuery := "INSERT INTO ANOMALIA_LOG (ANL_TIPO, ANL_PERIODO, ANL_VALOR, ANL_DESCRICAO, " + ;
-              "ANL_CRIADO_EM, ANL_STATUS, D_E_L_E_T_) VALUES (" + ;
+              "ANL_CRIADO_EM, ANL_STATUS, D_E_L_E_T_, FILIAL) VALUES (" + ;
               "'USUARIO_ANOMALIA', '" + GcSqlLit(cPeriodo) + "', " + AllTrim(Str(nQtd, 10, 0)) + ", " + ;
               "'" + GcSqlLit(cDescricao) + "', " + ;
-              "datetime('now'), 'ABERTO', ' ')"
+              "datetime('now'), 'ABERTO', ' ', '" + GcSqlLit(FWxFilial('ANOMALIA_LOG')) + "')"
     TCSqlExec(cQuery)
     Return .T.
   EndIf
@@ -348,8 +348,8 @@ User Function GcCriarAlertaCritico(cTipo as character, cMsg as character) as log
     Return .F.
   EndIf
 
-  cQuery := "INSERT INTO ALERTA (ALT_TIPO, ALT_MENSAGEM, ALT_CRIADO_EM, ALT_VISTO, D_E_L_E_T_) " + ;
-            "VALUES ('" + GcSqlLit(cTipo) + "', '" + GcSqlLit(cMsg) + "', datetime('now'), 0, ' ')"
+  cQuery := "INSERT INTO ALERTA (ALT_TIPO, ALT_MENSAGEM, ALT_CRIADO_EM, ALT_VISTO, D_E_L_E_T_, FILIAL) " + ;
+            "VALUES ('" + GcSqlLit(cTipo) + "', '" + GcSqlLit(cMsg) + "', datetime('now'), 0, ' ', '" + GcSqlLit(FWxFilial('ALERTA')) + "')"
 
   TCSqlExec(cQuery)
 
@@ -389,17 +389,17 @@ User Function GcAtualizarDashboardCache(cPeriodo as character) as logical
 
   nTotal := nDesequilibrio + nLanOrfao + nCobOrfao + nRateio + nTiming + nUsuario
 
-  cQuery := "DELETE FROM DASHBOARD_CACHE WHERE DSH_PERIODO = '" + GcSqlLit(cPeriodo) + "'"
+  cQuery := "DELETE FROM DASHBOARD_CACHE WHERE DSH_PERIODO = '" + GcSqlLit(cPeriodo) + "' AND FILIAL = '" + GcSqlLit(FWxFilial('DASHBOARD_CACHE')) + "'"
   TCSqlExec(cQuery)
 
   cQuery := "INSERT INTO DASHBOARD_CACHE (DSH_DATA, DSH_PERIODO, DSH_ANOMALIAS_TOTAL, " + ;
             "DSH_DESEQUILIBRIO_COUNT, DSH_LAN_ORFAO_COUNT, DSH_COB_ORFAO_COUNT, " + ;
-            "DSH_RATEIO_INVALID_COUNT, DSH_TIMING_COUNT, DSH_USUARIO_COUNT, DSH_ATUALIZADO_EM, D_E_L_E_T_) " + ;
+            "DSH_RATEIO_INVALID_COUNT, DSH_TIMING_COUNT, DSH_USUARIO_COUNT, DSH_ATUALIZADO_EM, D_E_L_E_T_, FILIAL) " + ;
             "VALUES (date('now'), '" + GcSqlLit(cPeriodo) + "', " + AllTrim(Str(nTotal, 10, 0)) + ", " + ;
             AllTrim(Str(nDesequilibrio, 10, 0)) + ", " + AllTrim(Str(nLanOrfao, 10, 0)) + ", " + ;
             AllTrim(Str(nCobOrfao, 10, 0)) + ", " + AllTrim(Str(nRateio, 10, 0)) + ", " + ;
             AllTrim(Str(nTiming, 10, 0)) + ", " + AllTrim(Str(nUsuario, 10, 0)) + ", " + ;
-            "datetime('now'), ' ')"
+            "datetime('now'), ' ', '" + GcSqlLit(FWxFilial('DASHBOARD_CACHE')) + "')"
 
   TCSqlExec(cQuery)
 
@@ -422,7 +422,7 @@ Static Function GcContarAnomaliasPorTipo(cPeriodo as character, cTipo as charact
   Local aResult as array
 
   cQuery := "SELECT COUNT(*) as CNT FROM ANOMALIA_LOG WHERE ANL_PERIODO = '" + GcSqlLit(cPeriodo) + ;
-            "' AND ANL_TIPO = '" + GcSqlLit(cTipo) + "' AND D_E_L_E_T_ = ' '"
+            "' AND ANL_TIPO = '" + GcSqlLit(cTipo) + "' AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('ANOMALIA_LOG')) + "'"
 
   aResult := TCSqlQuery(cQuery)
 

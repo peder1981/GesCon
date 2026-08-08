@@ -83,7 +83,7 @@ User Function GcAuditarPeriodoUI()
     EndIf
 
     aTot := TCSqlQuery("SELECT COUNT(*) as CNT FROM ANOMALIA_LOG WHERE ANL_PERIODO = '" + ;
-        GcSqlLit(cPeriodo) + "' AND D_E_L_E_T_ = ' '")
+        GcSqlLit(cPeriodo) + "' AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('ANOMALIA_LOG')) + "'")
 
     MsgAlert("Período " + cPeriodo + " auditado: " + ;
         AllTrim(aTot[1]["CNT"]) + " anomalia(s) registrada(s)." + Chr(10) + ;
@@ -158,7 +158,7 @@ User Function GcMenuAlertas()
             oBrowse:Activate()
         Case nOpcao == 2
             aAlt := TCSqlQuery("SELECT ALT_ID, ALT_TIPO, ALT_MENSAGEM, ALT_CRIADO_EM " + ;
-                "FROM ALERTA WHERE ALT_VISTO = 0 AND D_E_L_E_T_ = ' ' ORDER BY ALT_CRIADO_EM DESC")
+                "FROM ALERTA WHERE ALT_VISTO = 0 AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('ALERTA')) + "' ORDER BY ALT_CRIADO_EM DESC")
 
             If Len(aAlt) == 0
                 MsgInfo("Nenhum alerta pendente.", "Alertas")
@@ -175,7 +175,7 @@ User Function GcMenuAlertas()
 
             If nEscolha > 0 .And. nEscolha <= Len(aAlt)
                 TCSqlExec("UPDATE ALERTA SET ALT_VISTO = 1, ALT_VISTO_EM = datetime('now') " + ;
-                    "WHERE ALT_ID = " + AllTrim(aAlt[nEscolha]["ALT_ID"]))
+                    "WHERE ALT_ID = " + AllTrim(aAlt[nEscolha]["ALT_ID"]) + " AND FILIAL = '" + GcSqlLit(FWxFilial('ALERTA')) + "'")
                 MsgInfo("Alerta marcado como visto.", "Alertas")
             EndIf
     EndCase
@@ -199,7 +199,7 @@ User Function GcPainelAuditoria()
 
     aDsh := TCSqlQuery("SELECT DSH_ANOMALIAS_TOTAL, DSH_DESEQUILIBRIO_COUNT, DSH_LAN_ORFAO_COUNT, " + ;
         "DSH_COB_ORFAO_COUNT, DSH_RATEIO_INVALID_COUNT, DSH_TIMING_COUNT, DSH_ATUALIZADO_EM " + ;
-        "FROM DASHBOARD_CACHE WHERE DSH_PERIODO = '" + GcSqlLit(cPeriodo) + "' AND D_E_L_E_T_ = ' '")
+        "FROM DASHBOARD_CACHE WHERE DSH_PERIODO = '" + GcSqlLit(cPeriodo) + "' AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('DASHBOARD_CACHE')) + "'")
 
     If Len(aDsh) == 0
         MsgAlert("Sem painel para " + cPeriodo + "." + Chr(10) + ;

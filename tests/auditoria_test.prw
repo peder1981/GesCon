@@ -27,6 +27,20 @@ User Function RunAuditoriaTests()
     Local lOk as logical
 
     lOk := .T.
+
+    // Task 7: os validadores de auditoria agora filtram LANCAMENTOS e
+    // RATEIO_DETALHE por FILIAL. Estampar FILIAL = '      ' (default sem
+    // RpcSetEnv, ver comentario nos setups abaixo) nesses fixtures reativa
+    // as FKs compostas LANCAMENTOS -> PLANO_CONTAS(PLA_CODIGO, FILIAL) e
+    // RATEIO_DETALHE -> UNI(UNI_CODIGO, FILIAL), que este banco de teste
+    // descartavel nunca semeava (o NULL de FILIAL desativava a checagem).
+    // Semeia aqui, uma unica vez, as contas/unidades usadas pelos testes
+    // abaixo com essa mesma FILIAL, pra nao violar as FKs.
+    TCSqlExec("INSERT OR IGNORE INTO PLANO_CONTAS (FILIAL, PLA_CODIGO, PLA_NOME, PLA_TIPO, PLA_ATIVO, D_E_L_E_T_) VALUES ('      ', '1000', 'Caixa Teste', 'ATIVO', 1, ' ')")
+    TCSqlExec("INSERT OR IGNORE INTO PLANO_CONTAS (FILIAL, PLA_CODIGO, PLA_NOME, PLA_TIPO, PLA_ATIVO, D_E_L_E_T_) VALUES ('      ', '4000', 'Despesa Teste', 'DESPESA', 1, ' ')")
+    TCSqlExec("INSERT OR IGNORE INTO UNI (FILIAL, UNI_CODIGO, UNI_FRACAO, D_E_L_E_T_) VALUES ('      ', '101', 0.5, ' ')")
+    TCSqlExec("INSERT OR IGNORE INTO UNI (FILIAL, UNI_CODIGO, UNI_FRACAO, D_E_L_E_T_) VALUES ('      ', '102', 0.5, ' ')")
+
     If !TestAuditoriaTablesExist()
         lOk := .F.
     EndIf
@@ -321,18 +335,21 @@ User Function TestGcValidarDesequilibrioContabil()
     TCSqlExec("DELETE FROM RATEIO_DETALHE WHERE RAT_LANCAMENTO IN (SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "')")
     TCSqlExec("DELETE FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "'")
     TCSqlExec("DELETE FROM EXERCICIO WHERE EXE_CODIGO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
-    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) " + ;
-        "VALUES ('" + cPeriodo + "', '9995-01-01', '9995-01-31', 0, 0, ' ')")
+    // FILIAL estampado com 6 espacos: esta suite nunca chama RpcSetEnv,
+    // entao a sessao roda com a filial default, e e essa que os
+    // validadores em src/auditoria-validacoes.prw agora filtram (Task 7).
+    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_, FILIAL) " + ;
+        "VALUES ('" + cPeriodo + "', '9995-01-01', '9995-01-31', 0, 0, ' ', '      ')")
     TCSqlExec("INSERT INTO LANCAMENTOS (LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, " + ;
-        "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_) VALUES (" + ;
-        "'99950101', '4000', '1000', 100.00, '" + cDescr + "', 'AUTOMATICO_RATEIO', '" + cPeriodo + "', datetime('now'), 'TEST5', ' ')")
+        "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, FILIAL) VALUES (" + ;
+        "'99950101', '4000', '1000', 100.00, '" + cDescr + "', 'AUTOMATICO_RATEIO', '" + cPeriodo + "', datetime('now'), 'TEST5', ' ', '      ')")
 
     aLan := TCSqlQuery("SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "' ORDER BY LAN_ID DESC LIMIT 1")
     nLanId := Val(aLan[1]:LAN_ID)
 
     // RATEIO_DETALHE soma apenas 80.00, mas LAN_VALOR = 100.00 -> desequilibrio
-    TCSqlExec("INSERT INTO RATEIO_DETALHE (RAT_LANCAMENTO, RAT_UNIDADE, RAT_VALOR, RAT_PERCENTUAL, D_E_L_E_T_) " + ;
-        "VALUES (" + AllTrim(Str(nLanId, 10, 0)) + ", '101', 80.00, 80.00, ' ')")
+    TCSqlExec("INSERT INTO RATEIO_DETALHE (RAT_LANCAMENTO, RAT_UNIDADE, RAT_VALOR, RAT_PERCENTUAL, D_E_L_E_T_, FILIAL) " + ;
+        "VALUES (" + AllTrim(Str(nLanId, 10, 0)) + ", '101', 80.00, 80.00, ' ', '      ')")
 
     // Caso 1: periodo com lancamento desbalanceado
     If !GcValidarDesequilibrioContabil(cPeriodo)
@@ -390,11 +407,11 @@ User Function TestGcValidarLancamentosOrfaos()
     TCSqlExec("DELETE FROM ANOMALIA_LOG WHERE ANL_PERIODO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
     TCSqlExec("DELETE FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "'")
     TCSqlExec("DELETE FROM EXERCICIO WHERE EXE_CODIGO = '" + cPeriodo + "'")
-    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) " + ;
-        "VALUES ('" + cPeriodo + "', '9995-02-01', '9995-02-28', 0, 0, ' ')")
+    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_, FILIAL) " + ;
+        "VALUES ('" + cPeriodo + "', '9995-02-01', '9995-02-28', 0, 0, ' ', '      ')")
     TCSqlExec("INSERT INTO LANCAMENTOS (LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, " + ;
-        "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_) VALUES (" + ;
-        "'99950201', '4000', '1000', 50.00, '" + cDescr + "', 'AUTOMATICO_RATEIO', '" + cPeriodo + "', datetime('now'), 'TEST5', ' ')")
+        "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, FILIAL) VALUES (" + ;
+        "'99950201', '4000', '1000', 50.00, '" + cDescr + "', 'AUTOMATICO_RATEIO', '" + cPeriodo + "', datetime('now'), 'TEST5', ' ', '      ')")
 
     // Caso 1: lancamento sem cobranca correspondente (50.00 em '9995-02', nenhuma COB casa)
     If !GcValidarLancamentosOrfaos(cPeriodo)
@@ -448,8 +465,8 @@ User Function TestGcValidarCobrancasOrfaos()
     // Setup
     TCSqlExec("DELETE FROM ANOMALIA_LOG WHERE ANL_PERIODO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
     TCSqlExec("DELETE FROM COB WHERE COB_COMPET IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "') AND COB_UNIDADE = 'TEST5'")
-    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_) " + ;
-        "VALUES ('TEST5', '" + cPeriodo + "', 60.00, '" + cPeriodo + "-10', 'pendente', ' ')")
+    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_, FILIAL) " + ;
+        "VALUES ('TEST5', '" + cPeriodo + "', 60.00, '" + cPeriodo + "-10', 'pendente', ' ', '      ')")
 
     // Caso 1: cobranca sem lancamento correspondente
     If !GcValidarCobrancasOrfaos(cPeriodo)
@@ -511,21 +528,21 @@ User Function TestGcValidarRateioValido()
     TCSqlExec("DELETE FROM RATEIO_DETALHE WHERE RAT_LANCAMENTO IN (SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_DESCR IN ('" + cDescr + "', '" + cDescrLimpo + "'))")
     TCSqlExec("DELETE FROM LANCAMENTOS WHERE LAN_DESCR IN ('" + cDescr + "', '" + cDescrLimpo + "')")
     TCSqlExec("DELETE FROM EXERCICIO WHERE EXE_CODIGO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
-    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) " + ;
-        "VALUES ('" + cPeriodo + "', '9995-04-01', '9995-04-30', 0, 0, ' ')")
-    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) " + ;
-        "VALUES ('" + cPeriodoLimpo + "', '9995-94-01', '9995-94-30', 0, 0, ' ')")
+    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_, FILIAL) " + ;
+        "VALUES ('" + cPeriodo + "', '9995-04-01', '9995-04-30', 0, 0, ' ', '      ')")
+    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_, FILIAL) " + ;
+        "VALUES ('" + cPeriodoLimpo + "', '9995-94-01', '9995-94-30', 0, 0, ' ', '      ')")
 
     // Caso 1: rateio percentual desbalanceado (soma 80%, nao 100%)
     TCSqlExec("INSERT INTO LANCAMENTOS (LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, " + ;
-        "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_) VALUES (" + ;
-        "'99950401', '4000', '1000', 100.00, '" + cDescr + "', 'AUTOMATICO_RATEIO', '" + cPeriodo + "', datetime('now'), 'TEST5', ' ')")
+        "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, FILIAL) VALUES (" + ;
+        "'99950401', '4000', '1000', 100.00, '" + cDescr + "', 'AUTOMATICO_RATEIO', '" + cPeriodo + "', datetime('now'), 'TEST5', ' ', '      ')")
     aLan := TCSqlQuery("SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "' ORDER BY LAN_ID DESC LIMIT 1")
     nLanId := Val(aLan[1]:LAN_ID)
-    TCSqlExec("INSERT INTO RATEIO_DETALHE (RAT_LANCAMENTO, RAT_UNIDADE, RAT_VALOR, RAT_PERCENTUAL, D_E_L_E_T_) " + ;
-        "VALUES (" + AllTrim(Str(nLanId, 10, 0)) + ", '101', 40.00, 40.00, ' ')")
-    TCSqlExec("INSERT INTO RATEIO_DETALHE (RAT_LANCAMENTO, RAT_UNIDADE, RAT_VALOR, RAT_PERCENTUAL, D_E_L_E_T_) " + ;
-        "VALUES (" + AllTrim(Str(nLanId, 10, 0)) + ", '102', 40.00, 40.00, ' ')")
+    TCSqlExec("INSERT INTO RATEIO_DETALHE (RAT_LANCAMENTO, RAT_UNIDADE, RAT_VALOR, RAT_PERCENTUAL, D_E_L_E_T_, FILIAL) " + ;
+        "VALUES (" + AllTrim(Str(nLanId, 10, 0)) + ", '101', 40.00, 40.00, ' ', '      ')")
+    TCSqlExec("INSERT INTO RATEIO_DETALHE (RAT_LANCAMENTO, RAT_UNIDADE, RAT_VALOR, RAT_PERCENTUAL, D_E_L_E_T_, FILIAL) " + ;
+        "VALUES (" + AllTrim(Str(nLanId, 10, 0)) + ", '102', 40.00, 40.00, ' ', '      ')")
 
     If !GcValidarRateioValido(cPeriodo)
         ConOut("[FAIL] TestGcValidarRateioValido: deveria retornar .T. para rateio percentual invalido")
@@ -542,14 +559,14 @@ User Function TestGcValidarRateioValido()
 
     // Caso 2: rateio percentual valido (soma 100%) nao deve ser sinalizado
     TCSqlExec("INSERT INTO LANCAMENTOS (LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, " + ;
-        "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_) VALUES (" + ;
-        "'99950401', '4000', '1000', 100.00, '" + cDescrLimpo + "', 'AUTOMATICO_RATEIO', '" + cPeriodoLimpo + "', datetime('now'), 'TEST5', ' ')")
+        "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, FILIAL) VALUES (" + ;
+        "'99950401', '4000', '1000', 100.00, '" + cDescrLimpo + "', 'AUTOMATICO_RATEIO', '" + cPeriodoLimpo + "', datetime('now'), 'TEST5', ' ', '      ')")
     aLan := TCSqlQuery("SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescrLimpo + "' ORDER BY LAN_ID DESC LIMIT 1")
     nLanId := Val(aLan[1]:LAN_ID)
-    TCSqlExec("INSERT INTO RATEIO_DETALHE (RAT_LANCAMENTO, RAT_UNIDADE, RAT_VALOR, RAT_PERCENTUAL, D_E_L_E_T_) " + ;
-        "VALUES (" + AllTrim(Str(nLanId, 10, 0)) + ", '101', 50.00, 50.00, ' ')")
-    TCSqlExec("INSERT INTO RATEIO_DETALHE (RAT_LANCAMENTO, RAT_UNIDADE, RAT_VALOR, RAT_PERCENTUAL, D_E_L_E_T_) " + ;
-        "VALUES (" + AllTrim(Str(nLanId, 10, 0)) + ", '102', 50.00, 50.00, ' ')")
+    TCSqlExec("INSERT INTO RATEIO_DETALHE (RAT_LANCAMENTO, RAT_UNIDADE, RAT_VALOR, RAT_PERCENTUAL, D_E_L_E_T_, FILIAL) " + ;
+        "VALUES (" + AllTrim(Str(nLanId, 10, 0)) + ", '101', 50.00, 50.00, ' ', '      ')")
+    TCSqlExec("INSERT INTO RATEIO_DETALHE (RAT_LANCAMENTO, RAT_UNIDADE, RAT_VALOR, RAT_PERCENTUAL, D_E_L_E_T_, FILIAL) " + ;
+        "VALUES (" + AllTrim(Str(nLanId, 10, 0)) + ", '102', 50.00, 50.00, ' ', '      ')")
 
     If GcValidarRateioValido(cPeriodoLimpo)
         ConOut("[FAIL] TestGcValidarRateioValido: rateio valido (100%) nao deveria ser sinalizado")
@@ -593,15 +610,15 @@ User Function TestGcValidarTimingLancamentos()
     TCSqlExec("DELETE FROM COB WHERE COB_COMPET IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "') AND COB_UNIDADE = 'TEST5'")
     TCSqlExec("DELETE FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "'")
     TCSqlExec("DELETE FROM EXERCICIO WHERE EXE_CODIGO = '" + cPeriodo + "'")
-    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) " + ;
-        "VALUES ('" + cPeriodo + "', '9995-05-01', '9995-05-31', 0, 0, ' ')")
+    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_, FILIAL) " + ;
+        "VALUES ('" + cPeriodo + "', '9995-05-01', '9995-05-31', 0, 0, ' ', '      ')")
 
     // Vencimento em 9995-05-10, lancamento em 9995-05-15 (posterior -> anomalia)
-    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_) " + ;
-        "VALUES ('TEST5', '" + cPeriodo + "', 70.00, '" + cPeriodo + "-10', 'pendente', ' ')")
+    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_, FILIAL) " + ;
+        "VALUES ('TEST5', '" + cPeriodo + "', 70.00, '" + cPeriodo + "-10', 'pendente', ' ', '      ')")
     TCSqlExec("INSERT INTO LANCAMENTOS (LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, " + ;
-        "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_) VALUES (" + ;
-        "'99950515', '4000', '1000', 70.00, '" + cDescr + "', 'AUTOMATICO_RATEIO', '" + cPeriodo + "', datetime('now'), 'TEST5', ' ')")
+        "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, FILIAL) VALUES (" + ;
+        "'99950515', '4000', '1000', 70.00, '" + cDescr + "', 'AUTOMATICO_RATEIO', '" + cPeriodo + "', datetime('now'), 'TEST5', ' ', '      ')")
 
     // Caso 1: lancamento posterior ao vencimento da cobranca
     If !GcValidarTimingLancamentos(cPeriodo)
@@ -660,15 +677,15 @@ User Function TestGcValidarAlteracoesEmPeriodoFechado()
     TCSqlExec("DELETE FROM ANOMALIA_LOG WHERE ANL_PERIODO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
     TCSqlExec("DELETE FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "'")
     TCSqlExec("DELETE FROM EXERCICIO WHERE EXE_CODIGO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
-    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) " + ;
-        "VALUES ('" + cPeriodo + "', '9995-06-01', '9995-06-30', 0, 1, ' ')")
-    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) " + ;
-        "VALUES ('" + cPeriodoLimpo + "', '9995-96-01', '9995-96-28', 0, 1, ' ')")
+    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_, FILIAL) " + ;
+        "VALUES ('" + cPeriodo + "', '9995-06-01', '9995-06-30', 0, 1, ' ', '      ')")
+    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_, FILIAL) " + ;
+        "VALUES ('" + cPeriodoLimpo + "', '9995-96-01', '9995-96-28', 0, 1, ' ', '      ')")
 
     // Lancamento soft-deletado em periodo fechado
     TCSqlExec("INSERT INTO LANCAMENTOS (LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, " + ;
-        "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_) VALUES (" + ;
-        "'99950601', '4000', '1000', 90.00, '" + cDescr + "', 'MANUAL', '" + cPeriodo + "', datetime('now'), 'TEST5', '*')")
+        "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, FILIAL) VALUES (" + ;
+        "'99950601', '4000', '1000', 90.00, '" + cDescr + "', 'MANUAL', '" + cPeriodo + "', datetime('now'), 'TEST5', '*', '      ')")
 
     // Caso 1: lancamento removido apos fechamento do periodo
     If !GcValidarAlteracoesEmPeriodoFechado(cPeriodo)
@@ -733,18 +750,18 @@ User Function TestGcAuditarPeriodoCompleto()
     TCSqlExec("DELETE FROM RATEIO_DETALHE WHERE RAT_LANCAMENTO IN (SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "')")
     TCSqlExec("DELETE FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "'")
     TCSqlExec("DELETE FROM EXERCICIO WHERE EXE_CODIGO IN ('" + cPeriodo + "', '" + cPeriodoLimpo + "')")
-    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) " + ;
-        "VALUES ('" + cPeriodo + "', '9994-01-01', '9994-01-31', 0, 0, ' ')")
-    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) " + ;
-        "VALUES ('" + cPeriodoLimpo + "', '9994-91-01', '9994-91-28', 0, 0, ' ')")
+    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_, FILIAL) " + ;
+        "VALUES ('" + cPeriodo + "', '9994-01-01', '9994-01-31', 0, 0, ' ', '      ')")
+    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_, FILIAL) " + ;
+        "VALUES ('" + cPeriodoLimpo + "', '9994-91-01', '9994-91-28', 0, 0, ' ', '      ')")
     TCSqlExec("INSERT INTO LANCAMENTOS (LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, " + ;
-        "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_) VALUES (" + ;
-        "'99940101', '4000', '1000', 100.00, '" + cDescr + "', 'AUTOMATICO_RATEIO', '" + cPeriodo + "', datetime('now'), 'TEST6', ' ')")
+        "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, FILIAL) VALUES (" + ;
+        "'99940101', '4000', '1000', 100.00, '" + cDescr + "', 'AUTOMATICO_RATEIO', '" + cPeriodo + "', datetime('now'), 'TEST6', ' ', '      ')")
     aLan := TCSqlQuery("SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_DESCR = '" + cDescr + "' ORDER BY LAN_ID DESC LIMIT 1")
     nLanId := Val(aLan[1]:LAN_ID)
     // RATEIO_DETALHE soma apenas 80.00, mas LAN_VALOR = 100.00 -> desequilibrio
-    TCSqlExec("INSERT INTO RATEIO_DETALHE (RAT_LANCAMENTO, RAT_UNIDADE, RAT_VALOR, RAT_PERCENTUAL, D_E_L_E_T_) " + ;
-        "VALUES (" + AllTrim(Str(nLanId, 10, 0)) + ", '101', 80.00, 80.00, ' ')")
+    TCSqlExec("INSERT INTO RATEIO_DETALHE (RAT_LANCAMENTO, RAT_UNIDADE, RAT_VALOR, RAT_PERCENTUAL, D_E_L_E_T_, FILIAL) " + ;
+        "VALUES (" + AllTrim(Str(nLanId, 10, 0)) + ", '101', 80.00, 80.00, ' ', '      ')")
 
     // Caso 1: periodo com anomalia -> .T., ANOMALIA_LOG gravado, DASHBOARD_CACHE atualizado
     If !GcAuditarPeriodoCompleto(cPeriodo)
@@ -863,12 +880,12 @@ User Function TestGcAtualizarDashboardCache()
     // Setup
     TCSqlExec("DELETE FROM DASHBOARD_CACHE WHERE DSH_PERIODO = '" + cPeriodo + "'")
     TCSqlExec("DELETE FROM ANOMALIA_LOG WHERE ANL_PERIODO = '" + cPeriodo + "'")
-    TCSqlExec("INSERT INTO ANOMALIA_LOG (ANL_TIPO, ANL_PERIODO, ANL_VALOR, ANL_DESCRICAO, ANL_CRIADO_EM, ANL_STATUS, D_E_L_E_T_) " + ;
-        "VALUES ('DESEQUILIBRIO_CONTABIL', '" + cPeriodo + "', 10.00, 'test6-cache-1', datetime('now'), 'ABERTO', ' ')")
-    TCSqlExec("INSERT INTO ANOMALIA_LOG (ANL_TIPO, ANL_PERIODO, ANL_VALOR, ANL_DESCRICAO, ANL_CRIADO_EM, ANL_STATUS, D_E_L_E_T_) " + ;
-        "VALUES ('LAN_ORFAO', '" + cPeriodo + "', 1.00, 'test6-cache-2', datetime('now'), 'ABERTO', ' ')")
-    TCSqlExec("INSERT INTO ANOMALIA_LOG (ANL_TIPO, ANL_PERIODO, ANL_VALOR, ANL_DESCRICAO, ANL_CRIADO_EM, ANL_STATUS, D_E_L_E_T_) " + ;
-        "VALUES ('LAN_ORFAO', '" + cPeriodo + "', 1.00, 'test6-cache-3', datetime('now'), 'ABERTO', ' ')")
+    TCSqlExec("INSERT INTO ANOMALIA_LOG (ANL_TIPO, ANL_PERIODO, ANL_VALOR, ANL_DESCRICAO, ANL_CRIADO_EM, ANL_STATUS, D_E_L_E_T_, FILIAL) " + ;
+        "VALUES ('DESEQUILIBRIO_CONTABIL', '" + cPeriodo + "', 10.00, 'test6-cache-1', datetime('now'), 'ABERTO', ' ', '      ')")
+    TCSqlExec("INSERT INTO ANOMALIA_LOG (ANL_TIPO, ANL_PERIODO, ANL_VALOR, ANL_DESCRICAO, ANL_CRIADO_EM, ANL_STATUS, D_E_L_E_T_, FILIAL) " + ;
+        "VALUES ('LAN_ORFAO', '" + cPeriodo + "', 1.00, 'test6-cache-2', datetime('now'), 'ABERTO', ' ', '      ')")
+    TCSqlExec("INSERT INTO ANOMALIA_LOG (ANL_TIPO, ANL_PERIODO, ANL_VALOR, ANL_DESCRICAO, ANL_CRIADO_EM, ANL_STATUS, D_E_L_E_T_, FILIAL) " + ;
+        "VALUES ('LAN_ORFAO', '" + cPeriodo + "', 1.00, 'test6-cache-3', datetime('now'), 'ABERTO', ' ', '      ')")
 
     // Caso 1: primeira atualizacao grava contadores corretos (1 desequilibrio, 2 lan_orfao, total 3)
     If !GcAtualizarDashboardCache(cPeriodo)
