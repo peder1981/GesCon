@@ -77,18 +77,18 @@ User Function GcAbrirExercicio()
     EndIf
 
     aJa := TCSqlQuery("SELECT EXE_CODIGO FROM EXERCICIO WHERE EXE_CODIGO = '" + ;
-        GcSqlLit(cCodigo) + "' AND D_E_L_E_T_ = ' '")
+        GcSqlLit(cCodigo) + "' AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('EXERCICIO')) + "'")
     If Len(aJa) > 0
         MsgAlert("Exercício " + cCodigo + " já existe.", "Abrir Exercício")
         Return .F.
     EndIf
 
     // Um exercício ativo por vez
-    TCSqlExec("UPDATE EXERCICIO SET EXE_ATIVO = 0 WHERE D_E_L_E_T_ = ' '")
+    TCSqlExec("UPDATE EXERCICIO SET EXE_ATIVO = 0 WHERE D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('EXERCICIO')) + "'")
 
-    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) " + ;
+    TCSqlExec("INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_, FILIAL) " + ;
         "VALUES ('" + GcSqlLit(cCodigo) + "', '" + GcSqlLit(cInicio) + "', '" + ;
-        GcSqlLit(cFim) + "', 1, 0, ' ')")
+        GcSqlLit(cFim) + "', 1, 0, ' ', '" + GcSqlLit(FWxFilial('EXERCICIO')) + "')")
 
     MsgInfo("Exercício " + cCodigo + " aberto e definido como ativo.", "Abrir Exercício")
 Return .T.

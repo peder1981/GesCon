@@ -409,17 +409,29 @@ User Function TestPeriodClosureGeneratesSnapshots()
     TCSqlExec(cSql)
 
     // Step 2: Cria exercício de teste
-    cSql := "INSERT INTO EXERCICIO (EXE_CODIGO, EXE_ATIVO, EXE_FECHADO, EXE_INICIO, EXE_FIM, D_E_L_E_T_) VALUES ("
+    // FILIAL estampado com 6 espaços: esta suite nunca chama RpcSetEnv,
+    // entao a sessao roda com a filial default (ver FWxFilial em
+    // src/contabil.prw / pkg/vm/natives.go) e GcFecharPeriodo, chamado no
+    // Step 6 abaixo, filtra sua leitura de EXERCICIO por essa mesma filial.
+    cSql := "INSERT INTO EXERCICIO (EXE_CODIGO, EXE_ATIVO, EXE_FECHADO, EXE_INICIO, EXE_FIM, D_E_L_E_T_, FILIAL) VALUES ("
     cSql += "'" + cCompet + "', "
     cSql += "1, "
     cSql += "0, "
     cSql += "'20250101', "
     cSql += "'20250131', "
-    cSql += "' ')"
+    cSql += "' ', "
+    cSql += "'      ')"
     TCSqlExec(cSql)
     ConOut("Exercise " + cCompet + " created")
 
     // Step 3: Insere lançamentos contábeis de teste (para validar integridade)
+    // Sem FILIAL (fica NULL): LANCAMENTOS tem FOREIGN KEY composta pra
+    // PLANO_CONTAS(PLA_CODIGO, FILIAL), e este banco de teste descartavel
+    // nao semeia PLANO_CONTAS -- estampar FILIAL aqui violaria a FK. Como
+    // NULL desativa a checagem da FK composta (regra padrao SQL/SQLite) e
+    // GcValidarIntegridade/GcGerarBalancetePeriodo apenas somam por
+    // LAN_EXERCICIO (nao verificado por estes asserts), manter sem FILIAL
+    // preserva o comportamento anterior a esta task.
     // Lançamento 1: Débito 1100 / Crédito 3000 (Receita)
     cSql := "INSERT INTO LANCAMENTOS ("
     cSql += "LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, "
@@ -459,6 +471,9 @@ User Function TestPeriodClosureGeneratesSnapshots()
     ConOut("Test entries created: 2 double-entry records for accounting integrity")
 
     // Step 4: Insere registros COB de teste para gerar snapshots
+    // (GcGerarPortalExtratos/GcGerarPortalAgenda, chamados por
+    // GcFecharPeriodo, nao sao filtrados por FILIAL nesta task -- COB
+    // continua sem FILIAL aqui, como antes.)
     cSql := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_) VALUES ("
     cSql += "'101', '"
     cSql += cCompet + "', "
@@ -641,14 +656,18 @@ User Function TestE2EPortalFlow()
     ConOut("[PASS] Token criado: " + cToken)
 
     // Passo 3: Cria exercício de teste
+    // FILIAL estampado com 6 espaços: mesma razão do Step 2 de
+    // TestPeriodClosureGeneratesSnapshots -- sem RpcSetEnv, a sessão usa a
+    // filial default, e é essa que GcFecharPeriodo (Passo 7) vai filtrar.
     ConOut("Step 3: Create test exercise")
-    cSql := "INSERT INTO EXERCICIO (EXE_CODIGO, EXE_ATIVO, EXE_FECHADO, EXE_INICIO, EXE_FIM, D_E_L_E_T_) VALUES ("
+    cSql := "INSERT INTO EXERCICIO (EXE_CODIGO, EXE_ATIVO, EXE_FECHADO, EXE_INICIO, EXE_FIM, D_E_L_E_T_, FILIAL) VALUES ("
     cSql += "'" + cCompet + "', "
     cSql += "1, "
     cSql += "0, "
     cSql += "'20250301', "
     cSql += "'20250331', "
-    cSql += "' ')"
+    cSql += "' ', "
+    cSql += "'      ')"
     TCSqlExec(cSql)
     ConOut("[PASS] Exercise criado: " + cCompet)
 
@@ -677,6 +696,9 @@ User Function TestE2EPortalFlow()
     ConOut("[PASS] Test billing records inserted for periods: " + cCompet + ", " + cProxCompet)
 
     // Passo 5: Insere lançamentos contábeis de teste
+    // Sem FILIAL (fica NULL): mesma razão do Step 3 acima -- LANCAMENTOS
+    // tem FK composta pra PLANO_CONTAS(PLA_CODIGO, FILIAL), que este banco
+    // de teste não semeia.
     ConOut("Step 5: Insert accounting entries")
     cSql := "INSERT INTO LANCAMENTOS ("
     cSql += "LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, "

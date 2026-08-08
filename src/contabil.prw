@@ -56,7 +56,7 @@ User Function GcExercicioAtivo()
     Local aExercicio := {}
     Local cCodigo := ""
 
-    aExercicio := TCSqlQuery("SELECT EXE_CODIGO FROM EXERCICIO WHERE EXE_ATIVO = 1 AND D_E_L_E_T_ = ' ' LIMIT 1")
+    aExercicio := TCSqlQuery("SELECT EXE_CODIGO FROM EXERCICIO WHERE EXE_ATIVO = 1 AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('EXERCICIO')) + " LIMIT 1")
 
     If Len(aExercicio) > 0
         cCodigo := aExercicio[1]:EXE_CODIGO
@@ -82,7 +82,7 @@ User Function GcPeriodoFechado(cExercicio)
     Local lFechado := .F.
 
     If !Empty(cExercicio)
-        aExercicio := TCSqlQuery("SELECT EXE_FECHADO FROM EXERCICIO WHERE EXE_CODIGO = " + GcSqlVal(cExercicio) + " AND D_E_L_E_T_ = ' '")
+        aExercicio := TCSqlQuery("SELECT EXE_FECHADO FROM EXERCICIO WHERE EXE_CODIGO = " + GcSqlVal(cExercicio) + " AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('EXERCICIO')))
 
         If Len(aExercicio) > 0
             lFechado := (aExercicio[1]:EXE_FECHADO = 1)
@@ -144,7 +144,7 @@ User Function GcCriarLancamentoManualDireto(dData, cDescricao, cContaDeb, cConta
     // Monta SQL de inserção (com R_E_C_N_O_ auto-gerado via subquery)
     cSql := "INSERT INTO LANCAMENTOS ("
     cSql += "LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, "
-    cSql += "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, R_E_C_N_O_"
+    cSql += "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, R_E_C_N_O_, FILIAL"
     cSql += ") VALUES ("
     cSql += GcSqlVal(DtoS(dData)) + ", "
     cSql += GcSqlVal(cContaDeb) + ", "
@@ -156,7 +156,8 @@ User Function GcCriarLancamentoManualDireto(dData, cDescricao, cContaDeb, cConta
     cSql += "datetime('now'), "
     cSql += GcSqlVal("TEST_USER") + ", "
     cSql += GcSqlVal(" ") + ", "
-    cSql += "(SELECT COALESCE(MAX(R_E_C_N_O_), 0) + 1 FROM LANCAMENTOS)"
+    cSql += "(SELECT COALESCE(MAX(R_E_C_N_O_), 0) + 1 FROM LANCAMENTOS), "
+    cSql += GcSqlVal(FWxFilial('LANCAMENTOS'))
     cSql += ")"
 
     // Executa inserção
@@ -195,7 +196,7 @@ User Function GcEditarLancamentoDescricao(nRecno, cDescricao)
     EndIf
 
     // Verifica se lançamento existe
-    aLancamento := TCSqlQuery("SELECT LAN_EXERCICIO FROM LANCAMENTOS WHERE R_E_C_N_O_ = " + cValToChar(nRecno) + " AND D_E_L_E_T_ = ' '")
+    aLancamento := TCSqlQuery("SELECT LAN_EXERCICIO FROM LANCAMENTOS WHERE R_E_C_N_O_ = " + cValToChar(nRecno) + " AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('LANCAMENTOS')))
     If Len(aLancamento) = 0
         ConOut("ERROR: Entry not found")
         Return .F.
@@ -211,7 +212,7 @@ User Function GcEditarLancamentoDescricao(nRecno, cDescricao)
     EndIf
 
     // Monta SQL de atualização (apenas descrição e timestamp)
-    cSql := "UPDATE LANCAMENTOS SET LAN_DESCR = " + GcSqlVal(cDescricao) + ", LAN_DATA_HORA = datetime('now') WHERE R_E_C_N_O_ = " + cValToChar(nRecno) + " AND D_E_L_E_T_ = ' '"
+    cSql := "UPDATE LANCAMENTOS SET LAN_DESCR = " + GcSqlVal(cDescricao) + ", LAN_DATA_HORA = datetime('now') WHERE R_E_C_N_O_ = " + cValToChar(nRecno) + " AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('LANCAMENTOS'))
 
     // Executa atualização
     TCSqlExec(cSql)
@@ -248,7 +249,7 @@ User Function GcDeletarLancamento(nRecno)
     EndIf
 
     // Verifica se lançamento existe
-    aLancamento := TCSqlQuery("SELECT LAN_EXERCICIO FROM LANCAMENTOS WHERE R_E_C_N_O_ = " + cValToChar(nRecno) + " AND D_E_L_E_T_ = ' '")
+    aLancamento := TCSqlQuery("SELECT LAN_EXERCICIO FROM LANCAMENTOS WHERE R_E_C_N_O_ = " + cValToChar(nRecno) + " AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('LANCAMENTOS')))
     If Len(aLancamento) = 0
         ConOut("ERROR: Entry not found")
         Return .F.
@@ -264,7 +265,7 @@ User Function GcDeletarLancamento(nRecno)
     EndIf
 
     // Monta SQL de soft-delete
-    cSql := "UPDATE LANCAMENTOS SET D_E_L_E_T_ = '*', R_E_C_D_E_L_ = " + cValToChar(Seconds()) + " WHERE R_E_C_N_O_ = " + cValToChar(nRecno)
+    cSql := "UPDATE LANCAMENTOS SET D_E_L_E_T_ = '*', R_E_C_D_E_L_ = " + cValToChar(Seconds()) + " WHERE R_E_C_N_O_ = " + cValToChar(nRecno) + " AND FILIAL = " + GcSqlVal(FWxFilial('LANCAMENTOS'))
 
     // Executa deleção
     TCSqlExec(cSql)
@@ -305,7 +306,7 @@ User Function GcCalcularRateio(cReparticao, nValor, dData)
     // MVP: apenas tipo FRACAO (ideal fraction)
     If cReparticao = "FRACAO"
         // Query: unidades ativas com suas frações
-        aUnidades := TCSqlQuery("SELECT UNI_CODIGO, UNI_FRACAO FROM UNI WHERE D_E_L_E_T_ = ' ' ORDER BY UNI_CODIGO")
+        aUnidades := TCSqlQuery("SELECT UNI_CODIGO, UNI_FRACAO FROM UNI WHERE D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('UNI')) + " ORDER BY UNI_CODIGO")
 
         If Len(aUnidades) = 0
             ConOut("ERROR: No units found for repartition")
@@ -403,7 +404,7 @@ User Function GcLancarDespesaContabil(dData, cDescricao, nValor, cReparticao, nD
     // Cria lançamento principal: Débito 4000 (Despesa Comum) / Crédito 1000 (Caixa)
     cSql := "INSERT INTO LANCAMENTOS ("
     cSql += "LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, "
-    cSql += "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, R_E_C_N_O_"
+    cSql += "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, R_E_C_N_O_, FILIAL"
     cSql += ") VALUES ("
     cSql += GcSqlVal(DtoS(dData)) + ", "
     cSql += GcSqlVal("4000") + ", "
@@ -415,14 +416,15 @@ User Function GcLancarDespesaContabil(dData, cDescricao, nValor, cReparticao, nD
     cSql += "datetime('now'), "
     cSql += GcSqlVal("TEST_USER") + ", "
     cSql += GcSqlVal(" ") + ", "
-    cSql += "(SELECT COALESCE(MAX(R_E_C_N_O_), 0) + 1 FROM LANCAMENTOS)"
+    cSql += "(SELECT COALESCE(MAX(R_E_C_N_O_), 0) + 1 FROM LANCAMENTOS), "
+    cSql += GcSqlVal(FWxFilial('LANCAMENTOS'))
     cSql += ")"
 
     // Executa inserção do lançamento principal
     TCSqlExec(cSql)
 
     // Recupera o LAN_ID do lançamento principal (ID auto-gerado)
-    aVerificacao := TCSqlQuery("SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_DESCR = " + GcSqlVal(cDescricao) + " AND LAN_TIPO = 'AUTOMATICO_DESPESA' AND D_E_L_E_T_ = ' ' ORDER BY LAN_ID DESC LIMIT 1")
+    aVerificacao := TCSqlQuery("SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_DESCR = " + GcSqlVal(cDescricao) + " AND LAN_TIPO = 'AUTOMATICO_DESPESA' AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('LANCAMENTOS')) + " ORDER BY LAN_ID DESC LIMIT 1")
     If Len(aVerificacao) > 0
         nLanIdPrincipal := aVerificacao[1]:LAN_ID
         ConOut("Main entry created: LAN_ID = " + cValToChar(nLanIdPrincipal))
@@ -440,7 +442,7 @@ User Function GcLancarDespesaContabil(dData, cDescricao, nValor, cReparticao, nD
         // Cria lançamento de rateio: Débito 5000 (Contas a Receber) / Crédito 3000 (Receita Condominial)
         cSql := "INSERT INTO LANCAMENTOS ("
         cSql += "LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, "
-        cSql += "LAN_TIPO, LAN_REFERENCIA, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, R_E_C_N_O_"
+        cSql += "LAN_TIPO, LAN_REFERENCIA, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, R_E_C_N_O_, FILIAL"
         cSql += ") VALUES ("
         cSql += GcSqlVal(DtoS(dData)) + ", "
         cSql += GcSqlVal("5000") + ", "
@@ -453,7 +455,8 @@ User Function GcLancarDespesaContabil(dData, cDescricao, nValor, cReparticao, nD
         cSql += "datetime('now'), "
         cSql += GcSqlVal("TEST_USER") + ", "
         cSql += GcSqlVal(" ") + ", "
-        cSql += "(SELECT COALESCE(MAX(R_E_C_N_O_), 0) + 1 FROM LANCAMENTOS)"
+        cSql += "(SELECT COALESCE(MAX(R_E_C_N_O_), 0) + 1 FROM LANCAMENTOS), "
+        cSql += GcSqlVal(FWxFilial('LANCAMENTOS'))
         cSql += ")"
 
         // Executa inserção do lançamento de rateio
@@ -479,7 +482,7 @@ User Function GcLancarDespesaContabil(dData, cDescricao, nValor, cReparticao, nD
 
         // Insere cobrança na tabela COB
         cSql := "INSERT INTO COB ("
-        cSql += "COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_, R_E_C_D_E_L_"
+        cSql += "COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_, R_E_C_D_E_L_, FILIAL"
         cSql += ") VALUES ("
         cSql += GcSqlVal(cUnidade) + ", "
         cSql += GcSqlVal(cExercicio) + ", "
@@ -487,7 +490,8 @@ User Function GcLancarDespesaContabil(dData, cDescricao, nValor, cReparticao, nD
         cSql += GcSqlVal(cVencimento) + ", "
         cSql += GcSqlVal("PENDENTE") + ", "
         cSql += GcSqlVal(" ") + ", "
-        cSql += "0"
+        cSql += "0, "
+        cSql += GcSqlVal(FWxFilial('COB'))
         cSql += ")"
 
         // Executa inserção da cobrança
@@ -612,7 +616,7 @@ Return .T.
 */
 User Function GcContaExiste(cConta)
     Local aConta := TCSqlQuery("SELECT PLA_CODIGO FROM PLANO_CONTAS WHERE PLA_CODIGO = " + ;
-        GcSqlVal(cConta) + " AND PLA_ATIVO = 1 AND D_E_L_E_T_ = ' '")
+        GcSqlVal(cConta) + " AND PLA_ATIVO = 1 AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('PLANO_CONTAS')))
 Return Len(aConta) > 0
 
 /*/{Protheus.doc} GcMenuLancamentos
@@ -693,7 +697,7 @@ User Function GcSelecionarLancamento(cTitulo)
 
     aLan := TCSqlQuery("SELECT R_E_C_N_O_, LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, LAN_TIPO " + ;
         "FROM LANCAMENTOS WHERE LAN_EXERCICIO = " + GcSqlVal(cExercicio) + ;
-        " AND D_E_L_E_T_ = ' ' ORDER BY LAN_DATA, R_E_C_N_O_")
+        " AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('LANCAMENTOS')) + " ORDER BY LAN_DATA, R_E_C_N_O_")
 
     If Len(aLan) == 0
         MsgAlert("Nenhum lançamento no exercício " + cExercicio + ".", cTitulo)
@@ -745,7 +749,7 @@ User Function GcValidarIntegridade(cExercicio)
     EndIf
 
     // Soma débitos por conta de débito
-    aDebitos := TCSqlQuery("SELECT COALESCE(SUM(LAN_VALOR), 0) as TOTAL FROM LANCAMENTOS WHERE LAN_EXERCICIO = " + GcSqlVal(cExercicio) + " AND D_E_L_E_T_ = ' '")
+    aDebitos := TCSqlQuery("SELECT COALESCE(SUM(LAN_VALOR), 0) as TOTAL FROM LANCAMENTOS WHERE LAN_EXERCICIO = " + GcSqlVal(cExercicio) + " AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('LANCAMENTOS')))
     If Len(aDebitos) > 0
         nDebitos := aDebitos[1]:TOTAL
     EndIf
@@ -815,14 +819,14 @@ User Function GcFecharPeriodo(cExercicio)
     EndIf
 
     // Recupera exercício a fechar
-    aExercicio := TCSqlQuery("SELECT EXE_CODIGO, EXE_INICIO, EXE_FIM FROM EXERCICIO WHERE EXE_CODIGO = " + GcSqlVal(cExercicio) + " AND D_E_L_E_T_ = ' '")
+    aExercicio := TCSqlQuery("SELECT EXE_CODIGO, EXE_INICIO, EXE_FIM FROM EXERCICIO WHERE EXE_CODIGO = " + GcSqlVal(cExercicio) + " AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('EXERCICIO')))
     If Len(aExercicio) = 0
         ConOut("ERROR: Exercise not found: " + cExercicio)
         Return .F.
     EndIf
 
     // Marca período como fechado e inativo
-    cSql := "UPDATE EXERCICIO SET EXE_FECHADO = 1, EXE_ATIVO = 0 WHERE EXE_CODIGO = " + GcSqlVal(cExercicio)
+    cSql := "UPDATE EXERCICIO SET EXE_FECHADO = 1, EXE_ATIVO = 0 WHERE EXE_CODIGO = " + GcSqlVal(cExercicio) + " AND FILIAL = " + GcSqlVal(FWxFilial('EXERCICIO'))
     TCSqlExec(cSql)
     ConOut("Period marked as closed: " + cExercicio)
 
@@ -866,13 +870,14 @@ User Function GcFecharPeriodo(cExercicio)
             dProxFim := SToD(cValToChar(nProxAno) + PadL(cValToChar(nProxMes), 2, "0") + "31")
     EndCase
 
-    cSql := "INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) VALUES ("
+    cSql := "INSERT INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_, FILIAL) VALUES ("
     cSql += GcSqlVal(cProximo) + ", "
     cSql += GcSqlVal(DtoS(dProxInicio)) + ", "
     cSql += GcSqlVal(DtoS(dProxFim)) + ", "
     cSql += "1, "  // EXE_ATIVO = 1
     cSql += "0, "  // EXE_FECHADO = 0
-    cSql += GcSqlVal(" ")  // D_E_L_E_T_ = ' '
+    cSql += GcSqlVal(" ") + ", "  // D_E_L_E_T_ = ' '
+    cSql += GcSqlVal(FWxFilial('EXERCICIO'))
     cSql += ")"
 
     TCSqlExec(cSql)
@@ -925,13 +930,13 @@ User Function GcGerarBalancetePeriodo(cExercicio)
     EndIf
 
     // Soma receitas (contas 3000+)
-    aReceitas := TCSqlQuery("SELECT COALESCE(SUM(LAN_VALOR), 0) as TOTAL FROM LANCAMENTOS WHERE LAN_EXERCICIO = " + GcSqlVal(cExercicio) + " AND LAN_CONTA_CRED >= '3000' AND D_E_L_E_T_ = ' '")
+    aReceitas := TCSqlQuery("SELECT COALESCE(SUM(LAN_VALOR), 0) as TOTAL FROM LANCAMENTOS WHERE LAN_EXERCICIO = " + GcSqlVal(cExercicio) + " AND LAN_CONTA_CRED >= '3000' AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('LANCAMENTOS')))
     If Len(aReceitas) > 0
         nReceitas := aReceitas[1]:TOTAL
     EndIf
 
     // Soma despesas (contas 4000+)
-    aDespesas := TCSqlQuery("SELECT COALESCE(SUM(LAN_VALOR), 0) as TOTAL FROM LANCAMENTOS WHERE LAN_EXERCICIO = " + GcSqlVal(cExercicio) + " AND LAN_CONTA_DEB >= '4000' AND D_E_L_E_T_ = ' '")
+    aDespesas := TCSqlQuery("SELECT COALESCE(SUM(LAN_VALOR), 0) as TOTAL FROM LANCAMENTOS WHERE LAN_EXERCICIO = " + GcSqlVal(cExercicio) + " AND LAN_CONTA_DEB >= '4000' AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('LANCAMENTOS')))
     If Len(aDespesas) > 0
         nDespesas := aDespesas[1]:TOTAL
     EndIf
@@ -940,22 +945,23 @@ User Function GcGerarBalancetePeriodo(cExercicio)
     nSaldo := nReceitas - nDespesas
 
     // Verifica se balancete já existe
-    aVerificacao := TCSqlQuery("SELECT R_E_C_N_O_ FROM RPT_BALANCETE WHERE RPT_EXERCICIO = " + GcSqlVal(cExercicio) + " AND D_E_L_E_T_ = ' '")
+    aVerificacao := TCSqlQuery("SELECT R_E_C_N_O_ FROM RPT_BALANCETE WHERE RPT_EXERCICIO = " + GcSqlVal(cExercicio) + " AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('RPT_BALANCETE')))
 
     If Len(aVerificacao) > 0
         // Atualiza registro existente
-        cSql := "UPDATE RPT_BALANCETE SET RPT_RECEITAS = " + cValToChar(nReceitas) + ", RPT_DESPESAS = " + cValToChar(nDespesas) + ", RPT_SALDO = " + cValToChar(nSaldo) + ", RPT_DATA_GERACAO = datetime('now') WHERE RPT_EXERCICIO = " + GcSqlVal(cExercicio)
+        cSql := "UPDATE RPT_BALANCETE SET RPT_RECEITAS = " + cValToChar(nReceitas) + ", RPT_DESPESAS = " + cValToChar(nDespesas) + ", RPT_SALDO = " + cValToChar(nSaldo) + ", RPT_DATA_GERACAO = datetime('now') WHERE RPT_EXERCICIO = " + GcSqlVal(cExercicio) + " AND FILIAL = " + GcSqlVal(FWxFilial('RPT_BALANCETE'))
         TCSqlExec(cSql)
         ConOut("Balance sheet updated for " + cExercicio + ": receitas=" + cValToChar(nReceitas) + ", despesas=" + cValToChar(nDespesas) + ", saldo=" + cValToChar(nSaldo))
     Else
         // Insere novo registro
-        cSql := "INSERT INTO RPT_BALANCETE (RPT_EXERCICIO, RPT_RECEITAS, RPT_DESPESAS, RPT_SALDO, RPT_DATA_GERACAO, D_E_L_E_T_) VALUES ("
+        cSql := "INSERT INTO RPT_BALANCETE (RPT_EXERCICIO, RPT_RECEITAS, RPT_DESPESAS, RPT_SALDO, RPT_DATA_GERACAO, D_E_L_E_T_, FILIAL) VALUES ("
         cSql += GcSqlVal(cExercicio) + ", "
         cSql += cValToChar(nReceitas) + ", "
         cSql += cValToChar(nDespesas) + ", "
         cSql += cValToChar(nSaldo) + ", "
         cSql += "datetime('now'), "
-        cSql += GcSqlVal(" ")
+        cSql += GcSqlVal(" ") + ", "
+        cSql += GcSqlVal(FWxFilial('RPT_BALANCETE'))
         cSql += ")"
         TCSqlExec(cSql)
         ConOut("Balance sheet created for " + cExercicio + ": receitas=" + cValToChar(nReceitas) + ", despesas=" + cValToChar(nDespesas) + ", saldo=" + cValToChar(nSaldo))
@@ -1003,7 +1009,7 @@ User Function GcLancarDespesaUI()
     // O tipo de rateio sai de uma lista, não digitado: é chave estrangeira
     // de REPARTICAO e digitar errado só produziria erro de constraint.
     aRep := TCSqlQuery("SELECT REP_CODIGO, REP_NOME FROM REPARTICAO " + ;
-        "WHERE REP_ATIVO = 1 AND D_E_L_E_T_ = ' ' ORDER BY REP_CODIGO")
+        "WHERE REP_ATIVO = 1 AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('REPARTICAO')) + " ORDER BY REP_CODIGO")
 
     If Len(aRep) == 0
         MsgAlert("Nenhum tipo de repartição cadastrado.", "Lançar Despesa")
