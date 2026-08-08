@@ -30,7 +30,7 @@ Return
 User Function GcRegistrarPagamento(nRecno, dData)
     Local cData := DToS(dData)
     Local cDataFmt := Left(cData, 4) + "-" + SubStr(cData, 5, 2) + "-" + SubStr(cData, 7, 2)
-Return TCSqlExec("UPDATE COB SET COB_STATUS = 'pago', COB_DTPAG = '" + cDataFmt + "' WHERE R_E_C_N_O_ = " + Str(nRecno) + " AND D_E_L_E_T_ = ' '")
+Return TCSqlExec("UPDATE COB SET COB_STATUS = 'pago', COB_DTPAG = '" + cDataFmt + "' WHERE R_E_C_N_O_ = " + Str(nRecno) + " AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('COB')) + "'")
 
 /*/{Protheus.doc} GcSelecionarCobranca
     Lista cobranças num menu e devolve o R_E_C_N_O_ da escolhida.
@@ -56,7 +56,7 @@ User Function GcSelecionarCobranca(cStatus, cTitulo)
     EndIf
 
     cSql := "SELECT R_E_C_N_O_, COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS " + ;
-        "FROM COB WHERE D_E_L_E_T_ = ' ' "
+        "FROM COB WHERE D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('COB')) + "' "
     If !Empty(cStatus)
         cSql += "AND COB_STATUS = '" + GcSqlLit(cStatus) + "' "
     EndIf
