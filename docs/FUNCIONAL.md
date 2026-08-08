@@ -148,9 +148,11 @@ uma abertura e outra.
 
 ## Limitações conhecidas (Plano 3+)
 
-- **Papéis de usuário/permissões finas** — hoje só há dois perfis: admin
-  (acesso total) e condômino (token read-only). Multi-usuário admin ou
-  controle granular de permissões ficam pro próximo ciclo.
+- **Permissões finas** — hoje só há dois perfis: admin (acesso total) e
+  condômino (token read-only). Vários administradores já podem coexistir
+  (menu Usuários → Criar Usuário → Admin, tabela USR sem limite de linha);
+  o que fica pro próximo ciclo é controle granular por admin (ex.: um
+  síndico sem acesso a Contabilidade).
 - **Multi-condomínio** — o sistema administra um condomínio por instância.
 
 ## Limitações conhecidas (v1)

@@ -54,17 +54,55 @@ User Function AT05RevogarToken()
 Return lOk
 
 /*/{Protheus.doc} TestaGcCriarAdminNovo
-    Cria um admin temporário de teste e verifica que a entrada foi
-    gravada com USR_PERFIL = 'ADMIN'.
+    GcCriarAdminNovo() é interativo (FWGetText) — sem UI, a senha (default
+    "") nunca fica preenchida e ele sempre retorna .F., o que testaria só
+    o próprio limite do harness, não a feature. Este teste grava direto
+    pelo mesmo INSERT que GcCriarAdminNovo usa e confere o que a feature
+    "segundo admin" precisa: dois administradores coexistindo, cada um
+    autenticando só com a própria senha.
 */
 User Function AT05CriarAdmin()
     Local lOk := .T.
-    // Insere condômino se não existir
-    // Chama GcCriarAdminNovo com login/senha de teste
-    // Verifica USR_PERFIL = 'ADMIN' na tabela USR
-    // Limpa registro de teste
-    MsgInfo("Teste GcCriarAdminNovo — verifique manualmente a criação no banco.", "Usuarios Test")
+
+    TCSqlExec("DELETE FROM USR WHERE USR_LOGIN IN ('sindico1_test', 'sindico2_test')")
+
+    TCSqlExec("INSERT INTO USR (USR_LOGIN, USR_SENHA, USR_PERFIL) VALUES ('sindico1_test', '" + ;
+        GcSqlLit(FWHash("senha1")) + "', 'ADMIN')")
+    TCSqlExec("INSERT INTO USR (USR_LOGIN, USR_SENHA, USR_PERFIL) VALUES ('sindico2_test', '" + ;
+        GcSqlLit(FWHash("senha2")) + "', 'ADMIN')")
+
+    If GcCredenciaisValidas("sindico1_test", "senha1")
+        ConOut("  PASS: sindico1_test autentica com a própria senha")
+    Else
+        ConOut("  FALHA: sindico1_test deveria autenticar com a própria senha")
+        lOk := .F.
+    EndIf
+
+    If GcCredenciaisValidas("sindico2_test", "senha2")
+        ConOut("  PASS: sindico2_test autentica com a própria senha")
+    Else
+        ConOut("  FALHA: sindico2_test deveria autenticar com a própria senha")
+        lOk := .F.
+    EndIf
+
+    If !GcCredenciaisValidas("sindico1_test", "senha2")
+        ConOut("  PASS: sindico1_test não autentica com a senha de sindico2_test")
+    Else
+        ConOut("  FALHA: sindico1_test autenticou com senha de outro admin")
+        lOk := .F.
+    EndIf
+
+    Local aQtd := TCSqlQuery("SELECT COUNT(*) AS QTD FROM USR WHERE D_E_L_E_T_ = ' ' AND USR_PERFIL = 'ADMIN'")
+    If Val(aQtd[1]:QTD) >= 2
+        ConOut("  PASS: mais de um administrador ativo (" + aQtd[1]:QTD + ")")
+    Else
+        ConOut("  FALHA: esperava >=2 administradores ativos, achou " + aQtd[1]:QTD)
+        lOk := .F.
+    EndIf
+
+    TCSqlExec("DELETE FROM USR WHERE USR_LOGIN IN ('sindico1_test', 'sindico2_test')")
 Return lOk
 
 #include "../src/db.prw"
+#include "../src/login.prw"
 #include "../src/usuarios.prw"
