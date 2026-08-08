@@ -27,6 +27,8 @@ User Function RunCondominioSelecaoTests()
     AT06SuperAdminVeTudo()
     AT06SindicoVeSoVinculado()
     AT06LoginAtualPropaga()
+    AT06SindicoUmVinculoAutoSeleciona()
+    AT06SindicoZeroVinculosBloqueia()
 Return
 
 /*/{Protheus.doc} AT06SuperAdminVeTudo
@@ -169,6 +171,90 @@ User Function AT06LoginAtualPropaga()
     EndIf
 
     TCSqlExec("DELETE FROM USR WHERE USR_LOGIN = 'boot_test'")
+Return lOk
+
+/*/{Protheus.doc} AT06SindicoUmVinculoAutoSeleciona
+    Caso-limite Len(aCond) == 1: GcSelecionarCondominio faz RpcSetEnv +
+    grava g_cFilialAtiva e retorna .T. sem nunca chamar FWGetText -- o
+    branch de auto-seleção retorna antes do picker ser montado, então dá
+    pra chamar a função de verdade (não só reproduzir a query) e confirmar
+    o comportamento fim-a-fim sem UI.
+*/
+User Function AT06SindicoUmVinculoAutoSeleciona()
+    Local lOk := .T.
+    Local lRet
+    // g_cFilialAtiva precisa ser declarado Private AQUI, antes de chamar
+    // GcSelecionarCondominio: em gescon.prw quem declara é GesCon(), e como
+    // este teste chama a função direto (sem passar por GesCon()), sem esta
+    // declaração o "g_cFilialAtiva := ..." dentro da função criaria uma
+    // PRIVATE nova só visível no frame dela, liberada no Return -- este
+    // teste não veria o valor gravado.
+    Private g_cFilialAtiva := ""
+
+    TCSqlExec("DELETE FROM USR WHERE USR_LOGIN = 'sindico_um_test'")
+    TCSqlExec("DELETE FROM USR_COND WHERE USR_LOGIN = 'sindico_um_test'")
+    TCSqlExec("DELETE FROM COND WHERE COND_FILIAL = '090021'")
+
+    TCSqlExec("INSERT INTO USR (USR_LOGIN, USR_SENHA, USR_PERFIL) VALUES ('sindico_um_test', '" + ;
+        GcSqlLit(FWHash("senha")) + "', 'SINDICO')")
+    TCSqlExec("INSERT INTO COND (COND_FILIAL, COND_NOME, COND_ATIVO) VALUES ('090021', 'Cond Único', 1)")
+    TCSqlExec("INSERT INTO USR_COND (USR_LOGIN, FILIAL) VALUES ('sindico_um_test', '090021')")
+
+    lRet := GcSelecionarCondominio("sindico_um_test")
+
+    If lRet
+        ConOut("  PASS: síndico com 1 vínculo ativo -- GcSelecionarCondominio retorna .T. sem picker")
+    Else
+        ConOut("  FALHA: síndico com 1 vínculo ativo deveria auto-selecionar e retornar .T.")
+        lOk := .F.
+    EndIf
+
+    If g_cFilialAtiva == "090021"
+        ConOut("  PASS: g_cFilialAtiva gravado com o único COND_FILIAL vinculado (090021)")
+    Else
+        ConOut("  FALHA: g_cFilialAtiva deveria ser '090021', achou '" + g_cFilialAtiva + "'")
+        lOk := .F.
+    EndIf
+
+    TCSqlExec("DELETE FROM USR_COND WHERE USR_LOGIN = 'sindico_um_test'")
+    TCSqlExec("DELETE FROM USR WHERE USR_LOGIN = 'sindico_um_test'")
+    TCSqlExec("DELETE FROM COND WHERE COND_FILIAL = '090021'")
+Return lOk
+
+/*/{Protheus.doc} AT06SindicoZeroVinculosBloqueia
+    Caso-limite Len(aCond) == 0: GcSelecionarCondominio deve bloquear
+    (retornar .F.) sem quebrar e sem tentar montar o picker -- também sem
+    nunca chamar FWGetText, então dá pra chamar a função direto.
+*/
+User Function AT06SindicoZeroVinculosBloqueia()
+    Local lOk := .T.
+    Local lRet
+    Private g_cFilialAtiva := ""
+
+    TCSqlExec("DELETE FROM USR WHERE USR_LOGIN = 'sindico_zero_test'")
+    TCSqlExec("DELETE FROM USR_COND WHERE USR_LOGIN = 'sindico_zero_test'")
+
+    TCSqlExec("INSERT INTO USR (USR_LOGIN, USR_SENHA, USR_PERFIL) VALUES ('sindico_zero_test', '" + ;
+        GcSqlLit(FWHash("senha")) + "', 'SINDICO')")
+    // Nenhuma linha em USR_COND para este login -- 0 condomínios disponíveis.
+
+    lRet := GcSelecionarCondominio("sindico_zero_test")
+
+    If !lRet
+        ConOut("  PASS: síndico sem vínculo algum -- GcSelecionarCondominio bloqueia (.F.)")
+    Else
+        ConOut("  FALHA: síndico sem vínculo deveria ser bloqueado (.F.)")
+        lOk := .F.
+    EndIf
+
+    If Empty(g_cFilialAtiva)
+        ConOut("  PASS: g_cFilialAtiva permanece vazio quando bloqueado")
+    Else
+        ConOut("  FALHA: g_cFilialAtiva não deveria ter sido gravado, achou '" + g_cFilialAtiva + "'")
+        lOk := .F.
+    EndIf
+
+    TCSqlExec("DELETE FROM USR WHERE USR_LOGIN = 'sindico_zero_test'")
 Return lOk
 
 #include "../src/db.prw"
