@@ -1,16 +1,17 @@
 // src/usuarios.prw — gestão de usuários e tokens temporários do GesCon.
-// Menu "Usuários" com: Gerar Token, Revogar Token, Criar Usuário, Voltar.
+// Menu "Usuários" com: Gerar Token, Revogar Token, Criar Usuário,
+// Vincular-me a Condomínio, Voltar.
 #include "totvs.ch"
 
 /*/{Protheus.doc} GcMenuUsuarios
     Menu de gestão de usuários. Abre submenu com opções: gerar token,
-    revogar token, criar usuário, voltar.
+    revogar token, criar usuário, vincular-me a condomínio, voltar.
     @type User Function
     @author GesCon
     @since 2026-07-24
 */
 User Function GcMenuUsuarios()
-    Local aMenu := {"Gerar Token", "Revogar Token", "Criar Usuário", "Voltar"}
+    Local aMenu := {"Gerar Token", "Revogar Token", "Criar Usuário", "Vincular-me a Condomínio", "Voltar"}
     Local nOpcao := FWMenuSelect(aMenu, "Usuários")
 
     Do Case
@@ -20,6 +21,8 @@ User Function GcMenuUsuarios()
             GcRevogarToken()
         Case nOpcao == 3
             GcCriarUsuario()
+        Case nOpcao == 4
+            GcMenuVincularCondominio()
     EndCase
 Return
 
@@ -142,24 +145,29 @@ Return
     @obs Acesso de condôminos — exclusivamente via token — perfil CONDOMINO será implementado no Plano 3
 */
 User Function GcCriarUsuario()
-    Local aTipo := {"Admin"}
+    Local aTipo := {"Super Admin", "Síndico"}
     Local nTipo := FWMenuSelect(aTipo, "Tipo de usuário")
 
     Do Case
         Case nTipo == 1
-            GcCriarAdminNovo()
+            GcCriarAdminNovo("SUPERADMIN")
+        Case nTipo == 2
+            GcCriarSindicoNovo()
     EndCase
 Return
 
 /*/{Protheus.doc} GcCriarAdminNovo
-    Cria novo administrador com login e senha.
-    USR_PERFIL = 'ADMIN'.
+    Cria novo administrador com login e senha, no perfil recebido em
+    cPerfil ('SUPERADMIN' ou 'ADMIN'). Sem parâmetro (chamada legada,
+    zero args), assume 'SUPERADMIN' — preserva o comportamento de
+    qualquer chamador anterior a esta função ganhar o parâmetro.
     @type User Function
     @author GesCon
     @since 2026-07-24
+    @param cPerfil, character, perfil do novo usuário (default 'SUPERADMIN')
     @return lSucesso, logical, .T. se criado com sucesso
 */
-User Function GcCriarAdminNovo()
+User Function GcCriarAdminNovo(cPerfil)
     Local cLogin := FWGetText("Login do novo admin:", "admin2")
     If Empty(cLogin)
         Return .F.
@@ -170,9 +178,94 @@ User Function GcCriarAdminNovo()
         Return .F.
     EndIf
 
+    If Empty(cPerfil)
+        cPerfil := "SUPERADMIN"
+    EndIf
+
     TCSqlExec("INSERT INTO USR (USR_LOGIN, USR_SENHA, USR_PERFIL) " + ;
-        "VALUES ('" + GcSqlLit(cLogin) + "', '" + GcSqlLit(FWHash(cSenha)) + "', 'ADMIN')")
+        "VALUES ('" + GcSqlLit(cLogin) + "', '" + GcSqlLit(FWHash(cSenha)) + "', '" + GcSqlLit(cPerfil) + "')")
     MsgInfo("Administrador '" + cLogin + "' criado.", "GesCon")
+Return .T.
+
+/*/{Protheus.doc} GcParseIndicesSindico
+    Faz o parsing puro de uma lista de índices separados por vírgula
+    (ex: "1,3,5") — extraído de GcCriarSindicoNovo pra ficar testável
+    sem depender de FWGetText. Ignora tokens vazios/inválidos e qualquer
+    índice fora de [1, nMax] (ex: "1,x,99" com nMax=3 devolve só {1}).
+    @type Function
+    @author GesCon
+    @since 2026-08-08
+    @param cSel, character, lista de índices separados por vírgula
+    @param nMax, numeric, maior índice válido (Len(aCond) do chamador)
+    @return aIdx, array, índices válidos (1-based), sem duplicar a ordem de entrada
+*/
+User Function GcParseIndicesSindico(cSel, nMax)
+    Local aTok := StrTokArr(cSel, ",")
+    Local aIdx := {}
+    Local i
+    Local nIdx
+
+    For i := 1 To Len(aTok)
+        nIdx := Val(AllTrim(aTok[i]))
+        If nIdx >= 1 .And. nIdx <= nMax
+            AAdd(aIdx, nIdx)
+        EndIf
+    Next i
+Return aIdx
+
+/*/{Protheus.doc} GcCriarSindicoNovo
+    Cria um síndico (USR_PERFIL='SINDICO') e vincula a 1+ condomínios
+    escolhidos de uma lista (índices separados por vírgula, ex: "1,3").
+    @type Function
+    @author GesCon
+    @since 2026-08-08
+    @return lOk, logical
+*/
+User Function GcCriarSindicoNovo()
+    Local cLogin := FWGetText("Login do novo síndico:", "")
+    Local cSenha
+    Local aCond
+    Local cLista := ""
+    Local nJ
+    Local cSel
+    Local aIdx
+    Local i
+
+    If Empty(cLogin)
+        Return .F.
+    EndIf
+
+    cSenha := FWGetText("Senha:", "", .T.)
+    If Empty(cSenha)
+        Return .F.
+    EndIf
+
+    aCond := TCSqlQuery("SELECT COND_FILIAL, COND_NOME FROM COND WHERE COND_ATIVO = 1 AND D_E_L_E_T_ = ' ' ORDER BY COND_NOME")
+    If Len(aCond) == 0
+        MsgAlert("Nenhum condomínio cadastrado ainda.", "Criar Síndico")
+        Return .F.
+    EndIf
+
+    For nJ := 1 To Len(aCond)
+        cLista += Str(nJ, 3) + ". " + aCond[nJ]:COND_NOME + Chr(10)
+    Next nJ
+    cLista += "\nNúmeros dos condomínios (separados por vírgula, ex: 1,3):"
+
+    cSel := FWGetText(cLista, "")
+    If Empty(cSel)
+        Return .F.
+    EndIf
+
+    TCSqlExec("INSERT INTO USR (USR_LOGIN, USR_SENHA, USR_PERFIL) VALUES ('" + ;
+        GcSqlLit(cLogin) + "', '" + GcSqlLit(FWHash(cSenha)) + "', 'SINDICO')")
+
+    aIdx := GcParseIndicesSindico(cSel, Len(aCond))
+    For i := 1 To Len(aIdx)
+        TCSqlExec("INSERT INTO USR_COND (USR_LOGIN, FILIAL) VALUES ('" + ;
+            GcSqlLit(cLogin) + "', '" + GcSqlLit(aCond[aIdx[i]]:COND_FILIAL) + "')")
+    Next i
+
+    MsgInfo("Síndico '" + cLogin + "' criado e vinculado.", "GesCon")
 Return .T.
 
 /*/{Protheus.doc} GcGerarTokenId

@@ -14,6 +14,7 @@
 #include "src/malas.prw"
 #include "src/relatorios.prw"
 #include "src/usuarios.prw"
+#include "src/condominios-cadastro.prw"
 #include "src/portal.prw"
 #include "src/portal-v2.prw"
 #include "src/contabil.prw"
@@ -35,7 +36,7 @@
 User Function GesCon()
     Local aMenu := {"Unidades", "Condôminos", "Despesas", "Cobranças", "Fechamento Mensal", ;
         "Mala Direta", "Relatórios", "Contabilidade", "Auditoria", "Boletos", "Avisos", ;
-        "Usuários", "Trocar Senha", "Trocar Condomínio", "Sair"}
+        "Usuários", "Condomínios", "Trocar Senha", "Trocar Condomínio", "Sair"}
     Local nOpcao
     Local nEscolha
     Local cCompetencia
@@ -118,8 +119,10 @@ User Function GesCon()
                     Case nOpcao == 12
                         GcMenuUsuarios()
                     Case nOpcao == 13
-                        GcTrocarSenha()
+                        GcCadastroCondominios()
                     Case nOpcao == 14
+                        GcTrocarSenha()
+                    Case nOpcao == 15
                         GcSelecionarCondominio(cLoginAtual)
                     Otherwise
                         Exit

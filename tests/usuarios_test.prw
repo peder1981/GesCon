@@ -26,6 +26,8 @@ User Function RunUsuariosTests()
     AT05GerarToken()
     AT05RevogarToken()
     AT05CriarAdmin()
+    AT07VincularCondominioSemDuplicar()
+    AT07ParseIndicesSindico()
 Return
 
 /*/{Protheus.doc} TestaGcGerarToken
@@ -103,6 +105,83 @@ User Function AT05CriarAdmin()
     TCSqlExec("DELETE FROM USR WHERE USR_LOGIN IN ('sindico1_test', 'sindico2_test')")
 Return lOk
 
+/*/{Protheus.doc} AT07VincularCondominioSemDuplicar
+    GcVincularCondominioAoCriador ("se o vínculo ainda não existir") deve
+    ser idempotente: chamada duas vezes com o mesmo login+filial só pode
+    gravar 1 linha em USR_COND. USR_COND tem UNIQUE(USR_LOGIN, FILIAL)
+    (src/schema-embed.prw), então sem o SELECT de checagem antes do
+    INSERT a segunda chamada quebraria com erro de constraint, não com
+    duplicata silenciosa -- este teste cobre os dois jeitos de falhar.
+*/
+User Function AT07VincularCondominioSemDuplicar()
+    Local lOk := .T.
+    Local aQtd
+
+    TCSqlExec("DELETE FROM USR_COND WHERE USR_LOGIN = 'vinculo_test'")
+    TCSqlExec("DELETE FROM COND WHERE COND_FILIAL = '090031'")
+    TCSqlExec("INSERT INTO COND (COND_FILIAL, COND_NOME, COND_ATIVO) VALUES ('090031', 'Cond Vínculo', 1)")
+
+    GcVincularCondominioAoCriador("vinculo_test", "090031")
+    GcVincularCondominioAoCriador("vinculo_test", "090031")
+
+    aQtd := TCSqlQuery("SELECT COUNT(*) AS QTD FROM USR_COND WHERE USR_LOGIN = 'vinculo_test' " + ;
+        "AND FILIAL = '090031' AND D_E_L_E_T_ = ' '")
+    If Val(aQtd[1]:QTD) == 1
+        ConOut("  PASS: GcVincularCondominioAoCriador chamado 2x não duplica o vínculo")
+    Else
+        ConOut("  FALHA: esperava 1 vínculo após 2 chamadas, achou " + aQtd[1]:QTD)
+        lOk := .F.
+    EndIf
+
+    TCSqlExec("DELETE FROM USR_COND WHERE USR_LOGIN = 'vinculo_test'")
+    TCSqlExec("DELETE FROM COND WHERE COND_FILIAL = '090031'")
+Return lOk
+
+/*/{Protheus.doc} AT07ParseIndicesSindico
+    GcParseIndicesSindico é a lógica pura de parsing por trás do prompt
+    "Números dos condomínios (separados por vírgula, ex: 1,3)" dentro de
+    GcCriarSindicoNovo — extraída pra ficar testável sem FWGetText.
+    Cobre lista simples, espaços em volta da vírgula, token inválido
+    misturado e índice fora da faixa [1, nMax].
+*/
+User Function AT07ParseIndicesSindico()
+    Local lOk := .T.
+    Local aIdx
+
+    aIdx := GcParseIndicesSindico("1,3", 3)
+    If Len(aIdx) == 2 .And. aIdx[1] == 1 .And. aIdx[2] == 3
+        ConOut("  PASS: '1,3' com nMax=3 -> {1, 3}")
+    Else
+        ConOut("  FALHA: '1,3' com nMax=3 deveria dar {1, 3}, achou " + cValToChar(Len(aIdx)) + " item(ns)")
+        lOk := .F.
+    EndIf
+
+    aIdx := GcParseIndicesSindico(" 1 , 2 ", 3)
+    If Len(aIdx) == 2 .And. aIdx[1] == 1 .And. aIdx[2] == 2
+        ConOut("  PASS: espaços em volta da vírgula são ignorados")
+    Else
+        ConOut("  FALHA: ' 1 , 2 ' com nMax=3 deveria dar {1, 2}, achou " + cValToChar(Len(aIdx)) + " item(ns)")
+        lOk := .F.
+    EndIf
+
+    aIdx := GcParseIndicesSindico("1,x,99", 3)
+    If Len(aIdx) == 1 .And. aIdx[1] == 1
+        ConOut("  PASS: token inválido ('x') e índice fora da faixa (99) são descartados")
+    Else
+        ConOut("  FALHA: '1,x,99' com nMax=3 deveria dar {1}, achou " + cValToChar(Len(aIdx)) + " item(ns)")
+        lOk := .F.
+    EndIf
+
+    aIdx := GcParseIndicesSindico("0,4", 3)
+    If Len(aIdx) == 0
+        ConOut("  PASS: índices fora de [1, nMax] (0 e 4 com nMax=3) somem todos")
+    Else
+        ConOut("  FALHA: '0,4' com nMax=3 deveria dar {}, achou " + cValToChar(Len(aIdx)) + " item(ns)")
+        lOk := .F.
+    EndIf
+Return lOk
+
 #include "../src/db.prw"
 #include "../src/login.prw"
 #include "../src/usuarios.prw"
+#include "../src/condominios-cadastro.prw"
