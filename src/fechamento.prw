@@ -50,6 +50,7 @@ User Function GcFecharMes(cCompetencia, nDiaVencimento)
     EndIf
 
     Local cVencimento := GcProximoVencimento(cCompetencia, nDiaVencimento)
+    GcBackupBanco(cCompetencia) // ver src/db.prw — antes de gravar qualquer Cobrança
     Local i
     For i := 1 To Len(aUnidades)
         Local nValorUnidade := nTotalDespesas * Val(aUnidades[i]:UNI_FRACAO)

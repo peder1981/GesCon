@@ -20,7 +20,7 @@ falhas=0
 total=0
 saida=$(mktemp)
 banco=$(mktemp -u --suffix=.db)
-trap 'rm -f "$saida" "$banco" "$banco"-wal "$banco"-shm' EXIT
+trap 'rm -f "$saida" "$banco" "$banco"-wal "$banco"-shm "${banco%.db}"-backup-*.db' EXIT
 
 sqlite3 "$banco" < schema.sql
 echo "test: banco descartavel em $banco"

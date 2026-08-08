@@ -51,3 +51,37 @@ User Function GcBootstrapDB()
         ConOut("GesCon: falha ao aplicar o schema no banco.")
     EndIf
 Return lOk
+
+/*/{Protheus.doc} GcBackupBanco
+    Copia o banco corrente para um arquivo -backup-AAAAMMDDHHMMSS.db ao
+    lado dele, via VACUUM INTO — cópia atômica e consistente mesmo com o
+    WAL ativo (uma cópia ingênua do arquivo .db sozinho perderia
+    transação ainda não fechada no -wal). É o único banco do sistema, sem
+    servidor: perder o arquivo é perder tudo, e o Fechamento Mensal é o
+    maior volume de escrita que o sistema faz de uma vez.
+
+    ponytail: sem rotação/expiração de backups antigos — um fechamento
+    por competência é ~12/ano, não acumula a ponto de importar. Se um dia
+    importar, apagar os com mais de N meses aqui mesmo.
+
+    @type Function
+    @author GesCon
+    @since 2026-08-08
+    @param cRotulo, character, texto extra no nome do arquivo (ex.: a
+        competência sendo fechada) — evita colisão de nome quando duas
+        chamadas caem no mesmo segundo; VACUUM INTO recusa gravar por
+        cima de um arquivo já existente. Opcional.
+    @return cDestino, character, caminho do arquivo de backup gerado
+*/
+User Function GcBackupBanco(cRotulo)
+    Local aBanco := TCSqlQuery("PRAGMA database_list")
+    Local cOrigem := aBanco[1]:file
+    Local cSufixo := ""
+    If !Empty(cRotulo)
+        cSufixo := "-" + cRotulo
+    EndIf
+    Local cDestino := FilePath(cOrigem) + FileNoExt(FileName(cOrigem)) + ;
+        "-backup" + cSufixo + "-" + DTOS(Date()) + StrTran(Time(), ":", "") + ".db"
+    TCSqlExec("VACUUM INTO '" + GcSqlLit(cDestino) + "'")
+    ConOut("GesCon: backup do banco em " + cDestino)
+Return cDestino
