@@ -61,15 +61,18 @@ User Function GcBootstrapDB()
         ConOut("GesCon: falha ao aplicar o schema no banco.")
     EndIf
 
-    // Só roda o saneamento (inclui o UPDATE ... WHERE FILIAL IS NULL em
-    // 14 tabelas) quando uma migração real aconteceu agora — rodar isso
-    // em todo boot, indefinidamente, esconderia um bug futuro (algum
-    // INSERT de uma task futura que esqueça de estampar FILIAL) atrás de
-    // um "vira condomínio 1 silenciosamente" em vez de aparecer como o
-    // bug que é.
-    If lPrecisaMigrar
-        GcSemearMigracaoFilialPadrao()
-    EndIf
+    // A restauração das _OLD roda SEMPRE, mesmo fora de uma migração
+    // "nova" -- é a rede de segurança de uma migração anterior que tenha
+    // sido interrompida no meio (native error de TCSqlExec aborta o
+    // processo inteiro sem Try/Catch, ver scripts/check-triggers.sh): se
+    // uma tabela _OLD sobreviveu de um boot anterior, GcPrecisaMigrarFilial
+    // já devolve .F. (UNI já tem FILIAL) e um gate único aqui deixaria
+    // esses dados presos lá pra sempre, sem mais nenhum código tentando
+    // resgatá-los. O saneamento genérico (FILIAL NULL -> '010101', que
+    // esconderia um bug futuro atrás de "vira condomínio 1 sozinho")
+    // continua condicionado a uma migração estar de fato acontecendo
+    // agora -- por isso os dois viram parâmetro, não dois gates iguais.
+    GcSemearMigracaoFilialPadrao(lPrecisaMigrar)
 Return lOk
 
 /*/{Protheus.doc} GcPrecisaMigrarFilial
@@ -222,15 +225,33 @@ Return
     Segunda metade da migração: chamada depois de TCSqlExec(GcSchemaSQL())
     já ter recriado as 9 tabelas "compostas" (agora vazias, no formato
     novo). Copia os dados de cada "_OLD" de volta (se existir) com
-    FILIAL='010101', apaga a _OLD, e faz o mesmo saneamento (FILIAL
-    NULL/vazio -> '010101') nas demais tabelas -- cobre tanto as 8
-    recém-restauradas quanto as 18 simples que só ganharam a coluna via
-    ALTER (Step 6 acima), que fica NULL até este UPDATE rodar.
+    FILIAL='010101' e apaga a _OLD -- isso roda incondicionalmente, toda
+    vez, porque uma _OLD sobrevivente é sinal de uma migração anterior
+    interrompida (ver GcBootstrapDB) e precisa ser drenada não importa o
+    que lPrecisaMigrar diga sobre a chamada atual.
+
+    lPrecisaMigrar controla só a segunda parte: o saneamento genérico
+    (FILIAL NULL/vazio -> '010101') nas 14 tabelas "simples" -- esse sim
+    só deve rodar quando uma migração está de fato acontecendo agora,
+    senão esconderia um bug futuro (INSERT que esqueça de estampar
+    FILIAL) atrás de "vira condomínio 1 sozinho".
+
+    Sobre não conferir o retorno do TCSqlExec final: um erro de SQL
+    dentro dele é um native error do AdvPP, que aborta o processo inteiro
+    sem Try/Catch (mesma limitação documentada em
+    scripts/check-triggers.sh) -- não existe "continuar e reportar" nesse
+    ponto, só "o processo morre e o usuário vê o erro na tela". O que
+    resta fazer de defensivo já está feito: o backup em GcBootstrapDB
+    roda antes de qualquer coisa aqui, e a drenagem de _OLD incondicional
+    acima é a própria recuperação pro caso de um abort no meio.
     @type Function
     @author GesCon
     @since 2026-08-08
+    @param lSanear, logical, .T. pra também rodar o saneamento genérico
+        nas tabelas simples (só quando uma migração está de fato
+        acontecendo nesta chamada — ver GcBootstrapDB)
 */
-User Function GcSemearMigracaoFilialPadrao()
+User Function GcSemearMigracaoFilialPadrao(lSanear)
     // Ordem importa: LANCAMENTOS referencia PLANO_CONTAS/EXERCICIO (via
     // FK composta), RATEIO_DETALHE referencia UNI e LANCAMENTOS,
     // RPT_PORTAL_EXTRATOS/RPT_PORTAL_AGENDA referenciam UNI -- cada uma
@@ -287,9 +308,11 @@ User Function GcSemearMigracaoFilialPadrao()
         EndIf
     Next i
 
-    For i := 1 To Len(aTodas)
-        cSql += "UPDATE " + aTodas[i] + " SET FILIAL = '010101' WHERE FILIAL IS NULL OR FILIAL = '';" + Chr(10)
-    Next i
+    If lSanear
+        For i := 1 To Len(aTodas)
+            cSql += "UPDATE " + aTodas[i] + " SET FILIAL = '010101' WHERE FILIAL IS NULL OR FILIAL = '';" + Chr(10)
+        Next i
+    EndIf
 
     cSql += "PRAGMA foreign_keys=ON;" + Chr(10)
 
