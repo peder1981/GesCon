@@ -26,6 +26,12 @@ sqlite3 "$banco" < schema.sql
 echo "test: banco descartavel em $banco"
 echo
 
+if ! ./scripts/check-triggers.sh; then
+    falhas=$((falhas + 1))
+fi
+total=$((total + 1))
+echo
+
 for f in tests/*_test.prw; do
     [ -f "$f" ] || continue
     total=$((total + 1))

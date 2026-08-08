@@ -37,6 +37,26 @@ CREATE TABLE IF NOT EXISTS UNI (
     UNI_CONDOMINO TEXT
 );
 
+-- Vínculo unidade->condômino: UNI_CONDOMINO é texto livre na tela (sem
+-- combo/lookup), então valida na borda do banco em vez de na UI. Rejeita
+-- código que não existe (ou está excluído) em CON, tanto no Incluir quanto
+-- no Alterar da tela de Unidades.
+CREATE TRIGGER IF NOT EXISTS TRG_UNI_CONDOMINO_INS
+BEFORE INSERT ON UNI
+WHEN NEW.UNI_CONDOMINO IS NOT NULL AND TRIM(NEW.UNI_CONDOMINO) <> ''
+BEGIN
+    SELECT RAISE(ABORT, 'Condômino inexistente: cadastre o condômino antes de vincular a unidade.')
+    WHERE NOT EXISTS (SELECT 1 FROM CON WHERE CON_CODIGO = NEW.UNI_CONDOMINO AND D_E_L_E_T_ = ' ');
+END;
+
+CREATE TRIGGER IF NOT EXISTS TRG_UNI_CONDOMINO_UPD
+BEFORE UPDATE OF UNI_CONDOMINO ON UNI
+WHEN NEW.UNI_CONDOMINO IS NOT NULL AND TRIM(NEW.UNI_CONDOMINO) <> ''
+BEGIN
+    SELECT RAISE(ABORT, 'Condômino inexistente: cadastre o condômino antes de vincular a unidade.')
+    WHERE NOT EXISTS (SELECT 1 FROM CON WHERE CON_CODIGO = NEW.UNI_CONDOMINO AND D_E_L_E_T_ = ' ');
+END;
+
 CREATE TABLE IF NOT EXISTS DES (
     R_E_C_N_O_ INTEGER PRIMARY KEY AUTOINCREMENT,
     D_E_L_E_T_ TEXT DEFAULT ' ',
@@ -59,6 +79,28 @@ CREATE TABLE IF NOT EXISTS COB (
     COB_STATUS TEXT NOT NULL DEFAULT 'pendente',
     COB_DTPAG TEXT
 );
+
+-- Trava de Cobrança: valor, unidade, competência e vencimento só nascem
+-- pelo Fechamento Mensal e nunca mudam depois — só Registrar Pagamento
+-- (COB_STATUS/COB_DTPAG) toca o registro em diante. A tela de Cobranças é
+-- um FWMBrowse cru (Incluir/Alterar/Excluir livres na UI), então a garantia
+-- só existe se o banco a impuser.
+CREATE TRIGGER IF NOT EXISTS TRG_COB_TRAVA_VALOR
+BEFORE UPDATE OF COB_VALOR, COB_UNIDADE, COB_COMPET, COB_VENCTO ON COB
+WHEN OLD.COB_VALOR <> NEW.COB_VALOR
+    OR OLD.COB_UNIDADE <> NEW.COB_UNIDADE
+    OR OLD.COB_COMPET <> NEW.COB_COMPET
+    OR IFNULL(OLD.COB_VENCTO, '') <> IFNULL(NEW.COB_VENCTO, '')
+BEGIN
+    SELECT RAISE(ABORT, 'Cobrança travada: valor, unidade, competência e vencimento não podem ser alterados depois de criados pelo Fechamento. Use Registrar Pagamento para status e data.');
+END;
+
+CREATE TRIGGER IF NOT EXISTS TRG_COB_TRAVA_EXCLUSAO
+BEFORE UPDATE OF D_E_L_E_T_ ON COB
+WHEN NEW.D_E_L_E_T_ = '*' AND OLD.D_E_L_E_T_ = ' '
+BEGIN
+    SELECT RAISE(ABORT, 'Cobrança não pode ser excluída: é gerada pelo Fechamento Mensal e faz parte do histórico contábil.');
+END;
 
 CREATE TABLE IF NOT EXISTS USR (
     R_E_C_N_O_ INTEGER PRIMARY KEY AUTOINCREMENT,
