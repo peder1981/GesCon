@@ -36,19 +36,17 @@ esperar_ok() {
     fi
 }
 
-# 101-120 já vêm semeadas por schema.sql ("Seed units for testing"); usa
-# um código fora dessa faixa para não colidir com UNI_CODIGO UNIQUE.
 esperar_erro "UNI com condômino inexistente" \
-    "INSERT INTO UNI (UNI_CODIGO, UNI_FRACAO, UNI_CONDOMINO) VALUES ('999', 1.0, 'C999')"
+    "INSERT INTO UNI (UNI_CODIGO, UNI_FRACAO, UNI_CONDOMINO, FILIAL) VALUES ('999', 1.0, 'C999', '010101')"
 
 sqlite3 "$db" "INSERT INTO CON (CON_CODIGO, CON_NOME) VALUES ('C001', 'Fulano')"
 esperar_ok "UNI com condômino existente" \
-    "INSERT INTO UNI (UNI_CODIGO, UNI_FRACAO, UNI_CONDOMINO) VALUES ('999', 1.0, 'C001')"
+    "INSERT INTO UNI (UNI_CODIGO, UNI_FRACAO, UNI_CONDOMINO, FILIAL) VALUES ('999', 1.0, 'C001', '010101')"
 
 esperar_erro "UPDATE de UNI para condômino inexistente" \
     "UPDATE UNI SET UNI_CONDOMINO = 'C999' WHERE UNI_CODIGO = '999'"
 
-sqlite3 "$db" "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO) VALUES ('999', '2026-01', 500.0, '2026-01-10')"
+sqlite3 "$db" "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, FILIAL) VALUES ('999', '2026-01', 500.0, '2026-01-10', '010101')"
 esperar_erro "alterar COB_VALOR depois de criado" \
     "UPDATE COB SET COB_VALOR = 999 WHERE COB_UNIDADE = '999'"
 esperar_erro "excluir (soft-delete) COB" \

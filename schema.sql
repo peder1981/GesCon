@@ -130,7 +130,8 @@ CREATE TABLE IF NOT EXISTS USR_COND (
     R_E_C_N_O_ INTEGER PRIMARY KEY AUTOINCREMENT,
     D_E_L_E_T_ TEXT DEFAULT ' ',
     USR_LOGIN TEXT NOT NULL,
-    FILIAL TEXT NOT NULL
+    FILIAL TEXT NOT NULL,
+    UNIQUE(USR_LOGIN, FILIAL)
 );
 
 -- Nivel de compartilhamento por tabela, lido pela native FWxFilial do
@@ -447,7 +448,7 @@ CREATE TABLE IF NOT EXISTS RPT_BALANCETE (
     D_E_L_E_T_ TEXT DEFAULT ' ',
     R_E_C_D_E_L_ NUMERIC,
     FILIAL TEXT,
-    UNIQUE(RPT_EXERCICIO, D_E_L_E_T_)
+    UNIQUE(FILIAL, RPT_EXERCICIO, D_E_L_E_T_)
 );
 
 -- Metadados SX3 para PLANO_CONTAS
@@ -497,72 +498,20 @@ INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL
 ('RPT_BALANCETE', 4, 'RPT_SALDO',          'N', 14, 2, 'Saldo'),
 ('RPT_BALANCETE', 5, 'RPT_DATA_GERACAO',   'C', 19, 0, 'Data Geração');
 
--- Seed data for accounting system. FILIAL='SEED' explícito (nunca NULL) de
--- propósito: com UNIQUE(FILIAL, PLA_CODIGO) agora composto, INSERT OR
--- IGNORE só deduplica de verdade se a chave inteira bater — deixar FILIAL
--- implícito (NULL) faz cada boot do app inserir 20 linhas fantasma de novo
--- (NULL nunca é igual a NULL num UNIQUE), crescendo pra sempre. E não pode
--- ser '010101' (o condomínio real migrado): a mesma migração que faz o
--- banco já instalado virar 010101 tentaria inserir os MESMOS códigos ali,
--- e como a restauração usa INSERT puro (não OR IGNORE), colidiria com a
--- semente e falharia. 'SEED' nunca é um código de filial real (formato
--- GGUUFF de 6 dígitos).
-INSERT OR IGNORE INTO PLANO_CONTAS (PLA_CODIGO, PLA_NOME, PLA_TIPO, PLA_ATIVO, FILIAL)
-VALUES
-  ('1000', 'Caixa',                    'ATIVO',     1, 'SEED'),
-  ('1100', 'Banco',                    'ATIVO',     1, 'SEED'),
-  ('2000', 'Contas a Pagar',           'PASSIVO',   1, 'SEED'),
-  ('2100', 'Débitos Anteriores',       'PASSIVO',   1, 'SEED'),
-  ('3000', 'Receita Condominial',      'RECEITA',   1, 'SEED'),
-  ('3100', 'Multas e Juros',           'RECEITA',   1, 'SEED'),
-  ('4000', 'Despesa Comum',            'DESPESA',   1, 'SEED'),
-  ('4100', 'Despesa Extraordinária',   'DESPESA',   1, 'SEED'),
-  ('4200', 'Água/Luz/Condomínio',      'DESPESA',   1, 'SEED'),
-  ('4300', 'Limpeza',                  'DESPESA',   1, 'SEED'),
-  ('4400', 'Segurança',                'DESPESA',   1, 'SEED'),
-  ('4500', 'Manutenção',               'DESPESA',   1, 'SEED'),
-  ('4600', 'Seguros',                  'DESPESA',   1, 'SEED'),
-  ('4700', 'Impostos e Taxas',         'DESPESA',   1, 'SEED'),
-  ('4800', 'Depreciação',              'DESPESA',   1, 'SEED'),
-  ('4900', 'Ajustes e Créditos',       'DESPESA',   1, 'SEED'),
-  ('5000', 'Contas a Receber',         'ATIVO',     1, 'SEED'),
-  ('6000', 'Capital/Patrimônio',       'PASSIVO',   1, 'SEED'),
-  ('6100', 'Lucros Acumulados',        'PASSIVO',   1, 'SEED'),
-  ('7000', 'Outras Contas',            'ATIVO',     1, 'SEED');
-
-INSERT OR IGNORE INTO EXERCICIO (EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, FILIAL)
-VALUES
-  ('2025-01', '20250101', '20250131', 1, 0, 'SEED');
-
-INSERT OR IGNORE INTO REPARTICAO (REP_CODIGO, REP_NOME, REP_ATIVO, FILIAL)
-VALUES
-  ('FRACAO', 'Fração Ideal', 1, 'SEED'),
-  ('METRAGEM', 'Por Metragem', 1, 'SEED'),
-  ('FIXO', 'Valor Fixo', 1, 'SEED');
-
--- Seed units for testing
-INSERT OR IGNORE INTO UNI (UNI_CODIGO, UNI_BLOCO, UNI_FRACAO, FILIAL)
-VALUES
-  ('101', 'A', 0.05, 'SEED'),
-  ('102', 'A', 0.05, 'SEED'),
-  ('103', 'B', 0.05, 'SEED'),
-  ('104', 'B', 0.05, 'SEED'),
-  ('105', 'C', 0.05, 'SEED'),
-  ('106', 'C', 0.05, 'SEED'),
-  ('107', 'D', 0.05, 'SEED'),
-  ('108', 'D', 0.05, 'SEED'),
-  ('109', 'E', 0.05, 'SEED'),
-  ('110', 'E', 0.05, 'SEED'),
-  ('111', 'F', 0.05, 'SEED'),
-  ('112', 'F', 0.05, 'SEED'),
-  ('113', 'G', 0.05, 'SEED'),
-  ('114', 'G', 0.05, 'SEED'),
-  ('115', 'H', 0.05, 'SEED'),
-  ('116', 'H', 0.05, 'SEED'),
-  ('117', 'I', 0.05, 'SEED'),
-  ('118', 'I', 0.05, 'SEED'),
-  ('119', 'J', 0.05, 'SEED'),
-  ('120', 'J', 0.05, 'SEED');
+-- Os blocos de semente que existiam aqui (plano de contas padrão, tipos de
+-- rateio, exercício 2025-01, 20 unidades de teste) foram REMOVIDOS ao
+-- multi-condomínio: com UNIQUE composto (FILIAL, campo), não existe um
+-- FILIAL "neutro" que sirva de chave pra INSERT OR IGNORE deduplicar contra
+-- si mesmo sem também colidir com dado real. Testado com FILIAL=NULL
+-- (colisão nunca detectada — todo boot cria 20 linhas fantasma novas,
+-- crescimento sem fim) e com FILIAL='SEED' fixo (dedupla certo, mas todo
+-- código hoje ainda lê UNI/PLANO_CONTAS/etc. sem filtrar por FILIAL —
+-- Tasks 5-9 deste plano — então as linhas fantasma entravam na conta do
+-- fechamento de um condomínio real, dobrando unidades e duplicando
+-- exercício ativo). Nenhuma das duas é segura antes que todo o app filtre
+-- por FILIAL. Os testes que dependiam de unidades/contas pré-existentes já
+-- criam as próprias (INSERT OR IGNORE com D_E_L_E_T_ explícito, ex.
+-- tests/portal-v2_test.prw) — nenhum contava com a semente daqui.
 
 -- ============================================================================
 -- Portal do Condômino v2 — Tabelas de snapshot (avisos, extratos, agenda)
@@ -596,7 +545,7 @@ CREATE TABLE IF NOT EXISTS RPT_PORTAL_EXTRATOS (
     D_E_L_E_T_ TEXT DEFAULT ' ',
     R_E_C_D_E_L_ NUMERIC,
     FILIAL TEXT,
-    UNIQUE(REX_COMPETENCIA, REX_UNIDADE, D_E_L_E_T_),
+    UNIQUE(FILIAL, REX_COMPETENCIA, REX_UNIDADE, D_E_L_E_T_),
     FOREIGN KEY(REX_UNIDADE, FILIAL) REFERENCES UNI(UNI_CODIGO, FILIAL)
 );
 CREATE INDEX IF NOT EXISTS IDX_RPT_PORTAL_EXTRATOS_UNIDADE ON RPT_PORTAL_EXTRATOS(REX_UNIDADE, D_E_L_E_T_);
@@ -703,7 +652,7 @@ CREATE TABLE IF NOT EXISTS DASHBOARD_CACHE (
   R_E_C_D_E_L_ NUMERIC,
   FILIAL TEXT
 );
-CREATE UNIQUE INDEX IF NOT EXISTS IDX_DASHBOARD_DATA_PERIODO ON DASHBOARD_CACHE(DSH_DATA, DSH_PERIODO, D_E_L_E_T_);
+CREATE UNIQUE INDEX IF NOT EXISTS IDX_DASHBOARD_DATA_PERIODO ON DASHBOARD_CACHE(FILIAL, DSH_DATA, DSH_PERIODO, D_E_L_E_T_);
 
 
 -- Metadados SX3 para TOK_PERFIL

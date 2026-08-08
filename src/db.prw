@@ -46,13 +46,58 @@ Return StrTran(cRet, "'", "''")
 */
 User Function GcBootstrapDB()
     Local lOk := .T.
+    Local lPrecisaMigrar := GcPrecisaMigrarFilial()
+
+    // Backup só quando uma migração de verdade vai rodar nesta chamada —
+    // não em todo boot normal (GcBackupBanco já é usado com parcimônia,
+    // ver seu próprio comentário sobre não ter rotação de arquivos).
+    If lPrecisaMigrar
+        GcBackupBanco("pre-migracao-filial")
+    EndIf
+
     GcMigrarParaFilial()
     lOk := TCSqlExec(GcSchemaSQL())
     If !lOk
         ConOut("GesCon: falha ao aplicar o schema no banco.")
     EndIf
-    GcSemearMigracaoFilialPadrao()
+
+    // Só roda o saneamento (inclui o UPDATE ... WHERE FILIAL IS NULL em
+    // 14 tabelas) quando uma migração real aconteceu agora — rodar isso
+    // em todo boot, indefinidamente, esconderia um bug futuro (algum
+    // INSERT de uma task futura que esqueça de estampar FILIAL) atrás de
+    // um "vira condomínio 1 silenciosamente" em vez de aparecer como o
+    // bug que é.
+    If lPrecisaMigrar
+        GcSemearMigracaoFilialPadrao()
+    EndIf
 Return lOk
+
+/*/{Protheus.doc} GcPrecisaMigrarFilial
+    Detecta se a migração multi-condomínio vai rodar nesta chamada —
+    checa só UNI como proxy: as 9 tabelas "compostas" (ver
+    GcMigrarParaFilial) sempre migram juntas, na mesma versão, então se
+    UNI ainda não tem FILIAL nenhuma das outras tem. Usado pra só fazer
+    backup e saneamento quando uma migração de verdade está acontecendo,
+    não em todo boot normal.
+    @type Static Function
+    @author GesCon
+    @since 2026-08-08
+    @return lPrecisa, logical, .T. se a migração ainda vai rodar
+*/
+Static Function GcPrecisaMigrarFilial()
+    Local aCols := TCSqlQuery("PRAGMA table_info(UNI)")
+    Local i
+
+    If Len(aCols) == 0
+        Return .F.  // banco novo -- schema.sql cria UNI já com FILIAL, nada pra migrar
+    EndIf
+
+    For i := 1 To Len(aCols)
+        If Upper(aCols[i]:NAME) == "FILIAL"
+            Return .F.  // já migrada
+        EndIf
+    Next i
+Return .T.
 
 /*/{Protheus.doc} GcMigrarParaFilial
     Migração multi-condomínio: garante que toda tabela dependente de
@@ -63,12 +108,14 @@ Return lOk
     não consegue fazer sozinho.
 
     As 4 tabelas com UNIQUE global no código (UNI, PLANO_CONTAS,
-    REPARTICAO, EXERCICIO) precisam de recriação completa — SQLite não
-    altera UNIQUE de coluna existente via ALTER TABLE. A tática: renomeia
-    a tabela antiga pra _OLD aqui; schema.sql (chamado logo depois, ainda
-    dentro de GcBootstrapDB) recria a tabela do zero, já no formato novo,
-    porque CREATE TABLE IF NOT EXISTS só age quando a tabela "não existe"
-    — e agora ela não existe mesmo, foi renomeada. GcRestaurarTabelasComposta
+    REPARTICAO, EXERCICIO) — mais as outras 4 que têm FOREIGN KEY
+    apontando pra alguma delas (ver comentário abaixo) — precisam de
+    recriação completa: SQLite não altera UNIQUE nem FOREIGN KEY de
+    coluna existente via ALTER TABLE. A tática: renomeia a tabela antiga
+    pra _OLD aqui; schema.sql (chamado logo depois, ainda dentro de
+    GcBootstrapDB) recria a tabela do zero, já no formato novo, porque
+    CREATE TABLE IF NOT EXISTS só age quando a tabela "não existe" — e
+    agora ela não existe mesmo, foi renomeada. GcSemearMigracaoFilialPadrao
     (chamada depois do schema.sql) copia os dados de volta e apaga a _OLD.
 
     Idempotente: numa base já migrada, todo PRAGMA table_info já acha
@@ -91,10 +138,16 @@ User Function GcMigrarParaFilial()
     // existe mais. Descoberto validando contra cópia do banco real.
     Local aSimples := {"CON", "DES", "COB", "RPT_INADIM", "RPT_EXTRATO", ;
         "RPT_DESCAT", "CFG_BOLETO", "GCT_TOKEN", "RPT_COND_COBRANCAS", ;
-        "AUDITORIA", "RPT_BALANCETE", "AVISOS", ;
+        "AUDITORIA", "AVISOS", ;
         "ANOMALIA_LOG", "ALERTA", "DASHBOARD_CACHE"}
+    // RPT_BALANCETE entra em aCompostas junto com as outras: seu próprio
+    // UNIQUE(RPT_EXERCICIO, D_E_L_E_T_) também precisava virar
+    // UNIQUE(FILIAL, RPT_EXERCICIO, D_E_L_E_T_) -- sem isso, duas
+    // filiais fechando o mesmo EXE_CODIGO colidiriam no balancete uma
+    // da outra.
     Local aCompostas := {"UNI", "PLANO_CONTAS", "REPARTICAO", "EXERCICIO", ;
-        "LANCAMENTOS", "RATEIO_DETALHE", "RPT_PORTAL_EXTRATOS", "RPT_PORTAL_AGENDA"}
+        "LANCAMENTOS", "RATEIO_DETALHE", "RPT_PORTAL_EXTRATOS", "RPT_PORTAL_AGENDA", ;
+        "RPT_BALANCETE"}
     Local i
 
     For i := 1 To Len(aSimples)
@@ -104,6 +157,13 @@ User Function GcMigrarParaFilial()
     For i := 1 To Len(aCompostas)
         GcRenomearSeAntiga(aCompostas[i])
     Next i
+
+    // IDX_DASHBOARD_DATA_PERIODO é um índice avulso (não uma constraint
+    // de tabela), então dá pra corrigir sem recriar DASHBOARD_CACHE
+    // inteira -- só derruba o índice velho; schema.sql recria com FILIAL
+    // já na composição. DROP INDEX é idempotente por natureza (IF
+    // EXISTS), sem precisar do vaivém de _OLD.
+    TCSqlExec("DROP INDEX IF EXISTS IDX_DASHBOARD_DATA_PERIODO")
 Return
 
 /*/{Protheus.doc} GcAdicionarFilialSeFaltar
@@ -133,10 +193,9 @@ Return
 
 /*/{Protheus.doc} GcRenomearSeAntiga
     Renomeia cTabela para cTabela_OLD se ela existir e ainda não tiver
-    FILIAL -- primeira metade da migração das 4 tabelas com UNIQUE
-    composto (ver GcMigrarParaFilial). A segunda metade é
-    GcRestaurarTabelasComposta, chamada depois do schema.sql recriar a
-    tabela do zero.
+    FILIAL -- primeira metade da migração das 9 tabelas "compostas" (ver
+    GcMigrarParaFilial). A segunda metade é GcSemearMigracaoFilialPadrao,
+    chamada depois do schema.sql recriar a tabela do zero.
     @type Static Function
     @author GesCon
     @since 2026-08-08
@@ -161,7 +220,7 @@ Return
 
 /*/{Protheus.doc} GcSemearMigracaoFilialPadrao
     Segunda metade da migração: chamada depois de TCSqlExec(GcSchemaSQL())
-    já ter recriado as 8 tabelas "compostas" (agora vazias, no formato
+    já ter recriado as 9 tabelas "compostas" (agora vazias, no formato
     novo). Copia os dados de cada "_OLD" de volta (se existir) com
     FILIAL='010101', apaga a _OLD, e faz o mesmo saneamento (FILIAL
     NULL/vazio -> '010101') nas demais tabelas -- cobre tanto as 8
@@ -179,15 +238,14 @@ User Function GcSemearMigracaoFilialPadrao()
     // de volta com FILIAL='010101'. A lista abaixo já está na ordem certa.
     //
     // R_E_C_N_O_ fica de fora da cópia em UNI/PLANO_CONTAS/REPARTICAO/
-    // EXERCICIO de propósito: a tabela nova (recriada pelo schema.sql no
-    // passo anterior) já pode ter ganhado linhas via INSERT OR IGNORE dos
-    // blocos de semente ("Seed units for testing" etc.), com R_E_C_N_O_
-    // 1, 2, 3... -- copiar o R_E_C_N_O_ antigo verbatim colidia com essas.
-    // Nas outras 4, R_E_C_N_O_ NÃO é a chave primária de verdade (é
-    // LAN_ID/RAT_ID/REX_ID/REA_ID, cada uma com seu próprio
-    // AUTOINCREMENT) e nenhuma delas tem bloco de semente no schema.sql,
-    // então copiar o id inteiro é seguro -- e necessário pra
-    // RATEIO_DETALHE.RAT_LANCAMENTO continuar apontando pro LAN_ID certo.
+    // EXERCICIO de propósito defensivo: nelas R_E_C_N_O_ não é referenciado
+    // por mais nenhuma tabela, então deixar a tabela nova (recriada do
+    // zero pelo schema.sql) distribuir ids frescos via AUTOINCREMENT é
+    // seguro e mais simples que preservar o antigo. Nas outras 4,
+    // R_E_C_N_O_ NÃO é a chave primária de verdade (é LAN_ID/RAT_ID/
+    // REX_ID/REA_ID, cada uma com seu próprio AUTOINCREMENT) -- copiar o
+    // id inteiro é seguro e necessário pra RATEIO_DETALHE.RAT_LANCAMENTO
+    // continuar apontando pro LAN_ID certo.
     Local aCompostas := {{"UNI", "D_E_L_E_T_,R_E_C_D_E_L_,UNI_CODIGO,UNI_BLOCO,UNI_FRACAO,UNI_CONDOMINO"}, ;
         {"PLANO_CONTAS", "PLA_CODIGO,PLA_NOME,PLA_TIPO,PLA_ATIVO,D_E_L_E_T_,R_E_C_D_E_L_"}, ;
         {"REPARTICAO", "REP_CODIGO,REP_NOME,REP_ATIVO,REP_DETALHE,D_E_L_E_T_,R_E_C_D_E_L_"}, ;
@@ -195,16 +253,14 @@ User Function GcSemearMigracaoFilialPadrao()
         {"LANCAMENTOS", "LAN_ID,LAN_DATA,LAN_CONTA_DEB,LAN_CONTA_CRED,LAN_VALOR,LAN_DESCR,LAN_REFERENCIA,LAN_TIPO,LAN_DATA_HORA,LAN_USUARIO,LAN_EXERCICIO,R_E_C_N_O_,D_E_L_E_T_,R_E_C_D_E_L_"}, ;
         {"RATEIO_DETALHE", "RAT_ID,RAT_LANCAMENTO,RAT_UNIDADE,RAT_VALOR,RAT_PERCENTUAL,R_E_C_N_O_,D_E_L_E_T_,R_E_C_D_E_L_"}, ;
         {"RPT_PORTAL_EXTRATOS", "REX_ID,REX_COMPETENCIA,REX_UNIDADE,REX_VALOR,REX_VENCIMENTO,REX_STATUS,REX_DATA_PAGAMENTO,R_E_C_N_O_,D_E_L_E_T_,R_E_C_D_E_L_"}, ;
-        {"RPT_PORTAL_AGENDA", "REA_ID,REA_UNIDADE,REA_COMPETENCIA,REA_VENCIMENTO,REA_VALOR,R_E_C_N_O_,D_E_L_E_T_,R_E_C_D_E_L_"}}
-    // aTodas NAO inclui as 8 tabelas de aCompostas: essas já saem
-    // estampadas com FILIAL='010101' explícito no INSERT acima. Um
-    // saneamento genérico (FILIAL IS NULL) bateria nas linhas de semente
-    // dos blocos INSERT OR IGNORE do schema.sql (ex.: as 20 unidades de
-    // teste 101-120), que entram com FILIAL NULL de propósito -- forçá-las
-    // pra '010101' colide com a mesma unidade real já restaurada.
+        {"RPT_PORTAL_AGENDA", "REA_ID,REA_UNIDADE,REA_COMPETENCIA,REA_VENCIMENTO,REA_VALOR,R_E_C_N_O_,D_E_L_E_T_,R_E_C_D_E_L_"}, ;
+        {"RPT_BALANCETE", "RPT_EXERCICIO,RPT_RECEITAS,RPT_DESPESAS,RPT_SALDO,RPT_DATA_GERACAO,D_E_L_E_T_,R_E_C_D_E_L_"}}
+    // aTodas NAO inclui as 9 tabelas de aCompostas: essas já saem
+    // estampadas com FILIAL='010101' explícito no INSERT acima -- um
+    // saneamento genérico ali seria redundante.
     Local aTodas := {"CON", "DES", "COB", "RPT_INADIM", "RPT_EXTRATO", ;
         "RPT_DESCAT", "CFG_BOLETO", "GCT_TOKEN", "RPT_COND_COBRANCAS", ;
-        "AUDITORIA", "RPT_BALANCETE", "AVISOS", ;
+        "AUDITORIA", "AVISOS", ;
         "ANOMALIA_LOG", "ALERTA", "DASHBOARD_CACHE"}
     Local i
     Local aExiste
