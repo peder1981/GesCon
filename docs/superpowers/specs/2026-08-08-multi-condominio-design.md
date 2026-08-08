@@ -14,7 +14,7 @@ Hoje o GesCon administra **um condomínio por instância** — todo dado (unidad
 - **Síndicos** vinculados a um ou mais condomínios específicos, com poder de admin só dentro do(s) seu(s).
 - O **token do portal do condômino** já resolvendo sozinho a qual condomínio pertence — sem precisar que o admin abra tela nenhuma pra "apontar" o condômino certo.
 
-A investigação técnica descartou a ideia inicial (um arquivo `.db` por condomínio, trocado dentro da mesma sessão): o AdvPP abre um único banco por processo, decidido antes da janela existir, e não há comando pra reabrir outro banco em runtime. A saída — confirmada com o usuário — é **banco único + coluna de particionamento em cada tabela**, usando a convenção real do Protheus: campo **`FILIAL`**, 6 caracteres alfanuméricos (`GG` grupo de empresas + `UU` unidade de negócio + `FF` filial), e as funções `FWxFilial(cAlias)` / `FWXFilialSet(cFilial)` para lê-la e defini-la.
+A investigação técnica descartou a ideia inicial (um arquivo `.db` por condomínio, trocado dentro da mesma sessão): o AdvPP abre um único banco por processo, decidido antes da janela existir, e não há comando pra reabrir outro banco em runtime. A saída — confirmada com o usuário — é **banco único + coluna de particionamento em cada tabela**, usando a convenção real do Protheus: campo **`FILIAL`**, 6 caracteres alfanuméricos (`GG` grupo de empresas + `UU` unidade de negócio + `FF` filial), e as funções `FWxFilial(cAlias)` / `RpcSetEnv(cFilial)` para lê-la e defini-la.
 
 Isso significa que **parte deste trabalho é no motor AdvPP** (outro repositório, mesmo mantenedor), não só no GesCon. As duas frentes estão descritas separadamente abaixo.
 
@@ -42,7 +42,7 @@ Isso significa que **parte deste trabalho é no motor AdvPP** (outro repositóri
 
 Novo campo na `VM` (mesmo nível de `dbEngine`/`uiProvider`): `filialAtiva string`.
 
-- **`FWXFilialSet(cFilial)`** — grava a filial ativa da sessão (6 chars). Chamada uma vez, no login do GesCon (ou troca de condomínio).
+- **`RpcSetEnv(cFilial)`** — grava a filial ativa da sessão (6 chars). Chamada uma vez, no login do GesCon (ou troca de condomínio).
 - **`FWxFilial(cAlias)`** — devolve a filial ativa **truncada/espaçada conforme o nível de compartilhamento configurado pra `cAlias`**. É sempre esse valor que entra numa comparação de igualdade — nunca lógica condicional por nível.
 
 ### Nível de compartilhamento
@@ -126,7 +126,7 @@ Depois de `GcAutenticar()` batido:
 - **`SINDICO`**: lista só os vinculados via `USR_COND`.
 - Exatamente 1 condomínio disponível → seleciona sozinho, sem tela.
 - Zero disponível (síndico sem vínculo) → bloqueia login com mensagem clara.
-- Condomínio escolhido: `Private g_cFilialAtiva := cFilial` (mesmo padrão de `g_cUniPortal`/`g_cConPortal` já usado hoje) **e** `FWXFilialSet(cFilial)` — os dois precisam ficar em sincronia, o `Private` pra exibição (título de menu etc.), o native pra todo filtro de fato.
+- Condomínio escolhido: `Private g_cFilialAtiva := cFilial` (mesmo padrão de `g_cUniPortal`/`g_cConPortal` já usado hoje) **e** `RpcSetEnv(cFilial)` — os dois precisam ficar em sincronia, o `Private` pra exibição (título de menu etc.), o native pra todo filtro de fato.
 - Item novo no menu principal, **"Trocar Condomínio"** — reabre o mesmo picker sem deslogar.
 
 `GcCriarAdminNovo` (Usuários → Criar Usuário) ganha a pergunta de perfil (Super Admin / Síndico) e, se Síndico, a seleção de 1+ condomínios pra gravar em `USR_COND`. Tanto super admin quanto síndico podem cadastrar condomínio novo (tela nova, "Condomínios", no menu principal) — síndico que cadastra nasce vinculado ao que criou.
@@ -164,7 +164,7 @@ O `.exe` já instalado (v1.0.10) sobe direto no condomínio nº 1 sem passo manu
 ## Testes Esperados
 
 **AdvPP:**
-- ✅ `FWXFilialSet`/`FWxFilial` — sessão isolada, nível 6 devolve os 6 chars, nível 4/2/0 truncam e espaçam corretamente
+- ✅ `RpcSetEnv`/`FWxFilial` — sessão isolada, nível 6 devolve os 6 chars, nível 4/2/0 truncam e espaçam corretamente
 - ✅ `browse.go`: Incluir estampa `FILIAL` correta; Listar só mostra linhas da filial ativa; Alterar/Excluir seguem funcionando (não eram o caso quebrado da VIEW)
 - ✅ Tabela sem `FILIAL` (a maioria dos programas AdvPP fora do GesCon) — comportamento inalterado
 
