@@ -35,7 +35,7 @@
 User Function GesCon()
     Local aMenu := {"Unidades", "Condôminos", "Despesas", "Cobranças", "Fechamento Mensal", ;
         "Mala Direta", "Relatórios", "Contabilidade", "Auditoria", "Boletos", "Avisos", ;
-        "Usuários", "Trocar Senha", "Sair"}
+        "Usuários", "Trocar Senha", "Trocar Condomínio", "Sair"}
     Local nOpcao
     Local nEscolha
     Local cCompetencia
@@ -48,6 +48,8 @@ User Function GesCon()
     Private g_cUniPortal   := ""
     Private g_cConPortal   := ""
     Private g_lAutoPortal  := .F.
+    Private g_cFilialAtiva := ""
+    Private cLoginAtual    := ""
 
     ConOut("GesCon — Sistema de Gestão Condominial")
 
@@ -63,6 +65,10 @@ User Function GesCon()
         Case nEscolha == 1
             If !GcLogin()
                 MsgStop("Acesso não autorizado.", "GesCon")
+                Return
+            EndIf
+
+            If !GcSelecionarCondominio(cLoginAtual)
                 Return
             EndIf
 
@@ -113,6 +119,8 @@ User Function GesCon()
                         GcMenuUsuarios()
                     Case nOpcao == 13
                         GcTrocarSenha()
+                    Case nOpcao == 14
+                        GcSelecionarCondominio(cLoginAtual)
                     Otherwise
                         Exit
                 EndCase

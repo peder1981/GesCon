@@ -52,9 +52,10 @@ User Function GcCriarAdmin()
         Return .F.
     EndIf
 
-    TCSqlExec("INSERT INTO USR (USR_LOGIN, USR_SENHA) VALUES ('" + ;
-        GcSqlLit(cLogin) + "', '" + GcSqlLit(FWHash(cSenha)) + "')")
+    TCSqlExec("INSERT INTO USR (USR_LOGIN, USR_SENHA, USR_PERFIL) VALUES ('" + ;
+        GcSqlLit(cLogin) + "', '" + GcSqlLit(FWHash(cSenha)) + "', 'SUPERADMIN')")
     MsgInfo("Administrador " + cLogin + " criado. Login efetuado.", "GesCon")
+    cLoginAtual := cLogin
 Return .T.
 
 /*/{Protheus.doc} GcAutenticar
@@ -76,6 +77,8 @@ User Function GcAutenticar()
         MsgStop("Login ou senha inválidos.", "GesCon")
         Return .F.
     EndIf
+
+    cLoginAtual := cLogin
 Return .T.
 
 /*/{Protheus.doc} GcCredenciaisValidas
@@ -128,4 +131,67 @@ User Function GcTrocarSenha()
     TCSqlExec("UPDATE USR SET USR_SENHA = '" + GcSqlLit(FWHash(cSenhaNova)) + ;
         "' WHERE USR_LOGIN = '" + GcSqlLit(cLogin) + "' AND D_E_L_E_T_ = ' '")
     MsgInfo("Senha alterada com sucesso.", "Trocar Senha")
+Return .T.
+
+/*/{Protheus.doc} GcSelecionarCondominio
+    Lista os condomínios disponíveis para o login corrente (todos, se
+    SUPERADMIN; só os vinculados via USR_COND, se SINDICO), e grava a
+    escolha como filial ativa da sessão (RpcSetEnv + Private
+    g_cFilialAtiva). Se houver exatamente 1 disponível, seleciona sozinho
+    sem mostrar tela. Se houver 0, bloqueia.
+    @type Function
+    @author GesCon
+    @since 2026-08-08
+    @param cLogin, character, login já autenticado
+    @return lOk, logical, .T. se uma filial foi selecionada
+*/
+User Function GcSelecionarCondominio(cLogin)
+    Local aPerfil := TCSqlQuery("SELECT USR_PERFIL FROM USR WHERE USR_LOGIN = '" + ;
+        GcSqlLit(cLogin) + "' AND D_E_L_E_T_ = ' '")
+    Local cPerfil := ""
+    Local aCond := {}
+    Local cLista := ""
+    Local nJ
+    Local cSel
+    Local nIdx
+
+    If Len(aPerfil) > 0
+        cPerfil := aPerfil[1]:USR_PERFIL
+    EndIf
+
+    If cPerfil == "SUPERADMIN"
+        aCond := TCSqlQuery("SELECT COND_FILIAL, COND_NOME FROM COND WHERE COND_ATIVO = 1 AND D_E_L_E_T_ = ' ' ORDER BY COND_NOME")
+    Else
+        aCond := TCSqlQuery("SELECT C.COND_FILIAL, C.COND_NOME FROM COND C " + ;
+            "INNER JOIN USR_COND UC ON UC.FILIAL = C.COND_FILIAL AND UC.D_E_L_E_T_ = ' ' " + ;
+            "WHERE UC.USR_LOGIN = '" + GcSqlLit(cLogin) + "' AND C.COND_ATIVO = 1 AND C.D_E_L_E_T_ = ' ' " + ;
+            "ORDER BY C.COND_NOME")
+    EndIf
+
+    If Len(aCond) == 0
+        MsgStop("Nenhum condomínio vinculado a este usuário. Fale com o administrador.", "GesCon")
+        Return .F.
+    EndIf
+
+    If Len(aCond) == 1
+        RpcSetEnv(aCond[1]:COND_FILIAL)
+        g_cFilialAtiva := aCond[1]:COND_FILIAL
+        Return .T.
+    EndIf
+
+    For nJ := 1 To Len(aCond)
+        cLista += Str(nJ, 3) + ". " + aCond[nJ]:COND_NOME + Chr(10)
+    Next nJ
+    cLista += "\nSelecione o número do condomínio:"
+
+    cSel := FWGetText(cLista, "")
+    nIdx := Val(cSel)
+
+    If nIdx < 1 .Or. nIdx > Len(aCond)
+        MsgStop("Índice inválido.", "GesCon")
+        Return .F.
+    EndIf
+
+    RpcSetEnv(aCond[nIdx]:COND_FILIAL)
+    g_cFilialAtiva := aCond[nIdx]:COND_FILIAL
 Return .T.
