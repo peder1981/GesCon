@@ -2,6 +2,36 @@
 
 Mudanças notáveis do GesCon.
 
+## [1.1.0] — 2026-08-09
+
+### Adicionado
+
+- **Multi-condomínio.** Uma instalação passa a atender várias
+  administradoras/condomínios sobre um único banco de dados, isolados por
+  uma coluna `FILIAL` de 6 caracteres (convenção Protheus). Dois perfis de
+  usuário: `SUPERADMIN` enxerga e administra todos os condomínios;
+  `SINDICO` só os condomínios aos quais está vinculado, escolhidos no menu
+  "Trocar Condomínio". A base já instalada vira automaticamente o
+  condomínio nº 1 na primeira migração — nenhum passo manual.
+
+  Depende do AdvPP 2.0.22 (`RpcSetEnv`/`FWxFilial`, filtro automático de
+  `FILIAL` no `FWMBrowse`), atualizado nesta mesma versão.
+
+- **Backup automático do banco antes do Fechamento Mensal.** O fechamento é
+  irreversível (trava cobranças, fecha o exercício); agora uma cópia do
+  banco é feita antes de rodar, para haver como desfazer manualmente se
+  algo sair errado.
+
+### Corrigido
+
+- **Vínculo unidade→condômino e imutabilidade de Cobrança agora travados no
+  banco.** `UNI_CONDOMINO` rejeita código de condômino inexistente (e,
+  desde o multi-condomínio, também rejeita vínculo cruzado entre
+  condomínios diferentes). Cobranças geradas pelo Fechamento não podem mais
+  ter valor, unidade, competência ou vencimento alterados por fora do fluxo
+  de Registrar Pagamento, nem ser excluídas — a tela de Cobranças usa
+  `FWMBrowse` cru e a garantia só existia se o banco a impusesse.
+
 ## [1.0.10] — 2026-08-01
 
 ### Corrigido
