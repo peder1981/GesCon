@@ -46,10 +46,11 @@ User Function GesCon()
     Local nPortal
     Local aPortal
 
-    Private g_cUniPortal   := ""
-    Private g_cConPortal   := ""
-    Private g_lAutoPortal  := .F.
-    Private g_cFilialAtiva := ""
+    Private g_cUniPortal      := ""
+    Private g_cConPortal      := ""
+    Private g_lAutoPortal     := .F.
+    Private g_cFilialAtiva    := ""
+    Private g_cCondNomePortal := ""
     Private cLoginAtual    := ""
 
     ConOut("GesCon — Sistema de Gestão Condominial")

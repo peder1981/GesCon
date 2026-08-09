@@ -57,6 +57,19 @@ User Function PortalV2Test()
     TestE2EPortalFlow()
     ConOut("")
 
+    // Teardown: as unidades fixture (101/102/103/E2E_UNIT_001, FILIAL='      ')
+    // sao criadas via INSERT OR IGNORE por varios testes acima e nunca eram
+    // apagadas -- nao crescem sem limite (OR IGNORE), mas ficam presas em
+    // FILIAL='      ' e vazam pra outras suites que rodem sobre a mesma
+    // filial default. UNI tem FOREIGN KEY composta a partir de
+    // RPT_PORTAL_EXTRATOS/RPT_PORTAL_AGENDA/COB: os filhos precisam sumir
+    // primeiro, senao a DELETE de UNI quebra com FOREIGN KEY constraint failed.
+    TCSqlExec("DELETE FROM RPT_PORTAL_EXTRATOS WHERE REX_UNIDADE IN ('101', '102', '103', 'E2E_UNIT_001') AND FILIAL = '      '")
+    TCSqlExec("DELETE FROM RPT_PORTAL_AGENDA WHERE REA_UNIDADE IN ('101', '102', '103', 'E2E_UNIT_001') AND FILIAL = '      '")
+    TCSqlExec("DELETE FROM COB WHERE COB_UNIDADE IN ('101', '102', '103', 'E2E_UNIT_001') AND FILIAL = '      '")
+    TCSqlExec("DELETE FROM UNI WHERE UNI_CODIGO IN ('101', '102', '103', 'E2E_UNIT_001') AND FILIAL = '      '")
+    ConOut("")
+
     ConOut("========== FIM DOS TESTES DO PORTAL V2 ==========")
     ConOut("")
 

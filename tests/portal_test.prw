@@ -70,7 +70,7 @@ User Function AT06TokenValido()
     // Verifica USADO=1
     Local aUsado := TCSqlQuery("SELECT USADO FROM GCT_TOKEN WHERE TOKEN = 'test-token-0000-0000-0000-000000000001' AND D_E_L_E_T_ = ' '")
     If Len(aUsado) > 0
-        ConOut("uso_marked=" + cValToChar(aUsado[1]:USADO == 1))
+        ConOut("uso_marked=" + cValToChar(Val(aUsado[1]:USADO) == 1))
     Else
         lOk := .F.
         ConOut("erro_token_desapareceu=.T.")
@@ -103,11 +103,15 @@ User Function AT06PortalCalc()
     EndIf
 
     // Garante cobrança de teste para unidade 99
+    // FILIAL estampado com 6 espaços: este teste simula a sessão do portal
+    // sem passar por GcAuthPortalToken (que chamaria RpcSetEnv), então
+    // GcPortalCalcCobrancas filtra por FWxFilial('COB') na filial default
+    // (em branco) -- os fixtures precisam bater com essa mesma filial.
     TCSqlExec("DELETE FROM COB WHERE COB_UNIDADE = '99' AND D_E_L_E_T_ = ' '")
-    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS) VALUES ('99', '2026-07', '150.00', '2026-07-10', 'aberto')")
-    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS) VALUES ('99', '2026-08', '150.00', '2026-08-10', 'aberto')")
+    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, FILIAL) VALUES ('99', '2026-07', '150.00', '2026-07-10', 'aberto', '      ')")
+    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, FILIAL) VALUES ('99', '2026-08', '150.00', '2026-08-10', 'aberto', '      ')")
     // Cobrança de outra unidade — NÃO deve ser copiada
-    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS) VALUES ('88', '2026-07', '200.00', '2026-07-10', 'aberto')")
+    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, FILIAL) VALUES ('88', '2026-07', '200.00', '2026-07-10', 'aberto', '      ')")
 
     // Simula autenticação portal
     g_cUniPortal := "99"
@@ -214,6 +218,12 @@ User Function PortalTest()
     // data e DtoS() devolve "" -- a validade virava "-- 23:59:59" e o token
     // nascia invalido, o mesmo defeito que havia em GcGerarToken.
     Local cValidade  := TCSqlQuery("SELECT datetime('now', '+2 days') as DT")[1]:DT
+    // Filial real (o condomínio nº 1 default, sempre semeado pela migração
+    // em GcMigrarParaFilial) -- não a filial em branco. GcAuthPortalToken
+    // (Step 6) chama RpcSetEnv(FILIAL do token): se o fixture usasse a
+    // filial em branco, o teste não exerceria o caminho real de resolução
+    // de tenant que este token estabelece para as telas seguintes.
+    Local cFilTest := "010101"
 
     // ========================================
     // Step 0: Reset state (teardown prévio)
@@ -227,6 +237,8 @@ User Function PortalTest()
     g_cUniPortal   := ""
     g_cConPortal   := ""
     g_lAutoPortal  := .F.
+    g_cFilialAtiva := ""
+    RpcSetEnv("      ")
     ConOut("--- E2E: reset state ok ---")
 
     // ========================================
@@ -244,7 +256,7 @@ User Function PortalTest()
     // ========================================
     // Step 2: Criar unidade de teste
     // ========================================
-    TCSqlExec("INSERT INTO UNI (UNI_CODIGO, UNI_BLOCO, UNI_FRACAO) VALUES ('E2E99', 'A', 0.50)")
+    TCSqlExec("INSERT INTO UNI (UNI_CODIGO, UNI_BLOCO, UNI_FRACAO, FILIAL) VALUES ('E2E99', 'A', 0.50, '" + GcSqlLit(cFilTest) + "')")
     Local aUni := TCSqlQuery("SELECT UNI_CODIGO FROM UNI WHERE UNI_CODIGO = 'E2E99' AND D_E_L_E_T_ = ' '")
     If Len(aUni) != 1
         lTodosOk := .F.
@@ -256,7 +268,7 @@ User Function PortalTest()
     // ========================================
     // Step 3: Criar condômino vinculado à unidade
     // ========================================
-    TCSqlExec("INSERT INTO CON (CON_CODIGO, CON_NOME, CON_CPF, CON_EMAIL) VALUES ('CE2E99', 'Condômino E2E Teste', '000.000.000-00', 'e2e@teste.com')")
+    TCSqlExec("INSERT INTO CON (CON_CODIGO, CON_NOME, CON_CPF, CON_EMAIL, FILIAL) VALUES ('CE2E99', 'Condômino E2E Teste', '000.000.000-00', 'e2e@teste.com', '" + GcSqlLit(cFilTest) + "')")
     Local aCon := TCSqlQuery("SELECT CON_CODIGO FROM CON WHERE CON_CODIGO = 'CE2E99' AND D_E_L_E_T_ = ' '")
     If Len(aCon) != 1
         lTodosOk := .F.
@@ -268,9 +280,9 @@ User Function PortalTest()
     // ========================================
     // Step 4: Criar cobranças de teste para unidade E2E99
     // ========================================
-    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS) VALUES ('E2E99', '2026-07', '500.00', '2026-07-10', 'aberto')")
-    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS) VALUES ('E2E99', '2026-08', '550.00', '2026-08-10', 'aberto')")
-    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS) VALUES ('E2E99', '2026-07', '120.00', '2026-07-15', 'pago')")
+    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, FILIAL) VALUES ('E2E99', '2026-07', '500.00', '2026-07-10', 'aberto', '" + GcSqlLit(cFilTest) + "')")
+    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, FILIAL) VALUES ('E2E99', '2026-08', '550.00', '2026-08-10', 'aberto', '" + GcSqlLit(cFilTest) + "')")
+    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, FILIAL) VALUES ('E2E99', '2026-07', '120.00', '2026-07-15', 'pago', '" + GcSqlLit(cFilTest) + "')")
     ConOut("PASS: Step 4 - cobranças criadas")
 
     // ========================================
@@ -278,9 +290,9 @@ User Function PortalTest()
     // ========================================
     Local aTokenCheck := TCSqlQuery("SELECT COUNT(*) AS QTD FROM GCT_TOKEN WHERE TOKEN LIKE 'e2e-%' AND D_E_L_E_T_ = ' ' AND USADO = 0")
     If Len(aTokenCheck) > 0 .And. Val(aTokenCheck[1]:QTD) == 0
-        TCSqlExec("INSERT INTO GCT_TOKEN (TOKEN, USR_LOGIN, CON_CODIGO, UNI_CODIGO, CRIPTADO, VALIDO_ATE, USADO) " + ;
+        TCSqlExec("INSERT INTO GCT_TOKEN (TOKEN, USR_LOGIN, CON_CODIGO, UNI_CODIGO, CRIPTADO, VALIDO_ATE, USADO, FILIAL) " + ;
             "VALUES ('" + GcSqlLit(cTokenTest) + "', 'e2eadmin', 'CE2E99', 'E2E99', '" + ;
-            GcSqlLit(DtoC(Date()) + " " + Left(Time(), 8)) + "', '" + GcSqlLit(cValidade) + "', 0)")
+            GcSqlLit(DtoC(Date()) + " " + Left(Time(), 8)) + "', '" + GcSqlLit(cValidade) + "', 0, '" + GcSqlLit(cFilTest) + "')")
     EndIf
 
     aTokenCheck := TCSqlQuery("SELECT COUNT(*) AS QTD FROM GCT_TOKEN WHERE TOKEN = '" + GcSqlLit(Left(cTokenTest, 40)) + "' AND USADO = 0 AND D_E_L_E_T_ = ' '")
@@ -312,7 +324,7 @@ User Function PortalTest()
 
     // Verifica que token foi marcado como USADO=1
     Local aUsado := TCSqlQuery("SELECT USADO FROM GCT_TOKEN WHERE TOKEN = '" + GcSqlLit(Left(cTokenTest, 40)) + "' AND D_E_L_E_T_ = ' '")
-    If Len(aUsado) > 0 .And. aUsado[1]:USADO == 1
+    If Len(aUsado) > 0 .And. Val(aUsado[1]:USADO) == 1
         ConOut("PASS: Step 6c - token marcado como usado")
     Else
         lTodosOk := .F.
@@ -377,6 +389,8 @@ User Function PortalTest()
     g_cUniPortal   := ""
     g_cConPortal   := ""
     g_lAutoPortal  := .F.
+    g_cFilialAtiva := ""
+    RpcSetEnv("      ")
     ConOut("--- E2E: teardown completo ---")
 
     // ========================================

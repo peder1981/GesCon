@@ -38,7 +38,7 @@ Return .T.
 */
 User Function GcAuthPortalToken(cToken)
     Local aToken := TCSqlQuery("SELECT GCT_TOKEN.TOKEN, GCT_TOKEN.UNI_CODIGO, GCT_TOKEN.CON_CODIGO, " + ;
-        "GCT_TOKEN.VALIDO_ATE, GCT_TOKEN.USADO, COND.COND_NOME " + ;
+        "GCT_TOKEN.VALIDO_ATE, GCT_TOKEN.USADO, GCT_TOKEN.FILIAL, COND.COND_NOME " + ;
         "FROM GCT_TOKEN LEFT JOIN COND ON COND.COND_FILIAL = GCT_TOKEN.FILIAL " + ;
         "WHERE GCT_TOKEN.TOKEN = '" + GcSqlLit(cToken) + "' " + ;
         "AND GCT_TOKEN.D_E_L_E_T_ = ' ' " + ;
@@ -55,9 +55,24 @@ User Function GcAuthPortalToken(cToken)
     // ainda precisa ser marcado como usado.
     TCSqlExec("UPDATE GCT_TOKEN SET USADO = 1 WHERE TOKEN = '" + GcSqlLit(cToken) + "' AND D_E_L_E_T_ = ' '")
 
+    // A sessão do portal NUNCA passa por GcSelecionarCondominio (esse é o
+    // fluxo do admin, gescon.prw:72/126) -- então FWxFilial() aqui dentro
+    // sempre devolveria o default vazio, não a filial de quem é dono do
+    // token, e todo filtro FILIAL nas telas seguintes (GcPortalCalcCobrancas,
+    // GcPortalCondominoV2) bateria contra a filial errada. É por isso que os
+    // lookups de GCT_TOKEN acima e abaixo não filtram por FILIAL -- eles são
+    // o jeito de DESCOBRIR a filial, não de já assumir uma. RpcSetEnv aqui é
+    // o que estabelece o contexto pras telas seguintes usarem certo.
+    // Token gerado antes desta migração tem FILIAL=''/NULL: RpcSetEnv
+    // recusa (exige exatamente 6 caracteres) e devolve .F. sem alterar o
+    // estado da sessão -- fica no default vazio, que é o comportamento
+    // correto pra dado que também nunca teve FILIAL real.
+    RpcSetEnv(aToken[1]:FILIAL)
+
     // Salva unidade e condômino no escopo da sessão
     g_cUniPortal := aToken[1]:UNI_CODIGO
     g_cConPortal := aToken[1]:CON_CODIGO
+    g_cFilialAtiva := aToken[1]:FILIAL
     g_lAutoPortal := .T.
     // COND_NOME vem do LEFT JOIN acima -- fica vazio para tokens gerados
     // antes desta migração (FILIAL=''/NULL, sem COND correspondente).
@@ -129,5 +144,7 @@ User Function GcSairPortal()
     g_cConPortal := ""
     g_cCondNomePortal := ""
     g_lAutoPortal := .F.
+    g_cFilialAtiva := ""
+    RpcSetEnv("      ")
     MsgInfo("Sessão do portal encerrada.", "Portal Condômino")
 Return
