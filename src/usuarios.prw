@@ -5,14 +5,31 @@
 
 /*/{Protheus.doc} GcMenuUsuarios
     Menu de gestão de usuários. Abre submenu com opções: gerar token,
-    revogar token, criar usuário, vincular-me a condomínio, voltar.
+    revogar token, criar usuário, vincular-me a condomínio (só
+    SUPERADMIN), voltar.
+
+    C2 (revisão final): "Vincular-me a Condomínio" ficava disponível pra
+    QUALQUER perfil logado e não checava nada além de "o condomínio está
+    ativo" -- um síndico conseguia se autovincular a qualquer condomínio
+    (inclusive de outro síndico) e, com "Trocar Condomínio", ganhar acesso
+    total de leitura/escrita a dados de um tenant que não é seu. Some do
+    menu pra quem não é SUPERADMIN; GcMenuVincularCondominio também
+    confere de novo (defesa em profundidade, ver seu próprio comentário).
     @type User Function
     @author GesCon
     @since 2026-07-24
 */
 User Function GcMenuUsuarios()
-    Local aMenu := {"Gerar Token", "Revogar Token", "Criar Usuário", "Vincular-me a Condomínio", "Voltar"}
-    Local nOpcao := FWMenuSelect(aMenu, "Usuários")
+    Local lSuperAdmin := (GcPerfilDoLogin(cLoginAtual) == "SUPERADMIN")
+    Local aMenu := {"Gerar Token", "Revogar Token", "Criar Usuário"}
+    Local nOpcao
+
+    If lSuperAdmin
+        AAdd(aMenu, "Vincular-me a Condomínio")
+    EndIf
+    AAdd(aMenu, "Voltar")
+
+    nOpcao := FWMenuSelect(aMenu, "Usuários")
 
     Do Case
         Case nOpcao == 1
@@ -21,7 +38,7 @@ User Function GcMenuUsuarios()
             GcRevogarToken()
         Case nOpcao == 3
             GcCriarUsuario()
-        Case nOpcao == 4
+        Case nOpcao == 4 .And. lSuperAdmin
             GcMenuVincularCondominio()
     EndCase
 Return
@@ -138,23 +155,44 @@ User Function GcRevogarToken()
 Return
 
 /*/{Protheus.doc} GcCriarUsuario
-    Cria novo usuário: Admin (login/senha).
+    Cria novo usuário: Admin (login/senha) ou Síndico.
     Condôminos acessam via token temporário (não possuem login direto).
+
+    I5 (revisão final): a opção "Super Admin" ficava escolhível por
+    QUALQUER usuário logado -- um síndico conseguia criar outro super
+    admin (escalação de privilégio direta). Some da lista pra quem não é
+    SUPERADMIN; GcCriarAdminNovo também confere de novo (defesa em
+    profundidade, ver seu próprio comentário).
     @type User Function
     @author GesCon
     @since 2026-07-24
     @obs Acesso de condôminos — exclusivamente via token — perfil CONDOMINO será implementado no Plano 3
 */
 User Function GcCriarUsuario()
-    Local aTipo := {"Super Admin", "Síndico"}
-    Local nTipo := FWMenuSelect(aTipo, "Tipo de usuário")
+    Local lSuperAdmin := (GcPerfilDoLogin(cLoginAtual) == "SUPERADMIN")
+    Local aTipo := {}
+    Local nTipo
 
-    Do Case
-        Case nTipo == 1
-            GcCriarAdminNovo("SUPERADMIN")
-        Case nTipo == 2
-            GcCriarSindicoNovo()
-    EndCase
+    If lSuperAdmin
+        AAdd(aTipo, "Super Admin")
+    EndIf
+    AAdd(aTipo, "Síndico")
+
+    nTipo := FWMenuSelect(aTipo, "Tipo de usuário")
+
+    If lSuperAdmin
+        Do Case
+            Case nTipo == 1
+                GcCriarAdminNovo("SUPERADMIN")
+            Case nTipo == 2
+                GcCriarSindicoNovo()
+        EndCase
+    Else
+        Do Case
+            Case nTipo == 1
+                GcCriarSindicoNovo()
+        EndCase
+    EndIf
 Return
 
 /*/{Protheus.doc} GcCriarAdminNovo
@@ -169,18 +207,32 @@ Return
     @return lSucesso, logical, .T. se criado com sucesso
 */
 User Function GcCriarAdminNovo(cPerfil)
-    Local cLogin := FWGetText("Login do novo admin:", "admin2")
+    Local cLogin
+    Local cSenha
+
+    If Empty(cPerfil)
+        cPerfil := "SUPERADMIN"
+    EndIf
+
+    // I5 (revisão final), defesa em profundidade: GcCriarUsuario já
+    // esconde a opção "Super Admin" de quem não é SUPERADMIN, mas esta
+    // função também é acessível por chamada direta -- confere de novo
+    // aqui. cLoginAtual vazio (chamada fora de uma sessão logada de
+    // verdade, ex.: bootstrap/teste) passa direto, pois não há sessão
+    // nenhuma se autopromovendo.
+    If cPerfil == "SUPERADMIN" .And. !Empty(cLoginAtual) .And. GcPerfilDoLogin(cLoginAtual) != "SUPERADMIN"
+        MsgAlert("Apenas um super admin pode criar outro super admin.", "Criar Usuário")
+        Return .F.
+    EndIf
+
+    cLogin := FWGetText("Login do novo admin:", "admin2")
     If Empty(cLogin)
         Return .F.
     EndIf
 
-    Local cSenha := FWGetText("Senha:", "", .T.)
+    cSenha := FWGetText("Senha:", "", .T.)
     If Empty(cSenha)
         Return .F.
-    EndIf
-
-    If Empty(cPerfil)
-        cPerfil := "SUPERADMIN"
     EndIf
 
     TCSqlExec("INSERT INTO USR (USR_LOGIN, USR_SENHA, USR_PERFIL) " + ;

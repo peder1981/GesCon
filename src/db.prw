@@ -19,6 +19,34 @@ User Function GcSqlLit(cValor)
     EndIf
 Return StrTran(cRet, "'", "''")
 
+/*/{Protheus.doc} GcPerfilDoLogin
+    Consulta USR_PERFIL do login informado. Extraída da revisão final
+    (achados C2/I4/I5): três telas diferentes (src/usuarios.prw,
+    src/condominios-cadastro.prw) precisavam do mesmo "este login é
+    SUPERADMIN?" pra fechar buracos de autorização (síndico se
+    autovinculando a qualquer condomínio, editando/excluindo condomínio
+    alheio, ou criando outro super admin) -- mesma query que
+    GcSelecionarCondominio (src/login.prw) já fazia inline, centralizada
+    aqui pra não triplicar o SQL.
+    @type Function
+    @author GesCon
+    @since 2026-08-08
+    @param cLogin, character, login a consultar (aceita vazio/Nil -- devolve "")
+    @return cPerfil, character, USR_PERFIL do login (ex: "SUPERADMIN", "SINDICO") ou "" se não encontrado
+*/
+User Function GcPerfilDoLogin(cLogin)
+    Local aPerfil := {}
+    Local cPerfil := ""
+
+    If !Empty(cLogin)
+        aPerfil := TCSqlQuery("SELECT USR_PERFIL FROM USR WHERE USR_LOGIN = '" + ;
+            GcSqlLit(cLogin) + "' AND D_E_L_E_T_ = ' '")
+        If Len(aPerfil) > 0
+            cPerfil := aPerfil[1]:USR_PERFIL
+        EndIf
+    EndIf
+Return cPerfil
+
 /*/{Protheus.doc} GcBootstrapDB
     Aplica o schema no banco corrente. Chamado no arranque, antes de
     qualquer tela.
@@ -128,6 +156,13 @@ Return .T.
     @since 2026-08-08
 */
 User Function GcMigrarParaFilial()
+    // Captura ANTES de qualquer rename: GcPrecisaMigrarFilial() decide
+    // olhando PRAGMA table_info(UNI), e o loop de GcRenomearSeAntiga logo
+    // abaixo renomeia UNI para UNI_OLD -- chamar de novo depois disso
+    // devolveria .F. por engano (a tabela "UNI" não existe mais sob esse
+    // nome), quebrando o gate do UPDATE de USR_PERFIL no fim desta função.
+    Local lPrecisa := GcPrecisaMigrarFilial()
+
     // LANCAMENTOS/RATEIO_DETALHE/RPT_PORTAL_EXTRATOS/RPT_PORTAL_AGENDA
     // entram na lista de "recriar", não na de "só ganhar a coluna": todas
     // têm FOREIGN KEY apontando pra uma das 4 tabelas com UNIQUE composto
@@ -167,6 +202,26 @@ User Function GcMigrarParaFilial()
     // já na composição. DROP INDEX é idempotente por natureza (IF
     // EXISTS), sem precisar do vaivém de _OLD.
     TCSqlExec("DROP INDEX IF EXISTS IDX_DASHBOARD_DATA_PERIODO")
+
+    // C1 (revisão final): USR_PERFIL default é 'ADMIN' em schema.sql, e
+    // toda base instalada antes desta versão (v1.0.10) só tem admins
+    // 'ADMIN', nunca 'SUPERADMIN' -- USR_COND (o vínculo usuário-condomínio
+    // do síndico) é tabela nova e nasce vazia. Sem esta promoção,
+    // GcSelecionarCondominio (src/login.prw) cai no ramo USR_COND para
+    // esse admin, o JOIN não acha nada, devolve 0 condomínios, e o login
+    // trava sem caminho de recuperação (o menu Usuários fica atrás do
+    // próprio login). A spec promete "sobe direto no condomínio nº 1 sem
+    // passo manual" -- isto cumpre essa promessa. Roda só quando uma
+    // migração de verdade está acontecendo (lPrecisa), não em todo boot:
+    // depois da primeira migração, um 'ADMIN' criado deliberadamente (se
+    // algum fluxo futuro vier a criar um) não deve ser promovido à força.
+    // USR só existe se checado antes: um banco pré-v1.0.10 de verdade pode
+    // nem ter chegado a ter tabela de usuários ainda (scripts/
+    // check-migracao-filial.sh simula exatamente isso) -- schema.sql, que
+    // cria USR, só roda DEPOIS desta função, em GcBootstrapDB.
+    If lPrecisa .And. Len(TCSqlQuery("PRAGMA table_info(USR)")) > 0
+        TCSqlExec("UPDATE USR SET USR_PERFIL = 'SUPERADMIN' WHERE USR_PERFIL IS NULL OR USR_PERFIL IN ('', 'ADMIN')")
+    EndIf
 Return
 
 /*/{Protheus.doc} GcAdicionarFilialSeFaltar

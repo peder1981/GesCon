@@ -26,6 +26,26 @@ User Function ContabilTest()
     ConOut("========== TESTES DO SISTEMA CONTÁBIL ==========")
     ConOut("")
 
+    // Task 10 (revisao final, achado C3): schema.sql deixou de semear
+    // PLANO_CONTAS/EXERCICIO/UNI (Task 2 removeu essas sementes por
+    // corrupcao de dados -- nenhum outro teste contava com elas, mas esta
+    // suite contava sim, silenciosamente). Fixtures proprias desta suite,
+    // mesmo padrao de tests/auditoria_test.prw: FILIAL = '      ' (sessao
+    // sem RpcSetEnv, e' essa a filial que GcExercicioAtivo/GcPeriodoFechado/
+    // GcCriarLancamentoManualDireto/GcCalcularRateio filtram via
+    // FWxFilial()), INSERT OR IGNORE pra ser idempotente, teardown no fim
+    // desta funcao. Exercicio '2025-01' e as contas 1000/1100/2000/3000/
+    // 4000/5000/7000 sao as mesmas ja hardcoded nos testes abaixo e em
+    // GcLancarDespesaContabil (4000/1000/5000/3000).
+    TCSqlExec("INSERT OR IGNORE INTO EXERCICIO (FILIAL, EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) VALUES ('      ', '2025-01', '2025-01-01', '2025-01-31', 1, 0, ' ')")
+    TCSqlExec("INSERT OR IGNORE INTO PLANO_CONTAS (FILIAL, PLA_CODIGO, PLA_NOME, PLA_TIPO, PLA_ATIVO, D_E_L_E_T_) VALUES ('      ', '1000', 'Caixa', 'ATIVO', 1, ' ')")
+    TCSqlExec("INSERT OR IGNORE INTO PLANO_CONTAS (FILIAL, PLA_CODIGO, PLA_NOME, PLA_TIPO, PLA_ATIVO, D_E_L_E_T_) VALUES ('      ', '1100', 'Banco', 'ATIVO', 1, ' ')")
+    TCSqlExec("INSERT OR IGNORE INTO PLANO_CONTAS (FILIAL, PLA_CODIGO, PLA_NOME, PLA_TIPO, PLA_ATIVO, D_E_L_E_T_) VALUES ('      ', '2000', 'Fornecedores', 'PASSIVO', 1, ' ')")
+    TCSqlExec("INSERT OR IGNORE INTO PLANO_CONTAS (FILIAL, PLA_CODIGO, PLA_NOME, PLA_TIPO, PLA_ATIVO, D_E_L_E_T_) VALUES ('      ', '3000', 'Receita Condominial', 'RECEITA', 1, ' ')")
+    TCSqlExec("INSERT OR IGNORE INTO PLANO_CONTAS (FILIAL, PLA_CODIGO, PLA_NOME, PLA_TIPO, PLA_ATIVO, D_E_L_E_T_) VALUES ('      ', '4000', 'Despesa Comum', 'DESPESA', 1, ' ')")
+    TCSqlExec("INSERT OR IGNORE INTO PLANO_CONTAS (FILIAL, PLA_CODIGO, PLA_NOME, PLA_TIPO, PLA_ATIVO, D_E_L_E_T_) VALUES ('      ', '5000', 'Contas a Receber', 'ATIVO', 1, ' ')")
+    TCSqlExec("INSERT OR IGNORE INTO PLANO_CONTAS (FILIAL, PLA_CODIGO, PLA_NOME, PLA_TIPO, PLA_ATIVO, D_E_L_E_T_) VALUES ('      ', '7000', 'Despesa Extra', 'DESPESA', 1, ' ')")
+
     TesteGcSqlLit()
     ConOut("")
 
@@ -52,6 +72,23 @@ User Function ContabilTest()
 
     ConOut("========== FIM DOS TESTES ==========")
     ConOut("")
+
+    // Teardown das fixtures semeadas no topo desta funcao -- sem isso
+    // ficam ativas no banco descartavel compartilhado por scripts/test.sh
+    // e vazam pra qualquer suite que rode depois desta (mesmo motivo do
+    // teardown em tests/auditoria_test.prw). Ordem respeita as FOREIGN
+    // KEY: RATEIO_DETALHE -> COB -> LANCAMENTOS -> EXERCICIO -> PLANO_CONTAS.
+    // Todo lançamento criado por esta suite passa por
+    // GcCriarLancamentoManualDireto/GcLancarDespesaContabil, que gravam
+    // LAN_USUARIO = 'TEST_USER' -- marcador exclusivo o bastante pra
+    // identificar exatamente essas linhas sem depender de LAN_DESCR.
+    // UNI (T01/T02) fica de fora do teardown de propósito -- ver comentário
+    // em TesteCalcularRateioFracao.
+    TCSqlExec("DELETE FROM RATEIO_DETALHE WHERE RAT_LANCAMENTO IN (SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_USUARIO = 'TEST_USER' AND FILIAL = '      ')")
+    TCSqlExec("DELETE FROM COB WHERE COB_COMPET = '2025-01' AND COB_UNIDADE IN ('T01', 'T02')")
+    TCSqlExec("DELETE FROM LANCAMENTOS WHERE LAN_USUARIO = 'TEST_USER' AND FILIAL = '      '")
+    TCSqlExec("DELETE FROM EXERCICIO WHERE EXE_CODIGO = '2025-01' AND FILIAL = '      '")
+    TCSqlExec("DELETE FROM PLANO_CONTAS WHERE PLA_CODIGO IN ('1000', '1100', '2000', '3000', '4000', '5000', '7000') AND FILIAL = '      '")
 
 Return
 
@@ -81,35 +118,41 @@ User Function TesteGcSqlLit()
     ConOut("  (vazio) => " + cTeste4)
     ConOut("  (Nil) => " + cTeste5)
 
-    // Validações básicas
-    If cTeste1 = "'João''s Café'"
+    // Validações básicas -- GcSqlLit (src/db.prw) só ESCAPA aspas simples,
+    // não envolve o resultado com aspas (esse é o contrato de GcSqlVal em
+    // src/contabil.prw, uma função diferente -- ver o comentário de
+    // GcSqlVal explicando por que as duas existem). Os valores esperados
+    // abaixo tinham as aspas externas de GcSqlVal por engano: nunca batiam
+    // com o retorno real de GcSqlLit, e a regex antiga de scripts/test.sh
+    // (sem bare "FAIL:") escondia essas 5 falhas há muito tempo.
+    If cTeste1 = "João''s Café"
         ConOut("  PASS: João's Café corretamente escapado")
     Else
-        ConOut("  FAIL: João's Café esperado: 'João''s Café', obtido: " + cTeste1)
+        ConOut("  FAIL: João's Café esperado: João''s Café, obtido: " + cTeste1)
     EndIf
 
-    If cTeste2 = "'O''Brien'"
+    If cTeste2 = "O''Brien"
         ConOut("  PASS: O'Brien corretamente escapado")
     Else
-        ConOut("  FAIL: O'Brien esperado: 'O''Brien', obtido: " + cTeste2)
+        ConOut("  FAIL: O'Brien esperado: O''Brien, obtido: " + cTeste2)
     EndIf
 
-    If cTeste3 = "'simples'"
+    If cTeste3 = "simples"
         ConOut("  PASS: simples corretamente envolvido")
     Else
-        ConOut("  FAIL: simples esperado: 'simples', obtido: " + cTeste3)
+        ConOut("  FAIL: simples esperado: simples, obtido: " + cTeste3)
     EndIf
 
-    If cTeste4 = "''"
+    If cTeste4 = ""
         ConOut("  PASS: vazio corretamente envolvido com quotes")
     Else
-        ConOut("  FAIL: vazio esperado: '', obtido: " + cTeste4)
+        ConOut("  FAIL: vazio esperado: (vazio), obtido: " + cTeste4)
     EndIf
 
-    If cTeste5 = "''"
+    If cTeste5 = ""
         ConOut("  PASS: Nil convertido para vazio com quotes")
     Else
-        ConOut("  FAIL: Nil esperado: '', obtido: " + cTeste5)
+        ConOut("  FAIL: Nil esperado: (vazio), obtido: " + cTeste5)
     EndIf
 
 Return
@@ -394,10 +437,14 @@ User Function TesteCalcularRateioFracao()
 
     ConOut("TesteCalcularRateioFracao")
 
-    // Insere 2 unidades de teste com frações conhecidas
-    // (podem haver duplicatas de execuções anteriores, o que é aceitável)
-    TCSqlExec("INSERT INTO UNI (UNI_CODIGO, UNI_FRACAO) VALUES ('T01', 0.6)")
-    TCSqlExec("INSERT INTO UNI (UNI_CODIGO, UNI_FRACAO) VALUES ('T02', 0.4)")
+    // Insere 2 unidades de teste com frações conhecidas, na mesma FILIAL
+    // que GcCalcularRateio filtra (FWxFilial('UNI') sem RpcSetEnv = 6
+    // espaços) -- sem isso a query de GcCalcularRateio não encontra estas
+    // unidades e o teste falha com "No units found for repartition"
+    // (podem haver duplicatas de execuções anteriores, o que é aceitável,
+    // por isso INSERT OR IGNORE).
+    TCSqlExec("INSERT OR IGNORE INTO UNI (FILIAL, UNI_CODIGO, UNI_FRACAO, D_E_L_E_T_) VALUES ('      ', 'T01', 0.6, ' ')")
+    TCSqlExec("INSERT OR IGNORE INTO UNI (FILIAL, UNI_CODIGO, UNI_FRACAO, D_E_L_E_T_) VALUES ('      ', 'T02', 0.4, ' ')")
 
     ConOut("  Unidades criadas/existentes: T01 (0.6), T02 (0.4)")
 

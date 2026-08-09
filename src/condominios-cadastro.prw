@@ -4,16 +4,32 @@
 #include "totvs.ch"
 
 /*/{Protheus.doc} GcCadastroCondominios
-    Abre o cadastro de condomínios (browse CRUD sobre COND). Disponível
-    tanto pro super admin quanto pro síndico — quem cadastra um
-    condomínio novo ainda não fica vinculado a ele automaticamente por
-    este browse puro; ver GcVincularCondominioAoCriador.
+    Abre o cadastro de condomínios (browse CRUD sobre COND) -- só para
+    SUPERADMIN.
+
+    I4 (revisão final): COND não tem FILIAL (por design -- é ELA que
+    define as filiais das outras tabelas), então o auto-filtro por linha
+    do engine não se aplica aqui. Um FWMBrowse cru sobre COND, disponível
+    pra qualquer síndico, deixava QUALQUER síndico Alterar/Excluir
+    QUALQUER condomínio -- inclusive desativar o condomínio de outro
+    síndico (COND_ATIVO=0, tranca o dono de fora) ou trocar o
+    COND_FILIAL alheio (órfã as 22 tabelas daquele tenant). A spec só
+    previa síndico CRIANDO condomínio, nunca editando/excluindo um que
+    não é seu -- e este browse não distinguia Incluir de
+    Alterar/Excluir. Restringe a tela inteira a SUPERADMIN.
     @type Function
     @author GesCon
     @since 2026-08-08
 */
 User Function GcCadastroCondominios()
-    Local oBrowse := FWMBrowse():New()
+    Local oBrowse
+
+    If GcPerfilDoLogin(cLoginAtual) != "SUPERADMIN"
+        MsgAlert("Apenas o super admin pode gerenciar o cadastro de condomínios.", "Condomínios")
+        Return
+    EndIf
+
+    oBrowse := FWMBrowse():New()
     oBrowse:SetAlias("COND")
     oBrowse:SetDescription("Condomínios")
     oBrowse:Activate()
@@ -48,16 +64,28 @@ Return
     GcCadastroCondominios: um síndico que acabou de cadastrar um
     condomínio novo pelo browse cru ainda precisa se vincular a ele
     manualmente.
+    C2 (revisão final), defesa em profundidade: GcMenuUsuarios já esconde
+    esta opção de quem não é SUPERADMIN, mas esta função confere de novo
+    -- sem isto, qualquer síndico conseguia se autovincular (e ganhar
+    acesso total de leitura/escrita, via "Trocar Condomínio") a
+    QUALQUER condomínio ativo, inclusive de outro síndico.
     @type Function
     @author GesCon
     @since 2026-08-08
 */
 User Function GcMenuVincularCondominio()
-    Local aCond := TCSqlQuery("SELECT COND_FILIAL, COND_NOME FROM COND WHERE COND_ATIVO = 1 AND D_E_L_E_T_ = ' ' ORDER BY COND_NOME")
+    Local aCond
     Local cLista := ""
     Local nJ
     Local cSel
     Local nIdx
+
+    If GcPerfilDoLogin(cLoginAtual) != "SUPERADMIN"
+        MsgAlert("Apenas o super admin pode se vincular livremente a qualquer condomínio.", "Vincular Condomínio")
+        Return
+    EndIf
+
+    aCond := TCSqlQuery("SELECT COND_FILIAL, COND_NOME FROM COND WHERE COND_ATIVO = 1 AND D_E_L_E_T_ = ' ' ORDER BY COND_NOME")
 
     If Len(aCond) == 0
         MsgAlert("Nenhum condomínio cadastrado ainda.", "Vincular Condomínio")

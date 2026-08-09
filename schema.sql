@@ -44,12 +44,17 @@ CREATE TABLE IF NOT EXISTS UNI (
 -- combo/lookup), então valida na borda do banco em vez de na UI. Rejeita
 -- código que não existe (ou está excluído) em CON, tanto no Incluir quanto
 -- no Alterar da tela de Unidades.
+-- I6 (revisão final): a validação original checava só CON_CODIGO, sem
+-- FILIAL -- uma UNI do condomínio A conseguia vincular a um CON que só
+-- existe no condomínio B (o NOT EXISTS achava a linha de qualquer
+-- filial). A spec ("Testes Esperados") exige que esse vínculo cruzado
+-- entre tenants seja rejeitado -- ver scripts/check-triggers.sh.
 CREATE TRIGGER IF NOT EXISTS TRG_UNI_CONDOMINO_INS
 BEFORE INSERT ON UNI
 WHEN NEW.UNI_CONDOMINO IS NOT NULL AND TRIM(NEW.UNI_CONDOMINO) <> ''
 BEGIN
     SELECT RAISE(ABORT, 'Condômino inexistente: cadastre o condômino antes de vincular a unidade.')
-    WHERE NOT EXISTS (SELECT 1 FROM CON WHERE CON_CODIGO = NEW.UNI_CONDOMINO AND D_E_L_E_T_ = ' ');
+    WHERE NOT EXISTS (SELECT 1 FROM CON WHERE CON_CODIGO = NEW.UNI_CONDOMINO AND FILIAL = NEW.FILIAL AND D_E_L_E_T_ = ' ');
 END;
 
 CREATE TRIGGER IF NOT EXISTS TRG_UNI_CONDOMINO_UPD
@@ -57,7 +62,7 @@ BEFORE UPDATE OF UNI_CONDOMINO ON UNI
 WHEN NEW.UNI_CONDOMINO IS NOT NULL AND TRIM(NEW.UNI_CONDOMINO) <> ''
 BEGIN
     SELECT RAISE(ABORT, 'Condômino inexistente: cadastre o condômino antes de vincular a unidade.')
-    WHERE NOT EXISTS (SELECT 1 FROM CON WHERE CON_CODIGO = NEW.UNI_CONDOMINO AND D_E_L_E_T_ = ' ');
+    WHERE NOT EXISTS (SELECT 1 FROM CON WHERE CON_CODIGO = NEW.UNI_CONDOMINO AND FILIAL = NEW.FILIAL AND D_E_L_E_T_ = ' ');
 END;
 
 CREATE TABLE IF NOT EXISTS DES (

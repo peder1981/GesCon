@@ -39,12 +39,20 @@ esperar_ok() {
 esperar_erro "UNI com condômino inexistente" \
     "INSERT INTO UNI (UNI_CODIGO, UNI_FRACAO, UNI_CONDOMINO, FILIAL) VALUES ('999', 1.0, 'C999', '010101')"
 
-sqlite3 "$db" "INSERT INTO CON (CON_CODIGO, CON_NOME) VALUES ('C001', 'Fulano')"
+sqlite3 "$db" "INSERT INTO CON (CON_CODIGO, CON_NOME, FILIAL) VALUES ('C001', 'Fulano', '010101')"
 esperar_ok "UNI com condômino existente" \
     "INSERT INTO UNI (UNI_CODIGO, UNI_FRACAO, UNI_CONDOMINO, FILIAL) VALUES ('999', 1.0, 'C001', '010101')"
 
 esperar_erro "UPDATE de UNI para condômino inexistente" \
     "UPDATE UNI SET UNI_CONDOMINO = 'C999' WHERE UNI_CODIGO = '999'"
+
+# I6 (revisão final): a validação original checava só CON_CODIGO, sem
+# FILIAL -- uma UNI da filial 010101 conseguia vincular a um CON que só
+# existe na filial 020202 (tenant diferente). C002 abaixo só existe em
+# 020202; a UNI de teste é inserida em 010101.
+sqlite3 "$db" "INSERT INTO CON (CON_CODIGO, CON_NOME, FILIAL) VALUES ('C002', 'Beltrano', '020202')"
+esperar_erro "UNI com condômino de outra filial (cross-tenant)" \
+    "INSERT INTO UNI (UNI_CODIGO, UNI_FRACAO, UNI_CONDOMINO, FILIAL) VALUES ('998', 1.0, 'C002', '010101')"
 
 sqlite3 "$db" "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, FILIAL) VALUES ('999', '2026-01', 500.0, '2026-01-10', '010101')"
 esperar_erro "alterar COB_VALOR depois de criado" \

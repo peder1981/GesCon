@@ -50,9 +50,9 @@ for f in tests/*_test.prw; do
         continue
     fi
 
-    if grep -qE 'FALHA|\[FAIL\]|^Error:|Error: unknown' "$saida"; then
+    if grep -qE 'FALHA|FAIL|^Error:|Error: unknown' "$saida"; then
         printf '  FALHA %-28s\n' "$nome"
-        grep -nE 'FALHA|\[FAIL\]|^Error:' "$saida" | sed 's/^/        /' | head -10
+        grep -nE 'FALHA|FAIL|^Error:' "$saida" | sed 's/^/        /' | head -10
         falhas=$((falhas + 1))
         continue
     fi
