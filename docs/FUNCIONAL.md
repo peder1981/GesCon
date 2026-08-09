@@ -9,8 +9,11 @@ Para como o sistema é construído por dentro, ver
 GesCon é um sistema de gestão condominial: cadastro de unidades e
 condôminos, lançamento de despesas, rateio mensal por fração ideal,
 cobrança e registro de pagamento, mala direta por e-mail, relatórios,
-e login de administrador. Um condomínio por instância — se precisar
-administrar mais de um, sobe-se outra instância do sistema.
+e login de administrador. Suporta múltiplos condomínios numa mesma
+instância — um banco único com dados isolados por filial (`FILIAL`).
+Usuários do tipo `SUPERADMIN` acessam todos os condomínios; do tipo
+`SINDICO` acessam apenas os vinculados. Menu fornece "Trocar Condomínio"
+para trocar entre os disponíveis no contexto do usuário.
 
 ## Login
 
@@ -153,7 +156,6 @@ uma abertura e outra.
   (menu Usuários → Criar Usuário → Admin, tabela USR sem limite de linha);
   o que fica pro próximo ciclo é controle granular por admin (ex.: um
   síndico sem acesso a Contabilidade).
-- **Multi-condomínio** — o sistema administra um condomínio por instância.
 
 ## Limitações conhecidas (v1)
 
@@ -171,5 +173,3 @@ uma abertura e outra.
   um relatório (o conteúdo é recalculado do zero na próxima abertura,
   então a edição não sobrevive), mas nada impede clicar. Mesma
   limitação técnica da tela de Cobranças.
-- Multi-condomínio e permissões granulares ficam pro próximo ciclo — ver
-  "Limitações conhecidas (Plano 3+)" acima.

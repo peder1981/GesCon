@@ -93,6 +93,12 @@ if ! python3 scripts/alcance.py; then
     falhas=$((falhas + 1))
 fi
 
+# Completude do filtro FILIAL: toda tabela por-condominio numa query deve
+# ter FILIAL mencionado no arquivo.
+if ! bash scripts/check-filial.sh; then
+    falhas=$((falhas + 1))
+fi
+
 echo
 if [ "$falhas" -eq 0 ]; then
     echo "check: $total fontes, 0 erro"
