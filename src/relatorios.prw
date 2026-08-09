@@ -26,11 +26,11 @@
 */
 User Function GcBalanceteMensal(cCompetencia)
     Local aReceitas := TCSqlQuery("SELECT COALESCE(SUM(COB_VALOR),0) AS TOTAL FROM COB WHERE COB_COMPET = '" + ;
-        GcSqlLit(cCompetencia) + "' AND COB_STATUS = 'pago' AND D_E_L_E_T_ = ' '")
+        GcSqlLit(cCompetencia) + "' AND COB_STATUS = 'pago' AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('COB')) + "'")
     Local nReceitas := Val(aReceitas[1]:TOTAL)
 
     Local aDespesas := TCSqlQuery("SELECT COALESCE(SUM(DES_VALOR),0) AS TOTAL FROM DES WHERE DES_COMPET = '" + ;
-        GcSqlLit(cCompetencia) + "' AND D_E_L_E_T_ = ' '")
+        GcSqlLit(cCompetencia) + "' AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('DES')) + "'")
     Local nDespesas := Val(aDespesas[1]:TOTAL)
 
     Local nSaldo := nReceitas - nDespesas
@@ -54,8 +54,8 @@ Return nSaldo
 */
 User Function GcAtualizarInadimplentes()
     TCSqlExec("UPDATE COB SET COB_STATUS = 'atrasado' " + ;
-        "WHERE COB_STATUS = 'pendente' AND COB_VENCTO < date('now') AND D_E_L_E_T_ = ' '")
-    Local aQtd := TCSqlQuery("SELECT COUNT(*) AS QTD FROM COB WHERE COB_STATUS = 'atrasado' AND D_E_L_E_T_ = ' '")
+        "WHERE COB_STATUS = 'pendente' AND COB_VENCTO < date('now') AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('COB')) + "'")
+    Local aQtd := TCSqlQuery("SELECT COUNT(*) AS QTD FROM COB WHERE COB_STATUS = 'atrasado' AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('COB')) + "'")
 Return Val(aQtd[1]:QTD)
 
 /*/{Protheus.doc} GcInadimplenciaCalc
@@ -70,13 +70,14 @@ Return Val(aQtd[1]:QTD)
 User Function GcInadimplenciaCalc()
     GcAtualizarInadimplentes()
 
-    TCSqlExec("DELETE FROM RPT_INADIM")
-    TCSqlExec("INSERT INTO RPT_INADIM (RIN_UNIDADE, RIN_COMPET, RIN_VALOR, RIN_VENCTO, RIN_ATRASO) " + ;
+    TCSqlExec("DELETE FROM RPT_INADIM WHERE FILIAL = '" + GcSqlLit(FWxFilial('RPT_INADIM')) + "'")
+    TCSqlExec("INSERT INTO RPT_INADIM (RIN_UNIDADE, RIN_COMPET, RIN_VALOR, RIN_VENCTO, RIN_ATRASO, FILIAL) " + ;
         "SELECT COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, " + ;
-        "CAST(julianday('now') - julianday(COB_VENCTO) AS INTEGER) " + ;
-        "FROM COB WHERE COB_STATUS = 'atrasado' AND D_E_L_E_T_ = ' ' " + ;
+        "CAST(julianday('now') - julianday(COB_VENCTO) AS INTEGER), " + ;
+        "'" + GcSqlLit(FWxFilial('RPT_INADIM')) + "' " + ;
+        "FROM COB WHERE COB_STATUS = 'atrasado' AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('COB')) + "' " + ;
         "ORDER BY COB_VENCTO")
-    Local aQtd := TCSqlQuery("SELECT COUNT(*) AS QTD FROM RPT_INADIM")
+    Local aQtd := TCSqlQuery("SELECT COUNT(*) AS QTD FROM RPT_INADIM WHERE FILIAL = '" + GcSqlLit(FWxFilial('RPT_INADIM')) + "'")
 Return Val(aQtd[1]:QTD)
 
 /*/{Protheus.doc} GcInadimplencia
@@ -103,12 +104,13 @@ Return
     @return nQtd, numeric, quantidade de linhas geradas
 */
 User Function GcExtratoUnidadeCalc(cUnidade)
-    TCSqlExec("DELETE FROM RPT_EXTRATO")
-    TCSqlExec("INSERT INTO RPT_EXTRATO (REX_COMPET, REX_VALOR, REX_VENCTO, REX_STATUS, REX_DTPAG) " + ;
-        "SELECT COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, COB_DTPAG " + ;
-        "FROM COB WHERE COB_UNIDADE = '" + GcSqlLit(cUnidade) + "' AND D_E_L_E_T_ = ' ' " + ;
+    TCSqlExec("DELETE FROM RPT_EXTRATO WHERE FILIAL = '" + GcSqlLit(FWxFilial('RPT_EXTRATO')) + "'")
+    TCSqlExec("INSERT INTO RPT_EXTRATO (REX_COMPET, REX_VALOR, REX_VENCTO, REX_STATUS, REX_DTPAG, FILIAL) " + ;
+        "SELECT COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, COB_DTPAG, " + ;
+        "'" + GcSqlLit(FWxFilial('RPT_EXTRATO')) + "' " + ;
+        "FROM COB WHERE COB_UNIDADE = '" + GcSqlLit(cUnidade) + "' AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('COB')) + "' " + ;
         "ORDER BY COB_COMPET")
-    Local aQtd := TCSqlQuery("SELECT COUNT(*) AS QTD FROM RPT_EXTRATO")
+    Local aQtd := TCSqlQuery("SELECT COUNT(*) AS QTD FROM RPT_EXTRATO WHERE FILIAL = '" + GcSqlLit(FWxFilial('RPT_EXTRATO')) + "'")
 Return Val(aQtd[1]:QTD)
 
 /*/{Protheus.doc} GcExtratoUnidade
@@ -137,17 +139,18 @@ Return
     @return nQtd, numeric, quantidade de categorias geradas
 */
 User Function GcDespesasCategoriaCalc(cCompetencia)
-    Local cWhere := "D_E_L_E_T_ = ' '"
+    Local cWhere := "D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('DES')) + "'"
     If !Empty(cCompetencia)
         cWhere += " AND DES_COMPET = '" + GcSqlLit(cCompetencia) + "'"
     EndIf
 
-    TCSqlExec("DELETE FROM RPT_DESCAT")
-    TCSqlExec("INSERT INTO RPT_DESCAT (RDC_CATEG, RDC_TOTAL) " + ;
-        "SELECT COALESCE(NULLIF(DES_CATEG,''),'(sem categoria)'), SUM(DES_VALOR) " + ;
+    TCSqlExec("DELETE FROM RPT_DESCAT WHERE FILIAL = '" + GcSqlLit(FWxFilial('RPT_DESCAT')) + "'")
+    TCSqlExec("INSERT INTO RPT_DESCAT (RDC_CATEG, RDC_TOTAL, FILIAL) " + ;
+        "SELECT COALESCE(NULLIF(DES_CATEG,''),'(sem categoria)'), SUM(DES_VALOR), " + ;
+        "'" + GcSqlLit(FWxFilial('RPT_DESCAT')) + "' " + ;
         "FROM DES WHERE " + cWhere + " GROUP BY COALESCE(NULLIF(DES_CATEG,''),'(sem categoria)') " + ;
         "ORDER BY SUM(DES_VALOR) DESC")
-    Local aQtd := TCSqlQuery("SELECT COUNT(*) AS QTD FROM RPT_DESCAT")
+    Local aQtd := TCSqlQuery("SELECT COUNT(*) AS QTD FROM RPT_DESCAT WHERE FILIAL = '" + GcSqlLit(FWxFilial('RPT_DESCAT')) + "'")
 Return Val(aQtd[1]:QTD)
 
 /*/{Protheus.doc} GcDespesasCategoria

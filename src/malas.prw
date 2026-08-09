@@ -27,9 +27,9 @@ User Function GcMalaDireta(cCompetencia)
     Local aDest := TCSqlQuery("SELECT COB.COB_UNIDADE AS UNIDADE, COB.COB_VALOR AS VALOR, " + ;
         "COB.COB_VENCTO AS VENCTO, COB.COB_STATUS AS STATUS, CON.CON_NOME AS NOME, CON.CON_EMAIL AS EMAIL " + ;
         "FROM COB " + ;
-        "JOIN UNI ON UNI.UNI_CODIGO = COB.COB_UNIDADE AND UNI.D_E_L_E_T_ = ' ' " + ;
-        "JOIN CON ON CON.CON_CODIGO = UNI.UNI_CONDOMINO AND CON.D_E_L_E_T_ = ' ' " + ;
-        "WHERE COB.COB_COMPET = '" + GcSqlLit(cCompetencia) + "' AND COB.COB_STATUS <> 'pago' AND COB.D_E_L_E_T_ = ' '")
+        "JOIN UNI ON UNI.UNI_CODIGO = COB.COB_UNIDADE AND UNI.D_E_L_E_T_ = ' ' AND UNI.FILIAL = '" + GcSqlLit(FWxFilial('UNI')) + "' " + ;
+        "JOIN CON ON CON.CON_CODIGO = UNI.UNI_CONDOMINO AND CON.D_E_L_E_T_ = ' ' AND CON.FILIAL = '" + GcSqlLit(FWxFilial('CON')) + "' " + ;
+        "WHERE COB.COB_COMPET = '" + GcSqlLit(cCompetencia) + "' AND COB.COB_STATUS <> 'pago' AND COB.D_E_L_E_T_ = ' ' AND COB.FILIAL = '" + GcSqlLit(FWxFilial('COB')) + "'")
 
     Local nEnviados := 0
     Local i

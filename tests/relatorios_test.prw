@@ -16,18 +16,22 @@ User Function RelatoriosTest()
     TCSqlExec("DELETE FROM COB WHERE COB_UNIDADE = 'RPT01'")
     TCSqlExec("DELETE FROM DES WHERE DES_COMPET = '2095-06'")
 
+    // FILIAL estampado com 6 espaços: esta suite nunca chama RpcSetEnv,
+    // entao a sessao roda com a filial default (ver FWxFilial), e
+    // relatorios.prw filtra tudo por essa mesma filial. Sem isso, os
+    // fixtures ficariam com FILIAL NULL e nenhum Calc encontraria nada.
     // Cenário: uma unidade com 1 cobrança paga e 1 vencida/não paga
-    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, COB_DTPAG) VALUES " + ;
-        "('RPT01', '2095-05', 500, '2095-05-10', 'pago', '2095-05-05')")
-    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS) VALUES " + ;
-        "('RPT01', '2095-06', 600, '2020-01-10', 'pendente')") // vencimento no passado -> inadimplente
+    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, COB_DTPAG, FILIAL) VALUES " + ;
+        "('RPT01', '2095-05', 500, '2095-05-10', 'pago', '2095-05-05', '      ')")
+    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, FILIAL) VALUES " + ;
+        "('RPT01', '2095-06', 600, '2020-01-10', 'pendente', '      ')") // vencimento no passado -> inadimplente
 
-    TCSqlExec("INSERT INTO DES (DES_DESCR, DES_CATEG, DES_VALOR, DES_COMPET) VALUES " + ;
-        "('Teste A', 'Manutenção', 300, '2095-06')")
-    TCSqlExec("INSERT INTO DES (DES_DESCR, DES_CATEG, DES_VALOR, DES_COMPET) VALUES " + ;
-        "('Teste B', 'Manutenção', 200, '2095-06')")
-    TCSqlExec("INSERT INTO DES (DES_DESCR, DES_CATEG, DES_VALOR, DES_COMPET) VALUES " + ;
-        "('Teste C', 'Limpeza', 100, '2095-06')")
+    TCSqlExec("INSERT INTO DES (DES_DESCR, DES_CATEG, DES_VALOR, DES_COMPET, FILIAL) VALUES " + ;
+        "('Teste A', 'Manutenção', 300, '2095-06', '      ')")
+    TCSqlExec("INSERT INTO DES (DES_DESCR, DES_CATEG, DES_VALOR, DES_COMPET, FILIAL) VALUES " + ;
+        "('Teste B', 'Manutenção', 200, '2095-06', '      ')")
+    TCSqlExec("INSERT INTO DES (DES_DESCR, DES_CATEG, DES_VALOR, DES_COMPET, FILIAL) VALUES " + ;
+        "('Teste C', 'Limpeza', 100, '2095-06', '      ')")
 
     // Balancete de 2095-05: receita 500 (pago), despesa 0 -> saldo 500
     Local nSaldo := GcBalanceteMensal("2095-05")
