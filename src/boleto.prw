@@ -374,7 +374,7 @@ User Function GcBoletoConfigurar()
     // Pre-carrega a configuracao atual, se houver: a tela edita o que existe
     // em vez de comecar em branco toda vez.
     aCfg := TCSqlQuery("SELECT CFG_BANCO, CFG_AGENCIA, CFG_CONTA, CFG_COBRT, CFG_CARTEIRA " + ;
-        "FROM CFG_BOLETO WHERE D_E_L_E_T_ = ' '")
+        "FROM CFG_BOLETO WHERE D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('CFG_BOLETO')) + "'")
     If Len(aCfg) > 0
         cBanco    := AllTrim(aCfg[1]["CFG_BANCO"])
         cAgencia  := AllTrim(aCfg[1]["CFG_AGENCIA"])
@@ -421,10 +421,10 @@ User Function GcBoletoConfigurar()
     EndIf
 
     // Snapshot: uma configuracao por vez, entao limpa tudo antes de gravar
-    TCSqlExec("DELETE FROM CFG_BOLETO WHERE D_E_L_E_T_ = ' '")
-    TCSqlExec("INSERT INTO CFG_BOLETO (CFG_BANCO, CFG_AGENCIA, CFG_CONTA, CFG_COBRT, CFG_CARTEIRA) VALUES (" + ;
+    TCSqlExec("DELETE FROM CFG_BOLETO WHERE D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('CFG_BOLETO')) + "'")
+    TCSqlExec("INSERT INTO CFG_BOLETO (CFG_BANCO, CFG_AGENCIA, CFG_CONTA, CFG_COBRT, CFG_CARTEIRA, FILIAL) VALUES (" + ;
         "'" + GcSqlLit(cBanco) + "', '" + GcSqlLit(cAgencia) + "', '" + GcSqlLit(cConta) + "', " + ;
-        "'" + GcSqlLit(cCobrta) + "', '" + GcSqlLit(cCarteira) + "')")
+        "'" + GcSqlLit(cCobrta) + "', '" + GcSqlLit(cCarteira) + "', '" + GcSqlLit(FWxFilial('CFG_BOLETO')) + "')")
 
     MsgInfo("Configuração de boleto salva.", "Configuração de Boleto")
 Return .T.
@@ -440,7 +440,7 @@ Return .T.
 */
 User Function GcBoletoGera(nRecno)
     Local aCob := TCSqlQuery("SELECT COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS " + ;
-        "FROM COB WHERE R_E_C_N_O_ = " + StrZero(nRecno, 10) + " AND D_E_L_E_T_ = ' '")
+        "FROM COB WHERE R_E_C_N_O_ = " + StrZero(nRecno, 10) + " AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('COB')) + "'")
 
     If Len(aCob) == 0
         MsgStop("Cobrança não encontrada.", "Gerar Boleto")
@@ -456,7 +456,7 @@ User Function GcBoletoGera(nRecno)
     Local cNumeroDoc := StrZero(nRecno, 8)
 
     Local aCfg := TCSqlQuery("SELECT CFG_BANCO, CFG_AGENCIA, CFG_CONTA, CFG_COBRT, CFG_CARTEIRA " + ;
-        "FROM CFG_BOLETO WHERE D_E_L_E_T_ = ' '")
+        "FROM CFG_BOLETO WHERE D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('CFG_BOLETO')) + "'")
 
     If Len(aCfg) == 0
         MsgStop("Configuração de boleto não encontrada. Use Boletos > Configurar.", "Gerar Boleto")

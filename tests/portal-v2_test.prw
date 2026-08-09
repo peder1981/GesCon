@@ -166,36 +166,44 @@ User Function TestGcGerarPortalExtratos()
     cSql := "DELETE FROM COB WHERE COB_COMPET = '" + cCompet + "'"
     TCSqlExec(cSql)
 
+    // RPT_PORTAL_EXTRATOS tem FOREIGN KEY(REX_UNIDADE, FILIAL) -> UNI(UNI_CODIGO, FILIAL).
+    // Agora que o INSERT abaixo estampa FILIAL = '      ' (default sem RpcSetEnv), a FK
+    // composta passa a ser checada de verdade -- sem estas unidades, o INSERT quebrava
+    // com "FOREIGN KEY constraint failed".
+    TCSqlExec("INSERT OR IGNORE INTO UNI (UNI_CODIGO, UNI_FRACAO, D_E_L_E_T_, FILIAL) VALUES ('101', 0.1, ' ', '      ')")
+    TCSqlExec("INSERT OR IGNORE INTO UNI (UNI_CODIGO, UNI_FRACAO, D_E_L_E_T_, FILIAL) VALUES ('102', 0.1, ' ', '      ')")
+    TCSqlExec("INSERT OR IGNORE INTO UNI (UNI_CODIGO, UNI_FRACAO, D_E_L_E_T_, FILIAL) VALUES ('103', 0.1, ' ', '      ')")
+
     // Step 2: Insere COB records de teste
     // Record 1: Unidade 101, pendente, sem data de pagamento
-    cSql := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_) VALUES ("
+    cSql := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_, FILIAL) VALUES ("
     cSql += "'101', "
     cSql += "'" + cCompet + "', "
     cSql += "1000.00, "
     cSql += "'20250215', "
     cSql += "'PENDENTE', "
-    cSql += "' ')"
+    cSql += "' ', '      ')"
     TCSqlExec(cSql)
 
     // Record 2: Unidade 102, pendente
-    cSql := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_) VALUES ("
+    cSql := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_, FILIAL) VALUES ("
     cSql += "'102', "
     cSql += "'" + cCompet + "', "
     cSql += "1500.00, "
     cSql += "'20250215', "
     cSql += "'PENDENTE', "
-    cSql += "' ')"
+    cSql += "' ', '      ')"
     TCSqlExec(cSql)
 
     // Record 3: Unidade 103, pago (com status PAGO)
-    cSql := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, COB_DTPAG, D_E_L_E_T_) VALUES ("
+    cSql := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, COB_DTPAG, D_E_L_E_T_, FILIAL) VALUES ("
     cSql += "'103', "
     cSql += "'" + cCompet + "', "
     cSql += "2000.00, "
     cSql += "'20250215', "
     cSql += "'PAGO', "
     cSql += "'20250210', "
-    cSql += "' ')"
+    cSql += "' ', '      ')"
     TCSqlExec(cSql)
 
     // Step 3: Chama função
@@ -273,6 +281,13 @@ User Function TestGcGerarPortalAgenda()
     cSql := "DELETE FROM RPT_PORTAL_AGENDA WHERE REA_UNIDADE IN ('101', '102', '103')"
     TCSqlExec(cSql)
 
+    // RPT_PORTAL_AGENDA tem FOREIGN KEY(REA_UNIDADE, FILIAL) -> UNI(UNI_CODIGO, FILIAL).
+    // Mesma razao de TestGcGerarPortalExtratos: o INSERT abaixo estampa
+    // FILIAL = '      ', entao a FK composta precisa destas unidades.
+    TCSqlExec("INSERT OR IGNORE INTO UNI (UNI_CODIGO, UNI_FRACAO, D_E_L_E_T_, FILIAL) VALUES ('101', 0.1, ' ', '      ')")
+    TCSqlExec("INSERT OR IGNORE INTO UNI (UNI_CODIGO, UNI_FRACAO, D_E_L_E_T_, FILIAL) VALUES ('102', 0.1, ' ', '      ')")
+    TCSqlExec("INSERT OR IGNORE INTO UNI (UNI_CODIGO, UNI_FRACAO, D_E_L_E_T_, FILIAL) VALUES ('103', 0.1, ' ', '      ')")
+
     // Gera os 3 primeiros meses (2025-01, 2025-02, 2025-03)
     // AAdd, nao aMeses[n] := -- atribuir por indice num array vazio nao
     // cresce o array, e Len(aMeses) ficava 1: o fixture so criava cobrancas
@@ -291,31 +306,31 @@ User Function TestGcGerarPortalAgenda()
 
         // Insere COB records de teste
         // Mês 1: 3 registros (unidades 101, 102, 103)
-        cSql := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_) VALUES ("
+        cSql := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_, FILIAL) VALUES ("
         cSql += "'101', "
         cSql += "'" + cMesAtual + "', "
         cSql += "1000.00, "
         cSql += "'20250215', "  // Usar data consistente para os testes (mês 2)
         cSql += "'PENDENTE', "
-        cSql += "' ')"
+        cSql += "' ', '      ')"
         TCSqlExec(cSql)
 
-        cSql := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_) VALUES ("
+        cSql := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_, FILIAL) VALUES ("
         cSql += "'102', "
         cSql += "'" + cMesAtual + "', "
         cSql += "1500.00, "
         cSql += "'20250215', "
         cSql += "'PENDENTE', "
-        cSql += "' ')"
+        cSql += "' ', '      ')"
         TCSqlExec(cSql)
 
-        cSql := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_) VALUES ("
+        cSql := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_, FILIAL) VALUES ("
         cSql += "'103', "
         cSql += "'" + cMesAtual + "', "
         cSql += "2000.00, "
         cSql += "'20250215', "
         cSql += "'PENDENTE', "
-        cSql += "' ')"
+        cSql += "' ', '      ')"
         TCSqlExec(cSql)
     Next i
 
@@ -392,6 +407,13 @@ User Function TestPeriodClosureGeneratesSnapshots()
     TCSqlExec(cSql)
     cSql := "DELETE FROM RPT_PORTAL_AGENDA WHERE REA_COMPETENCIA IN ('" + cCompet + "', '" + cProxCompet + "')"
     TCSqlExec(cSql)
+
+    // RPT_PORTAL_EXTRATOS/RPT_PORTAL_AGENDA tem FOREIGN KEY(unidade, FILIAL) ->
+    // UNI(UNI_CODIGO, FILIAL). GcFecharPeriodo (Step 6 abaixo) chama
+    // GcGerarPortalExtratos/GcGerarPortalAgenda, que agora estampam
+    // FILIAL = '      ' -- garante as unidades usadas pelas COB deste teste.
+    TCSqlExec("INSERT OR IGNORE INTO UNI (UNI_CODIGO, UNI_FRACAO, D_E_L_E_T_, FILIAL) VALUES ('101', 0.1, ' ', '      ')")
+    TCSqlExec("INSERT OR IGNORE INTO UNI (UNI_CODIGO, UNI_FRACAO, D_E_L_E_T_, FILIAL) VALUES ('102', 0.1, ' ', '      ')")
     cSql := "DELETE FROM RPT_BALANCETE WHERE RPT_EXERCICIO IN ('" + cCompet + "', '" + cProxCompet + "')"
     TCSqlExec(cSql)
     cSql := "DELETE FROM COB WHERE COB_COMPET = '" + cCompet + "'"
@@ -474,22 +496,22 @@ User Function TestPeriodClosureGeneratesSnapshots()
     // (GcGerarPortalExtratos/GcGerarPortalAgenda, chamados por
     // GcFecharPeriodo, nao sao filtrados por FILIAL nesta task -- COB
     // continua sem FILIAL aqui, como antes.)
-    cSql := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_) VALUES ("
+    cSql := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_, FILIAL) VALUES ("
     cSql += "'101', '"
     cSql += cCompet + "', "
     cSql += "500.00, "
     cSql += "'20250220', "
     cSql += "'PENDENTE', "
-    cSql += "' ')"
+    cSql += "' ', '      ')"
     TCSqlExec(cSql)
 
-    cSql := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_) VALUES ("
+    cSql := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_, FILIAL) VALUES ("
     cSql += "'102', '"
     cSql += cCompet + "', "
     cSql += "750.00, "
     cSql += "'20250220', "
     cSql += "'PENDENTE', "
-    cSql += "' ')"
+    cSql += "' ', '      ')"
     TCSqlExec(cSql)
 
     ConOut("Test billing records created: 2 COB entries for " + cCompet)
@@ -633,10 +655,12 @@ User Function TestE2EPortalFlow()
     ConOut("[PASS] Previous test data cleaned")
 
     // Passo 1b: Garante a unidade em UNI. RPT_PORTAL_EXTRATOS e
-    // RPT_PORTAL_AGENDA tem FOREIGN KEY para UNI(UNI_CODIGO); sem esta
-    // linha a geracao dos snapshots morria em FOREIGN KEY constraint failed.
-    cSql := "INSERT OR IGNORE INTO UNI (UNI_CODIGO, UNI_BLOCO, UNI_FRACAO, D_E_L_E_T_) VALUES ("
-    cSql += "'" + cUnitCode + "', 'E2E', 0.01, ' ')"
+    // RPT_PORTAL_AGENDA tem FOREIGN KEY composta para UNI(UNI_CODIGO, FILIAL);
+    // sem esta linha (e sem FILIAL, agora que GcGerarPortalExtratos/Agenda
+    // estampam FILIAL = '      ') a geracao dos snapshots morria em FOREIGN
+    // KEY constraint failed.
+    cSql := "INSERT OR IGNORE INTO UNI (UNI_CODIGO, UNI_BLOCO, UNI_FRACAO, D_E_L_E_T_, FILIAL) VALUES ("
+    cSql += "'" + cUnitCode + "', 'E2E', 0.01, ' ', '      ')"
     TCSqlExec(cSql)
 
     // Passo 2: Cria token válido na tabela GCT_TOKEN
@@ -674,23 +698,23 @@ User Function TestE2EPortalFlow()
     // Passo 4: Insere registros COB de teste (dois períodos para testar agenda)
     ConOut("Step 4: Insert test billing records (COB)")
     // Registros para o período atual (2025-03)
-    cSql := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_) VALUES ("
+    cSql := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_, FILIAL) VALUES ("
     cSql += "'" + cUnitCode + "', '"
     cSql += cCompet + "', "
     cSql += "500.00, "
     cSql += "'20250315', "
     cSql += "'PENDENTE', "
-    cSql += "' ')"
+    cSql += "' ', '      ')"
     TCSqlExec(cSql)
 
     // Registros para mês futuro (para testar agenda)
-    cSql := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_) VALUES ("
+    cSql := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, D_E_L_E_T_, FILIAL) VALUES ("
     cSql += "'" + cUnitCode + "', '"
     cSql += cProxCompet + "', "
     cSql += "750.00, "
     cSql += "'20250415', "
     cSql += "'PENDENTE', "
-    cSql += "' ')"
+    cSql += "' ', '      ')"
     TCSqlExec(cSql)
 
     ConOut("[PASS] Test billing records inserted for periods: " + cCompet + ", " + cProxCompet)
@@ -1062,6 +1086,12 @@ User Function TestGcPortalCondominoV2()
     cSql := "DELETE FROM RPT_PORTAL_AGENDA WHERE REA_UNIDADE = '" + cUnitCode + "'"
     TCSqlExec(cSql)
 
+    // RPT_PORTAL_EXTRATOS/RPT_PORTAL_AGENDA tem FOREIGN KEY(unidade, FILIAL) ->
+    // UNI(UNI_CODIGO, FILIAL); os INSERT diretos abaixo (Steps 4/5) agora
+    // estampam FILIAL = '      ', entao a unidade precisa existir com essa
+    // mesma FILIAL.
+    TCSqlExec("INSERT OR IGNORE INTO UNI (UNI_CODIGO, UNI_FRACAO, D_E_L_E_T_, FILIAL) VALUES ('" + cUnitCode + "', 0.1, ' ', '      ')")
+
     ConOut("Test data cleaned up")
 
     // Step 2: Insere token válido (não usado, válido por 30 dias)
@@ -1083,41 +1113,45 @@ User Function TestGcPortalCondominoV2()
     ConOut("Test token created: " + cToken)
 
     // Step 3: Insere dados de teste em AVISOS (global, sem filtro de unidade)
-    cSql := "INSERT INTO AVISOS (AVI_TITULO, AVI_CORPO, AVI_ATIVO, D_E_L_E_T_) VALUES ("
+    // FILIAL estampado com 6 espaços: esta suite nunca chama RpcSetEnv,
+    // entao a sessao roda com a filial default, e GcPortalCondominoV2
+    // agora filtra AVISOS/RPT_PORTAL_EXTRATOS/RPT_PORTAL_AGENDA por essa
+    // mesma filial (Task 9).
+    cSql := "INSERT INTO AVISOS (AVI_TITULO, AVI_CORPO, AVI_ATIVO, D_E_L_E_T_, FILIAL) VALUES ("
     cSql += "'Aviso 1', "
     cSql += "'Corpo do aviso 1', "
     cSql += "1, "
-    cSql += "' ')"
+    cSql += "' ', '      ')"
     TCSqlExec(cSql)
 
-    cSql := "INSERT INTO AVISOS (AVI_TITULO, AVI_CORPO, AVI_ATIVO, D_E_L_E_T_) VALUES ("
+    cSql := "INSERT INTO AVISOS (AVI_TITULO, AVI_CORPO, AVI_ATIVO, D_E_L_E_T_, FILIAL) VALUES ("
     cSql += "'Aviso 2', "
     cSql += "'Corpo do aviso 2', "
     cSql += "1, "
-    cSql += "' ')"
+    cSql += "' ', '      ')"
     TCSqlExec(cSql)
 
     ConOut("Test notices inserted: 2 AVISOS for unit " + cUnitCode)
 
     // Step 4: Insere dados de teste em RPT_PORTAL_EXTRATOS para a unidade
-    cSql := "INSERT INTO RPT_PORTAL_EXTRATOS (REX_COMPETENCIA, REX_UNIDADE, REX_VALOR, REX_VENCIMENTO, REX_STATUS, D_E_L_E_T_) VALUES ("
+    cSql := "INSERT INTO RPT_PORTAL_EXTRATOS (REX_COMPETENCIA, REX_UNIDADE, REX_VALOR, REX_VENCIMENTO, REX_STATUS, D_E_L_E_T_, FILIAL) VALUES ("
     cSql += "'2025-01', "
     cSql += "'" + cUnitCode + "', "
     cSql += "1000.00, "
     cSql += "'2025-02-15', "
     cSql += "'PENDENTE', "
-    cSql += "' ')"
+    cSql += "' ', '      ')"
     TCSqlExec(cSql)
 
     ConOut("Test extract inserted: 1 RPT_PORTAL_EXTRATOS for unit " + cUnitCode)
 
     // Step 5: Insere dados de teste em RPT_PORTAL_AGENDA para a unidade
-    cSql := "INSERT INTO RPT_PORTAL_AGENDA (REA_UNIDADE, REA_COMPETENCIA, REA_VENCIMENTO, REA_VALOR, D_E_L_E_T_) VALUES ("
+    cSql := "INSERT INTO RPT_PORTAL_AGENDA (REA_UNIDADE, REA_COMPETENCIA, REA_VENCIMENTO, REA_VALOR, D_E_L_E_T_, FILIAL) VALUES ("
     cSql += "'" + cUnitCode + "', "
     cSql += "'2025-02', "
     cSql += "'2025-02-15', "
     cSql += "1000.00, "
-    cSql += "' ')"
+    cSql += "' ', '      ')"
     TCSqlExec(cSql)
 
     ConOut("Test schedule inserted: 1 RPT_PORTAL_AGENDA for unit " + cUnitCode)

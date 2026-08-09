@@ -38,8 +38,8 @@ Return
 User Function GcGerarToken()
     Local aCond := TCSqlQuery("SELECT CON_CODIGO, CON_NOME, UNI_CODIGO, CON_EMAIL " + ;
         "FROM CON " + ;
-        "INNER JOIN UNI ON UNI.UNI_CONDOMINO = CON.CON_CODIGO " + ;
-        "WHERE CON.D_E_L_E_T_ = ' ' " + ;
+        "INNER JOIN UNI ON UNI.UNI_CONDOMINO = CON.CON_CODIGO AND UNI.FILIAL = '" + GcSqlLit(FWxFilial('UNI')) + "' " + ;
+        "WHERE CON.D_E_L_E_T_ = ' ' AND CON.FILIAL = '" + GcSqlLit(FWxFilial('CON')) + "' " + ;
         "ORDER BY CON_NOME")
 
     If Len(aCond) == 0
@@ -81,9 +81,9 @@ User Function GcGerarToken()
     Local cValidadeIso := aDatas[1]:VALIDADE
     Local cLoginAtual  := GetEnv("USER")
 
-    TCSqlExec("INSERT INTO GCT_TOKEN (TOKEN, USR_LOGIN, CON_CODIGO, UNI_CODIGO, CRIPTADO, VALIDO_ATE, USADO) " + ;
+    TCSqlExec("INSERT INTO GCT_TOKEN (TOKEN, USR_LOGIN, CON_CODIGO, UNI_CODIGO, CRIPTADO, VALIDO_ATE, USADO, FILIAL) " + ;
         "VALUES ('" + GcSqlLit(cToken) + "', '" + GcSqlLit(cLoginAtual) + "', '" + GcSqlLit(cConCod) + "', " + ;
-        "'" + GcSqlLit(cUniCod) + "', '" + GcSqlLit(cCriadoIso) + "', '" + GcSqlLit(cValidadeIso) + "', 0)")
+        "'" + GcSqlLit(cUniCod) + "', '" + GcSqlLit(cCriadoIso) + "', '" + GcSqlLit(cValidadeIso) + "', 0, '" + GcSqlLit(FWxFilial('GCT_TOKEN')) + "')")
 
     // Mostra token ao admin
     MsgInfo("Token gerado:" + Chr(10) + ;
@@ -106,6 +106,7 @@ User Function GcRevogarToken()
         "WHERE D_E_L_E_T_ = ' ' " + ;
         "AND USADO = 0 " + ;
         "AND VALIDO_ATE > datetime('now') " + ;
+        "AND FILIAL = '" + GcSqlLit(FWxFilial('GCT_TOKEN')) + "' " + ;
         "ORDER BY CRIPTADO DESC")
 
     If Len(aTokens) == 0
@@ -131,7 +132,7 @@ User Function GcRevogarToken()
 
     // DELETE lógico
     Local cTokenSelecionado := aTokens[nIdx]:TOKEN
-    TCSqlExec("UPDATE GCT_TOKEN SET D_E_L_E_T_ = '*' WHERE TOKEN = '" + GcSqlLit(cTokenSelecionado) + "' AND D_E_L_E_T_ = ' '")
+    TCSqlExec("UPDATE GCT_TOKEN SET D_E_L_E_T_ = '*' WHERE TOKEN = '" + GcSqlLit(cTokenSelecionado) + "' AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('GCT_TOKEN')) + "'")
 
     MsgInfo("Token revogado: " + Left(cTokenSelecionado, 8) + "...", "GesCon")
 Return

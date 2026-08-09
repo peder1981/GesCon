@@ -45,6 +45,9 @@ User Function GcValidarToken(cToken as character) as object
         Return oToken
     EndIf
 
+    // Sem filtro de FILIAL: TOKEN e' PRIMARY KEY (globalmente unico), e um
+    // token gerado antes desta migracao tem FILIAL=''/NULL -- a mesma razao
+    // pela qual src/portal.prw::GcAuthPortalToken usa LEFT JOIN, nao INNER.
     aResult := TCSqlQuery("SELECT TOK_PERFIL, USR_LOGIN, UNI_CODIGO, VALIDO_ATE, USADO " + ;
         "FROM GCT_TOKEN WHERE TOKEN = '" + GcSqlLit(cToken) + "' AND D_E_L_E_T_ = ' '")
 
@@ -118,9 +121,9 @@ User Function GcValidarLoginPortal(cUsername as character, cPassword as characte
     dValidade := Date() + 30
     cValidoIso := GcDataHoraIso(dValidade)
 
-    TCSqlExec("INSERT INTO GCT_TOKEN (TOKEN, USR_LOGIN, CON_CODIGO, UNI_CODIGO, CRIPTADO, VALIDO_ATE, USADO, TOK_PERFIL) " + ;
+    TCSqlExec("INSERT INTO GCT_TOKEN (TOKEN, USR_LOGIN, CON_CODIGO, UNI_CODIGO, CRIPTADO, VALIDO_ATE, USADO, TOK_PERFIL, FILIAL) " + ;
         "VALUES ('" + GcSqlLit(cToken) + "', '" + GcSqlLit(cUsername) + "', '', '000', " + ;
-        "'" + GcSqlLit(cCriadoIso) + "', '" + GcSqlLit(cValidoIso) + "', 0, '" + GcSqlLit(cPerfil) + "')")
+        "'" + GcSqlLit(cCriadoIso) + "', '" + GcSqlLit(cValidoIso) + "', 0, '" + GcSqlLit(cPerfil) + "', '" + GcSqlLit(FWxFilial('GCT_TOKEN')) + "')")
 
     oResult := JsonObject():new()
     oResult:token := cToken
@@ -146,6 +149,8 @@ User Function GcInvalidarToken(cToken as character) as logical
         Return .F.
     EndIf
 
+    // Sem filtro de FILIAL nesta consulta/UPDATE: TOKEN e' PRIMARY KEY
+    // (globalmente unico), mesma razao do GcValidarToken acima.
     aResult := TCSqlQuery("SELECT TOKEN FROM GCT_TOKEN WHERE TOKEN = '" + GcSqlLit(cToken) + ;
         "' AND D_E_L_E_T_ = ' '")
 

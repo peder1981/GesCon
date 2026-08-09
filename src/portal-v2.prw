@@ -159,21 +159,21 @@ User Function GcPortalCondominoV2(cToken as character) as logical
     ConOut("GcPortalCondominoV2: Token autenticado para unidade " + cUnitCode)
 
     // Consulta AVISOS (global, não filtrado por unidade)
-    cSql := "SELECT COUNT(*) as CNT FROM AVISOS WHERE AVI_ATIVO = 1 AND D_E_L_E_T_ = ' '"
+    cSql := "SELECT COUNT(*) as CNT FROM AVISOS WHERE AVI_ATIVO = 1 AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('AVISOS')) + "'"
     aAvisos := TCSqlQuery(cSql)
     If Len(aAvisos) > 0
         ConOut("GcPortalCondominoV2: " + cValToChar(aAvisos[1]:CNT) + " avisos encontrados para unidade " + cUnitCode)
     EndIf
 
     // Consulta RPT_PORTAL_EXTRATOS filtrado por unidade
-    cSql := "SELECT COUNT(*) as CNT FROM RPT_PORTAL_EXTRATOS WHERE REX_UNIDADE = '" + GcSqlLit(cUnitCode) + "' AND D_E_L_E_T_ = ' '"
+    cSql := "SELECT COUNT(*) as CNT FROM RPT_PORTAL_EXTRATOS WHERE REX_UNIDADE = '" + GcSqlLit(cUnitCode) + "' AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('RPT_PORTAL_EXTRATOS')) + "'"
     aExtratos := TCSqlQuery(cSql)
     If Len(aExtratos) > 0
         ConOut("GcPortalCondominoV2: " + cValToChar(aExtratos[1]:CNT) + " extratos encontrados para unidade " + cUnitCode)
     EndIf
 
     // Consulta RPT_PORTAL_AGENDA filtrado por unidade
-    cSql := "SELECT COUNT(*) as CNT FROM RPT_PORTAL_AGENDA WHERE REA_UNIDADE = '" + GcSqlLit(cUnitCode) + "' AND D_E_L_E_T_ = ' '"
+    cSql := "SELECT COUNT(*) as CNT FROM RPT_PORTAL_AGENDA WHERE REA_UNIDADE = '" + GcSqlLit(cUnitCode) + "' AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('RPT_PORTAL_AGENDA')) + "'"
     aAgenda := TCSqlQuery(cSql)
     If Len(aAgenda) > 0
         ConOut("GcPortalCondominoV2: " + cValToChar(aAgenda[1]:CNT) + " agendas encontradas para unidade " + cUnitCode)
@@ -238,7 +238,7 @@ User Function GcGerarPortalExtratos(cCompetencia as character) as numeric
 
     Try
         // Passo 1: Delete dos extratos antigos para esta competência (snapshot pattern)
-        cSql := "DELETE FROM RPT_PORTAL_EXTRATOS WHERE REX_COMPETENCIA = '" + GcSqlLit(cCompetencia) + "'"
+        cSql := "DELETE FROM RPT_PORTAL_EXTRATOS WHERE REX_COMPETENCIA = '" + GcSqlLit(cCompetencia) + "' AND FILIAL = '" + GcSqlLit(FWxFilial('RPT_PORTAL_EXTRATOS')) + "'"
         TCSqlExec(cSql)
         ConOut("Old extracts cleared for competência: " + cCompetencia)
 
@@ -246,7 +246,8 @@ User Function GcGerarPortalExtratos(cCompetencia as character) as numeric
         cSql := "SELECT COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, COB_DTPAG "
         cSql += "FROM COB "
         cSql += "WHERE COB_COMPET = '" + GcSqlLit(cCompetencia) + "' "
-        cSql += "AND D_E_L_E_T_ = ' '"
+        cSql += "AND D_E_L_E_T_ = ' ' "
+        cSql += "AND FILIAL = '" + GcSqlLit(FWxFilial('COB')) + "'"
         aCobrancas := TCSqlQuery(cSql)
 
         If Len(aCobrancas) = 0
@@ -284,7 +285,7 @@ User Function GcGerarPortalExtratos(cCompetencia as character) as numeric
 
             // Monta SQL de inserção em RPT_PORTAL_EXTRATOS
             cSql := "INSERT INTO RPT_PORTAL_EXTRATOS ("
-            cSql += "REX_COMPETENCIA, REX_UNIDADE, REX_VALOR, REX_VENCIMENTO, REX_STATUS, REX_DATA_PAGAMENTO, D_E_L_E_T_"
+            cSql += "REX_COMPETENCIA, REX_UNIDADE, REX_VALOR, REX_VENCIMENTO, REX_STATUS, REX_DATA_PAGAMENTO, D_E_L_E_T_, FILIAL"
             cSql += ") VALUES ("
             cSql += "'" + GcSqlLit(cCompetencia) + "', "
             cSql += "'" + GcSqlLit(aCobrancas[i]:COB_UNIDADE) + "', "
@@ -297,7 +298,8 @@ User Function GcGerarPortalExtratos(cCompetencia as character) as numeric
                 cSql += GcSqlVal(cDataPagamento)
             EndIf
             cSql += ", "
-            cSql += "' '"
+            cSql += "' ', "
+            cSql += "'" + GcSqlLit(FWxFilial('RPT_PORTAL_EXTRATOS')) + "'"
             cSql += ")"
 
             // Executa inserção com verificação de erro
@@ -373,8 +375,9 @@ User Function GcGerarPortalAgenda(cCompetencia as character) as numeric
     Begin Transaction
 
     Try
-        // Passo 1: Delete da agenda antiga (snapshot pattern - delete 100%, sem filtro)
-        cSql := "DELETE FROM RPT_PORTAL_AGENDA"
+        // Passo 1: Delete da agenda antiga (snapshot pattern - delete 100% da
+        // filial ativa, sem filtro de competência)
+        cSql := "DELETE FROM RPT_PORTAL_AGENDA WHERE FILIAL = '" + GcSqlLit(FWxFilial('RPT_PORTAL_AGENDA')) + "'"
         TCSqlExec(cSql)
         ConOut("Old agenda cleared")
 
@@ -396,7 +399,8 @@ User Function GcGerarPortalAgenda(cCompetencia as character) as numeric
             cSql := "SELECT COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO "
             cSql += "FROM COB "
             cSql += "WHERE COB_COMPET = '" + GcSqlLit(cMesAtual) + "' "
-            cSql += "AND D_E_L_E_T_ = ' '"
+            cSql += "AND D_E_L_E_T_ = ' ' "
+            cSql += "AND FILIAL = '" + GcSqlLit(FWxFilial('COB')) + "'"
             aCobrancas := TCSqlQuery(cSql)
 
             If Len(aCobrancas) = 0
@@ -419,13 +423,14 @@ User Function GcGerarPortalAgenda(cCompetencia as character) as numeric
 
                 // Monta SQL de inserção em RPT_PORTAL_AGENDA
                 cSql := "INSERT INTO RPT_PORTAL_AGENDA ("
-                cSql += "REA_UNIDADE, REA_COMPETENCIA, REA_VENCIMENTO, REA_VALOR, D_E_L_E_T_"
+                cSql += "REA_UNIDADE, REA_COMPETENCIA, REA_VENCIMENTO, REA_VALOR, D_E_L_E_T_, FILIAL"
                 cSql += ") VALUES ("
                 cSql += "'" + GcSqlLit(aCobrancas[j]:COB_UNIDADE) + "', "
                 cSql += "'" + GcSqlLit(cMesAtual) + "', "
                 cSql += "'" + GcSqlLit(cVencimento) + "', "
                 cSql += cValToChar(aCobrancas[j]:COB_VALOR) + ", "
-                cSql += "' '"
+                cSql += "' ', "
+                cSql += "'" + GcSqlLit(FWxFilial('RPT_PORTAL_AGENDA')) + "'"
                 cSql += ")"
 
                 // Executa inserção com verificação de erro
@@ -480,12 +485,13 @@ User Function GcCriarAviso(cTitulo as character, cCorpo as character) as logical
     Try
         // Monta SQL de inserção em AVISOS
         cSql := "INSERT INTO AVISOS ("
-        cSql += "AVI_TITULO, AVI_CORPO, AVI_ATIVO, D_E_L_E_T_"
+        cSql += "AVI_TITULO, AVI_CORPO, AVI_ATIVO, D_E_L_E_T_, FILIAL"
         cSql += ") VALUES ("
         cSql += "'" + GcSqlLit(cTitulo) + "', "
         cSql += "'" + GcSqlLit(cCorpo) + "', "
         cSql += "1, "
-        cSql += "' '"
+        cSql += "' ', "
+        cSql += "'" + GcSqlLit(FWxFilial('AVISOS')) + "'"
         cSql += ")"
 
         // Executa inserção com verificação de erro
@@ -539,7 +545,7 @@ User Function GcArquivarAviso(nAvisoId as numeric) as logical
 
     Try
         // Passo 1: Verifica se o aviso existe
-        cSql := "SELECT AVI_ID FROM AVISOS WHERE AVI_ID = " + cValToChar(nAvisoId) + " AND D_E_L_E_T_ = ' '"
+        cSql := "SELECT AVI_ID FROM AVISOS WHERE AVI_ID = " + cValToChar(nAvisoId) + " AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('AVISOS')) + "'"
         aResult := TCSqlQuery(cSql)
 
         If Len(aResult) = 0
@@ -548,7 +554,7 @@ User Function GcArquivarAviso(nAvisoId as numeric) as logical
         EndIf
 
         // Passo 2: Atualiza AVI_ATIVO = 0
-        cSql := "UPDATE AVISOS SET AVI_ATIVO = 0 WHERE AVI_ID = " + cValToChar(nAvisoId) + " AND D_E_L_E_T_ = ' '"
+        cSql := "UPDATE AVISOS SET AVI_ATIVO = 0 WHERE AVI_ID = " + cValToChar(nAvisoId) + " AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('AVISOS')) + "'"
         TCSqlExec(cSql)
 
         // Commit da transação
