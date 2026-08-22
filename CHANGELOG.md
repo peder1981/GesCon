@@ -2,6 +2,22 @@
 
 Mudanças notáveis do GesCon.
 
+## [1.1.2] — 2026-08-21
+
+### Adicionado
+
+- **Fechamento Mensal agora alimenta o Balancete.** Mais um achado do QA
+  do Wilson Kraft: `GcFecharMes` (Despesas → Fechamento → Cobranças) só
+  gravava `DES`/`COB`, nunca `LANCAMENTOS` — a Contabilidade formal ficava
+  cega pro fluxo operacional real, e fechar um mês inteiro de despesas
+  deixava o Balancete zerado. Agora, quando existe um exercício aberto
+  para a competência fechada, `GcFecharMes` também grava os lançamentos
+  (débito Despesa Comum/crédito Caixa por despesa, débito Contas a
+  Receber/crédito Receita por unidade rateada), reaproveitando o mesmo
+  padrão contábil que "Lançar Despesa com Rateio" já usava para despesas
+  avulsas. Sem exercício aberto pra competência, o fechamento segue
+  gerando só as Cobranças, como sempre — nada quebra.
+
 ## [1.1.1] — 2026-08-21
 
 QA cirúrgico do Wilson Kraft: rodou a base de testes dele, achou três bugs

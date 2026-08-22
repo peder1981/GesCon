@@ -153,18 +153,31 @@ o browse, só funciona em `advplc serve`/`build`) — mesmo motivo de
 `GcCondominos`/`GcUnidades`/etc nunca serem testadas via `advplc run`:
 `FWMBrowse:Activate()` exige uma sessão de UI de verdade.
 
-## Lacuna conhecida: Contabilidade formal não recebe Despesas/Cobranças
+## Ponte entre Fechamento Mensal e Contabilidade formal
 
 Apontada pelo Wilson Kraft em QA (2026-08-21): o fluxo operacional
-(Despesas → `GcFecharMes` → Cobranças, `src/fechamento.prw`) lê e grava
-inteiramente nas tabelas `DES`/`COB` — nunca toca `LANCAMENTOS`. Já o
+(Despesas → `GcFecharMes` → Cobranças, `src/fechamento.prw`) lia e gravava
+inteiramente nas tabelas `DES`/`COB` — nunca tocava `LANCAMENTOS`. Já o
 módulo de Contabilidade formal (`GcNovoLancamento`/`GcGerarBalancetePeriodo`,
-`src/contabil.prw`) só enxerga o que foi lançado manualmente. Fechar um mês
-inteiro de despesas e cobranças pelo fluxo normal não move o Balancete —
-são dois trilhos paralelos que nunca se cruzam. Ainda não há decisão
-tomada sobre se isso é intencional (dois módulos independentes) ou se
-`GcFecharMes` deveria gerar lançamentos automáticos em `LANCAMENTOS` como
-ponte.
+`src/contabil.prw`) só enxergava o que era lançado manualmente. Fechar um
+mês inteiro de despesas e cobranças pelo fluxo normal não movia o
+Balancete — eram dois trilhos paralelos que nunca se cruzavam.
+
+Existia até uma segunda ponte já pronta e desconectada: o menu
+Contabilidade → Lançamentos → "Lançar Despesa com Rateio"
+(`GcLancarDespesaUI`/`GcLancarDespesaContabil`) já gravava tanto
+`LANCAMENTOS` quanto `COB` para uma despesa avulsa — só não era o caminho
+que o fechamento em lote usava.
+
+**Decisão (2026-08-21):** `GcFecharMes` agora também grava `LANCAMENTOS`
+(débito Despesa Comum 4000/crédito Caixa 1000 por despesa da competência;
+débito Contas a Receber 5000/crédito Receita Condominial 3000 por unidade
+rateada), reaproveitando o mesmo padrão contábil de `GcLancarDespesaContabil`,
+*condicionado a existir um `EXERCICIO` aberto com `EXE_CODIGO` igual à
+competência* — `LANCAMENTOS` tem FK obrigatória para `EXERCICIO`, então sem
+exercício aberto o fechamento segue gerando só as Cobranças (como sempre
+fez) e avisa via `ConOut`. O Fluxo B (`GcLancarDespesaUI`) continua existindo
+para lançamento avulso, sem alteração.
 
 ## Grafo de dependências (`#include`)
 
