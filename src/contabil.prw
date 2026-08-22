@@ -91,6 +91,35 @@ User Function GcPeriodoFechado(cExercicio)
 
 Return lFechado
 
+/*/{Protheus.doc} GcDataNoExercicio
+    Verifica se uma data (AAAAMMDD) está dentro do período (EXE_INICIO a
+    EXE_FIM) do exercício informado. Sem esta checagem o "Novo Lançamento"
+    aceitava datas fora do exercício ativo, distorcendo o balancete sem
+    nenhum aviso.
+    @type Function
+    @author GesCon
+    @since 2026-08-21
+    @param cData, character, data no formato AAAAMMDD
+    @param cExercicio, character, código do exercício (ex: "2025-01")
+    @return lDentro, logical, .T. se a data está dentro do período (ou o
+        exercício não foi encontrado, considerado inválido -> .F.)
+    @example
+        If !GcDataNoExercicio("20260215", "2026-02")
+            MsgAlert("Data fora do período")
+        EndIf
+*/
+User Function GcDataNoExercicio(cData, cExercicio)
+    Local aExercicio := {}
+    Local lDentro := .F.
+
+    aExercicio := TCSqlQuery("SELECT EXE_INICIO, EXE_FIM FROM EXERCICIO WHERE EXE_CODIGO = " + GcSqlVal(cExercicio) + " AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('EXERCICIO')))
+
+    If Len(aExercicio) > 0
+        lDentro := (cData >= aExercicio[1]:EXE_INICIO .And. cData <= aExercicio[1]:EXE_FIM)
+    EndIf
+
+Return lDentro
+
 /*/{Protheus.doc} GcCriarLancamentoManualDireto
     Cria um lançamento manual em partida dupla com validações de exercício,
     período, contas diferentes e valor positivo.
@@ -126,6 +155,13 @@ User Function GcCriarLancamentoManualDireto(dData, cDescricao, cContaDeb, cConta
     // Verifica se período está fechado
     If GcPeriodoFechado(cExercicio)
         ConOut("ERROR: Period is closed")
+        Return .F.
+    EndIf
+
+    // Valida data dentro do período do exercício ativo (sem isso, uma data
+    // fora do range distorce o balancete sem nenhum aviso)
+    If !GcDataNoExercicio(DtoS(dData), cExercicio)
+        ConOut("ERROR: Date outside active exercise period")
         Return .F.
     EndIf
 
@@ -576,6 +612,11 @@ User Function GcNovoLancamento()
         Return .F.
     EndIf
 
+    If !GcDataNoExercicio(cData, cExercicio)
+        MsgAlert("Data fora do período do exercício " + cExercicio + ".", "Novo Lançamento")
+        Return .F.
+    EndIf
+
     If nValor <= 0
         MsgAlert("Valor deve ser maior que zero.", "Novo Lançamento")
         Return .F.
@@ -901,8 +942,8 @@ Return lRet
 /*/{Protheus.doc} GcGerarBalancetePeriodo
     Gera balancete (relatório de resumo contábil) do exercício.
     Workflow:
-    1. Soma todos os lançamentos de receita (contas 3000+)
-    2. Soma todos os lançamentos de despesa (contas 4000+)
+    1. Soma todos os lançamentos de receita (contas 3000-3999)
+    2. Soma todos os lançamentos de despesa (contas 4000-4999)
     3. Calcula saldo = receitas - despesas
     4. Grava/atualiza RPT_BALANCETE
     5. Retorna saldo numérico
@@ -929,14 +970,14 @@ User Function GcGerarBalancetePeriodo(cExercicio)
         Return 0
     EndIf
 
-    // Soma receitas (contas 3000+)
-    aReceitas := TCSqlQuery("SELECT COALESCE(SUM(LAN_VALOR), 0) as TOTAL FROM LANCAMENTOS WHERE LAN_EXERCICIO = " + GcSqlVal(cExercicio) + " AND LAN_CONTA_CRED >= '3000' AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('LANCAMENTOS')))
+    // Soma receitas (contas 3000-3999)
+    aReceitas := TCSqlQuery("SELECT COALESCE(SUM(LAN_VALOR), 0) as TOTAL FROM LANCAMENTOS WHERE LAN_EXERCICIO = " + GcSqlVal(cExercicio) + " AND LAN_CONTA_CRED >= '3000' AND LAN_CONTA_CRED < '4000' AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('LANCAMENTOS')))
     If Len(aReceitas) > 0
         nReceitas := aReceitas[1]:TOTAL
     EndIf
 
-    // Soma despesas (contas 4000+)
-    aDespesas := TCSqlQuery("SELECT COALESCE(SUM(LAN_VALOR), 0) as TOTAL FROM LANCAMENTOS WHERE LAN_EXERCICIO = " + GcSqlVal(cExercicio) + " AND LAN_CONTA_DEB >= '4000' AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('LANCAMENTOS')))
+    // Soma despesas (contas 4000-4999)
+    aDespesas := TCSqlQuery("SELECT COALESCE(SUM(LAN_VALOR), 0) as TOTAL FROM LANCAMENTOS WHERE LAN_EXERCICIO = " + GcSqlVal(cExercicio) + " AND LAN_CONTA_DEB >= '4000' AND LAN_CONTA_DEB < '5000' AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('LANCAMENTOS')))
     If Len(aDespesas) > 0
         nDespesas := aDespesas[1]:TOTAL
     EndIf

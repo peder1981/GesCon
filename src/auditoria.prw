@@ -154,6 +154,6 @@ User Function GcAuditoriaFecharPeriodo(cExercicio)
         ConOut("WARNING: " + cDescricao)
     Next nI
 
-    ConOut("Audit complete: " + cValToChar(nAnomalias) + " anomalies detected (including " + cValToChar(nI) + " orphan charges)")
+    ConOut("Audit complete: " + cValToChar(nAnomalias) + " anomalies detected (including " + cValToChar(Len(aCobOrfaos)) + " orphan charges)")
 
 Return nAnomalias

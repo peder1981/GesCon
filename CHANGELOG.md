@@ -2,6 +2,36 @@
 
 Mudanças notáveis do GesCon.
 
+## [1.1.1] — 2026-08-21
+
+QA cirúrgico do Wilson Kraft: rodou a base de testes dele, achou três bugs
+reais em produção que os testes automatizados não cobriam, e apontou o
+diagnóstico exato de cada um. Obrigado, Wilson — parceria como essa é o que
+mantém o sistema honesto.
+
+### Corrigido
+
+- **Balancete contava rateio (5000) como despesa, dobrando o valor.**
+  `GcGerarBalancetePeriodo` somava receita com `LAN_CONTA_CRED >= '3000'` e
+  despesa com `LAN_CONTA_DEB >= '4000'`, sem teto — qualquer conta acima de
+  4000 (inclusive 5000, Contas a Receber, usada no lançamento de rateio)
+  entrava como despesa. Agora as faixas são fechadas: receita 3000-3999,
+  despesa 4000-4999.
+
+- **"Novo Lançamento" aceitava qualquer data, mesmo fora do exercício
+  ativo.** Sem aviso nenhum, um lançamento com data de outro período
+  distorcia o balancete do exercício errado. Nova validação
+  (`GcDataNoExercicio`) compara a data informada contra `EXE_INICIO`/
+  `EXE_FIM` do exercício e rejeita fora do intervalo — vale tanto pro
+  formulário quanto para `GcCriarLancamentoManualDireto` (usada por scripts
+  e testes).
+
+- **Auditoria anunciava "1 cobrança órfã" mesmo com zero órfãs.** A
+  mensagem final de `GcAuditoriaFecharPeriodo` usava a variável de controle
+  do `FOR` (`nI`) para contar cobranças órfãs; com o array vazio o loop
+  nunca rodava e `nI` ficava no valor inicial (1), mentindo no log mesmo
+  quando a auditoria estava limpa. Agora usa `Len(aCobOrfaos)`.
+
 ## [1.1.0] — 2026-08-09
 
 ### Adicionado

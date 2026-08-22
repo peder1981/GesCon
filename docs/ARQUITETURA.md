@@ -153,6 +153,19 @@ o browse, só funciona em `advplc serve`/`build`) — mesmo motivo de
 `GcCondominos`/`GcUnidades`/etc nunca serem testadas via `advplc run`:
 `FWMBrowse:Activate()` exige uma sessão de UI de verdade.
 
+## Lacuna conhecida: Contabilidade formal não recebe Despesas/Cobranças
+
+Apontada pelo Wilson Kraft em QA (2026-08-21): o fluxo operacional
+(Despesas → `GcFecharMes` → Cobranças, `src/fechamento.prw`) lê e grava
+inteiramente nas tabelas `DES`/`COB` — nunca toca `LANCAMENTOS`. Já o
+módulo de Contabilidade formal (`GcNovoLancamento`/`GcGerarBalancetePeriodo`,
+`src/contabil.prw`) só enxerga o que foi lançado manualmente. Fechar um mês
+inteiro de despesas e cobranças pelo fluxo normal não move o Balancete —
+são dois trilhos paralelos que nunca se cruzam. Ainda não há decisão
+tomada sobre se isso é intencional (dois módulos independentes) ou se
+`GcFecharMes` deveria gerar lançamentos automáticos em `LANCAMENTOS` como
+ponte.
+
 ## Grafo de dependências (`#include`)
 
 ```

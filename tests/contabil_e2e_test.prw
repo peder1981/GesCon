@@ -58,7 +58,10 @@ User Function ContabilE2ETest()
     // (debito 4000/credito 1000 no lancamento principal, debito 5000/
     // credito 3000 em cada rateio) -- mesmo comentario de
     // tests/contabil_test.prw sobre essas contas.
-    TCSqlExec("INSERT OR IGNORE INTO EXERCICIO (FILIAL, EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) VALUES ('      ', '2024-01', '2024-01-01', '2024-01-31', 1, 0, ' ')")
+    // EXE_INICIO/EXE_FIM no formato DtoS (AAAAMMDD, sem hífen) com range
+    // largo pra cobrir Date() -- ver comentário equivalente em
+    // tests/contabil_test.prw.
+    TCSqlExec("INSERT OR IGNORE INTO EXERCICIO (FILIAL, EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) VALUES ('      ', '2024-01', '20000101', '20991231', 1, 0, ' ')")
     TCSqlExec("INSERT OR IGNORE INTO PLANO_CONTAS (FILIAL, PLA_CODIGO, PLA_NOME, PLA_TIPO, PLA_ATIVO, D_E_L_E_T_) VALUES ('      ', '1000', 'Caixa', 'ATIVO', 1, ' ')")
     TCSqlExec("INSERT OR IGNORE INTO PLANO_CONTAS (FILIAL, PLA_CODIGO, PLA_NOME, PLA_TIPO, PLA_ATIVO, D_E_L_E_T_) VALUES ('      ', '1100', 'Banco', 'ATIVO', 1, ' ')")
     TCSqlExec("INSERT OR IGNORE INTO PLANO_CONTAS (FILIAL, PLA_CODIGO, PLA_NOME, PLA_TIPO, PLA_ATIVO, D_E_L_E_T_) VALUES ('      ', '3000', 'Receita Condominial', 'RECEITA', 1, ' ')")

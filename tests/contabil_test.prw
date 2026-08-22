@@ -37,7 +37,12 @@ User Function ContabilTest()
     // desta funcao. Exercicio '2025-01' e as contas 1000/1100/2000/3000/
     // 4000/5000/7000 sao as mesmas ja hardcoded nos testes abaixo e em
     // GcLancarDespesaContabil (4000/1000/5000/3000).
-    TCSqlExec("INSERT OR IGNORE INTO EXERCICIO (FILIAL, EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) VALUES ('      ', '2025-01', '2025-01-01', '2025-01-31', 1, 0, ' ')")
+    // EXE_INICIO/EXE_FIM no formato DtoS (AAAAMMDD, sem hífen -- igual ao
+    // que GcAbrirExercicio/GcAuditoriaFecharPeriodo gravam em produção) e
+    // com range largo o bastante pra cobrir Date() em qualquer execução,
+    // já que os testes abaixo usam GcCriarLancamentoManualDireto(Date(), ...)
+    // e GcDataNoExercicio valida a data contra este período.
+    TCSqlExec("INSERT OR IGNORE INTO EXERCICIO (FILIAL, EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) VALUES ('      ', '2025-01', '20000101', '20991231', 1, 0, ' ')")
     TCSqlExec("INSERT OR IGNORE INTO PLANO_CONTAS (FILIAL, PLA_CODIGO, PLA_NOME, PLA_TIPO, PLA_ATIVO, D_E_L_E_T_) VALUES ('      ', '1000', 'Caixa', 'ATIVO', 1, ' ')")
     TCSqlExec("INSERT OR IGNORE INTO PLANO_CONTAS (FILIAL, PLA_CODIGO, PLA_NOME, PLA_TIPO, PLA_ATIVO, D_E_L_E_T_) VALUES ('      ', '1100', 'Banco', 'ATIVO', 1, ' ')")
     TCSqlExec("INSERT OR IGNORE INTO PLANO_CONTAS (FILIAL, PLA_CODIGO, PLA_NOME, PLA_TIPO, PLA_ATIVO, D_E_L_E_T_) VALUES ('      ', '2000', 'Fornecedores', 'PASSIVO', 1, ' ')")
