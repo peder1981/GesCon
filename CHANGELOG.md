@@ -2,6 +2,71 @@
 
 Mudanças notáveis do GesCon.
 
+## [1.2.0] — 2026-08-23
+
+Segunda rodada do QA do Wilson Kraft: três relatórios (sessões de 15, 16,
+22 e 23/08) consolidando bugs novos, uma proposta formal de integração
+Contábil × Condominial, e o fechamento do ciclo de teste do Portal do
+Condômino (autenticação por token, sem falhas de segurança). Obrigado de
+novo, Wilson — a proposta escrita deu o desenho certo pra esta versão.
+
+### Adicionado
+
+- **Conta de despesa por categoria no Fechamento Mensal.** Nova tabela
+  `CATEG_CONTA` mapeia `DES_CATEG` (categoria da despesa) para a conta
+  contábil correspondente do Plano de Contas — `GcFecharMes` debita a
+  conta certa por despesa (ex: 4500 Manutenção) em vez de sempre 4000.
+  Sem categoria ou sem mapeamento cadastrado, cai no fallback histórico
+  (4000). Proposta do Wilson Kraft, que notou o Plano de Contas já ter
+  4500/4600/4700 sem nenhuma despesa nunca cair lá.
+- **Flag anti-duplicidade em `DES`.** `DES_LANCADO_CONTABIL` é marcado
+  pelo Fechamento Mensal em cada despesa contabilizada, dando
+  rastreabilidade de que aquela despesa já gerou lançamento — evita que a
+  mesma despesa seja lançada de novo manualmente por "Lançar Despesa com
+  Rateio".
+
+### Corrigido
+
+- **Fechamento sem exercício aberto falhava em silêncio.** `GcFecharMes`
+  só avisava via `ConOut` (console) quando não achava um exercício pra
+  competência — o síndico não via nada na tela, só o Balancete
+  misteriosamente não batia depois. Agora é `MsgAlert` visível.
+- **`COB_VENCTO`/`COB_STATUS` em formatos diferentes conforme a origem.**
+  "Lançar Despesa com Rateio" (`GcLancarDespesaContabil`) gravava
+  vencimento sem traços (`20260910`) e status maiúsculo (`PENDENTE`),
+  enquanto o Fechamento Mensal grava com traços (`2026-09-10`) e
+  minúsculo (`pendente`) — a mesma unidade podia acumular cobranças em
+  dois formatos distintos. Unificado no padrão do Fechamento Mensal.
+- **Resíduo de ponto flutuante no rateio.** `nValor * nFracao` sem
+  `Round()` produzia valores como `25.000500000000002` — achado desde
+  15/08, causa raiz agora corrigida em `GcCalcularRateio` (rateio manual)
+  e em `GcFecharMes` (fechamento em lote): ambos arredondam para 2 casas.
+- **Mensagem genérica ao lançar rateio FIXO/METRAGEM.** Esses tipos
+  aparecem selecionáveis no menu mas nunca foram implementados (só
+  FRACAO) — a mensagem de erro agora diz isso explicitamente, em vez de
+  "Não foi possível lançar a despesa" sem contexto.
+- **`"\n"` literal nos prompts de Gerar/Revogar Token.** AdvPL/AdvPP não
+  interpreta `"\n"` como escape de quebra de linha — trocado por
+  `Chr(10)`, consistente com o resto da função.
+- **Login pré-preenchido com "admin2" em Criar Usuário.** Resíduo de
+  teste do próprio desenvolvimento; default trocado para vazio.
+- **Portal do Condômino sem restrição de leitura.** O comentário do
+  código promete acesso "read-only", mas a tela expunha
+  Incluir/Editar/Excluir sem nenhuma restrição — `FWMBrowse` (AdvPP) não
+  tem modo read-only. Sem risco de persistência real (o snapshot é
+  recriado do zero a cada login), mas a janela de exposição de um dado
+  forjado durante a sessão foi reduzida: `GcPortalBrowse` agora recalcula
+  o snapshot de novo assim que a tela fecha. Ver `docs/ARQUITETURA.md`
+  para a lacuna completa (correção definitiva depende do compilador).
+
+### Testado sem bugs (Wilson Kraft, sessões de 16 e 22-23/08)
+
+Boletos (configuração e geração), Avisos (consultar/criar/arquivar),
+Fechar Período/Exercícios, Inadimplência, Extrato por Unidade, e o ciclo
+completo de autenticação do Portal do Condômino (geração de token, login
+com token válido, rejeição de token inválido/reutilizado — nenhuma falha
+de segurança encontrada).
+
 ## [1.1.2] — 2026-08-21
 
 ### Adicionado

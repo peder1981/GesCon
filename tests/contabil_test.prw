@@ -514,6 +514,28 @@ User Function TesteCalcularRateioFracao()
         ConOut("  FAIL: T01 + T02 esperado " + cValToChar(nEsperadoTestunidades) + ", obtido " + cValToChar(nSomaTestunidades))
     EndIf
 
+    // Arredondamento (Wilson Kraft, QA 2026-08-15): fração 1/3 força
+    // resíduo de ponto flutuante (333.3333333333333) sem Round() dentro
+    // de GcCalcularRateio -- valida diretamente o valor cru, sem
+    // Round() no teste, pra não mascarar a ausência do fix.
+    TCSqlExec("INSERT OR IGNORE INTO UNI (FILIAL, UNI_CODIGO, UNI_FRACAO, D_E_L_E_T_) VALUES ('      ', 'T06', 0.333333333333, ' ')")
+    Local aRateio2 := GcCalcularRateio("FRACAO", 1000.00, Date())
+    Local nValorT06 := 0
+    Local nT06Found := 0
+    Local nI2
+    For nI2 := 1 To Len(aRateio2)
+        If aRateio2[nI2][1] = "T06"
+            nT06Found += 1
+            nValorT06 := aRateio2[nI2][3]
+        EndIf
+    Next nI2
+    If nT06Found > 0 .And. nValorT06 == 333.33
+        ConOut("  PASS: rateio sem resíduo de ponto flutuante (333.33)")
+    Else
+        ConOut("  FAIL: rateio T06 esperado 333.33, obtido " + cValToChar(nValorT06))
+    EndIf
+    TCSqlExec("DELETE FROM UNI WHERE UNI_CODIGO = 'T06' AND FILIAL = '      '")
+
 Return
 
 /*/{Protheus.doc} TesteLancarDespesaComRateio
@@ -611,6 +633,16 @@ User Function TesteLancarDespesaComRateio()
         ConOut("  PASS: Cobranças criadas: " + cValToChar(nCobrancasInseridas))
     Else
         ConOut("  FAIL: Nenhuma cobrança foi criada")
+    EndIf
+
+    // COB_VENCTO com traços e COB_STATUS minúsculo -- achado do Wilson
+    // Kraft (QA 2026-08-22): GcLancarDespesaContabil gravava "YYYYMMDD"/
+    // "PENDENTE", diferente do padrão usado por GcFecharMes.
+    Local aCobFormato := TCSqlQuery("SELECT COB_VENCTO, COB_STATUS FROM COB WHERE COB_UNIDADE IN ('T01','T02') AND D_E_L_E_T_ = ' ' ORDER BY R_E_C_N_O_ DESC LIMIT 1")
+    If Len(aCobFormato) > 0 .And. "-" $ aCobFormato[1]:COB_VENCTO .And. aCobFormato[1]:COB_STATUS == "pendente"
+        ConOut("  PASS: COB_VENCTO com traços e COB_STATUS minúsculo")
+    Else
+        ConOut("  FAIL: formato de COB_VENCTO/COB_STATUS inconsistente")
     EndIf
 
     // Valida contagem total de lançamentos: deve ser 1 (principal) + N (rateios)

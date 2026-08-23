@@ -20,6 +20,16 @@
     @since 2026-07-31
 */
 User Function RunPortalTests()
+    // Achado ao mexer no portal (mitigação do Wilson Kraft, QA 2026-08-23):
+    // este runner só chamava PortalTest() -- AT06TokenInvalido,
+    // AT06TokenValido, AT06PortalCalc, AT06SairPortal e AT08TokenUsado
+    // ficavam órfãos, nunca executados por `advplc run` (mesmo padrão de
+    // RunUsuariosTests, tests/usuarios_test.prw).
+    AT06TokenInvalido()
+    AT06TokenValido()
+    AT06PortalCalc()
+    AT06SairPortal()
+    AT08TokenUsado()
 Return PortalTest()
 
 /*/{Protheus.doc} TestaGcPortalAuthVazio
@@ -49,7 +59,7 @@ User Function AT06TokenValido()
     // Cria unidade e condômino de teste se necessário
     Local aUni := TCSqlQuery("SELECT UNI_CODIGO FROM UNI WHERE UNI_CODIGO = '99' AND D_E_L_E_T_ = ' '")
     If Len(aUni) == 0
-        TCSqlExec("INSERT INTO UNI (UNI_CODIGO, UNI_NOME, UNI_ENDERECO, UNI_BAIRRO, UNI_CIDADE, UNI_ESTADO, UNI_CEP, UNI_COMPLEMENTO, UNI_FONE) VALUES ('99', 'Teste', 'Rua Teste', 'Centro', 'São Paulo', 'SP', '00000-000', 'Apto 1', '11111111')")
+        TCSqlExec("INSERT INTO UNI (FILIAL, UNI_CODIGO, UNI_BLOCO, UNI_FRACAO) VALUES ('      ', '99', 'A', 0.10)")
     EndIf
 
     Local aCon := TCSqlQuery("SELECT CON_CODIGO FROM CON WHERE CON_CODIGO = 'C999' AND D_E_L_E_T_ = ' '")
@@ -99,7 +109,7 @@ User Function AT06PortalCalc()
     // Garante unidade e condômino de teste
     Local aUni := TCSqlQuery("SELECT UNI_CODIGO FROM UNI WHERE UNI_CODIGO = '99' AND D_E_L_E_T_ = ' '")
     If Len(aUni) == 0
-        TCSqlExec("INSERT INTO UNI (UNI_CODIGO, UNI_NOME, UNI_ENDERECO, UNI_BAIRRO, UNI_CIDADE, UNI_ESTADO, UNI_CEP, UNI_COMPLEMENTO, UNI_FONE) VALUES ('99', 'Teste', 'Rua Teste', 'Centro', 'São Paulo', 'SP', '00000-000', 'Apto 1', '11111111')")
+        TCSqlExec("INSERT INTO UNI (FILIAL, UNI_CODIGO, UNI_BLOCO, UNI_FRACAO) VALUES ('      ', '99', 'A', 0.10)")
     EndIf
 
     // Garante cobrança de teste para unidade 99
@@ -133,6 +143,25 @@ User Function AT06PortalCalc()
         If nCount != 0
             lOk := .F.
         EndIf
+    EndIf
+
+    // Mitigação do achado do Wilson Kraft (QA 2026-08-23): FWMBrowse
+    // (AdvPP) não tem modo read-only -- Incluir/Editar/Excluir ficam
+    // disponíveis no portal apesar do comentário "read-only" em
+    // GcPortalBrowse. GcPortalCalcCobrancas recria o snapshot do zero a
+    // partir de COB; simula uma linha forjada e confirma que ela some no
+    // próximo recálculo (GcPortalBrowse agora chama isso de novo ao
+    // fechar a tela, encolhendo a janela de exposição de "até o próximo
+    // login" para "durante esta tela").
+    TCSqlExec("INSERT INTO RPT_COND_COBRANCAS (RCC_UNIDADE, RCC_COMPET, RCC_VALOR, RCC_VENCTO, RCC_STATUS, D_E_L_E_T_, FILIAL) " + ;
+        "VALUES ('99', '2026-12', 999.00, '2026-12-10', 'pago', ' ', '      ')")
+    GcPortalCalcCobrancas()
+    Local aForjada := TCSqlQuery("SELECT COUNT(*) AS QTD FROM RPT_COND_COBRANCAS WHERE RCC_COMPET = '2026-12' AND RCC_VALOR = 999.00 AND D_E_L_E_T_ = ' '")
+    If Len(aForjada) > 0 .And. Val(aForjada[1]:QTD) == 0
+        ConOut("  PASS: linha forjada some após recalcular RPT_COND_COBRANCAS")
+    Else
+        lOk := .F.
+        ConOut("  FAIL: linha forjada continuou em RPT_COND_COBRANCAS após recalcular")
     EndIf
 
     // Limpa

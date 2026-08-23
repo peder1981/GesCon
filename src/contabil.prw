@@ -353,7 +353,10 @@ User Function GcCalcularRateio(cReparticao, nValor, dData)
         For nI := 1 To Len(aUnidades)
             cUnidade := aUnidades[nI]:UNI_CODIGO
             nFracao := aUnidades[nI]:UNI_FRACAO
-            nValorUnit := nValor * nFracao
+            // Round: multiplicação de double por fração produz resíduo de
+            // ponto flutuante (ex: 25.000500000000002) -- valor monetário
+            // sempre tem 2 casas (achado do Wilson Kraft, QA 2026-08-15/22).
+            nValorUnit := Round(nValor * nFracao, 2)
 
             // Adiciona à array: {unidade, fração, valor_rateiado}
             AAdd(aRateio, {cUnidade, nFracao, nValorUnit})
@@ -368,6 +371,30 @@ User Function GcCalcularRateio(cReparticao, nValor, dData)
     EndIf
 
 Return aRateio
+
+/*/{Protheus.doc} GcContaDespesaPorCategoria
+    Mapeia DES_CATEG (texto livre) para a conta de despesa correspondente
+    em CATEG_CONTA. Sem categoria ou sem mapeamento cadastrado, cai no
+    fallback histórico (4000 — Despesa Comum). Usada pelo Fechamento
+    Mensal (GcFecharMes) pra debitar a conta certa por categoria, em vez
+    de sempre 4000 (proposta do Wilson Kraft, QA 2026-08-23).
+    @type Function
+    @author GesCon
+    @since 2026-08-23
+    @param cCategoria, character, DES_CATEG da despesa (pode ser vazio)
+    @return cConta, character, código da conta contábil de despesa
+*/
+User Function GcContaDespesaPorCategoria(cCategoria)
+    Local cConta := "4000"
+    Local aConta := {}
+    If !Empty(cCategoria)
+        aConta := TCSqlQuery("SELECT CGC_CONTA FROM CATEG_CONTA WHERE CGC_CATEGORIA = " + GcSqlVal(cCategoria) + ;
+            " AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('CATEG_CONTA')))
+        If Len(aConta) > 0 .And. !Empty(aConta[1]:CGC_CONTA)
+            cConta := aConta[1]:CGC_CONTA
+        EndIf
+    EndIf
+Return cConta
 
 /*/{Protheus.doc} GcLancarDespesaContabil
     Cria lançamento de despesa com rateio automático em partida dupla.
@@ -442,6 +469,10 @@ User Function GcLancarDespesaContabil(dData, cDescricao, nValor, cReparticao, nD
     cSql += "LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, "
     cSql += "LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, R_E_C_N_O_, FILIAL"
     cSql += ") VALUES ("
+    // Conta fixa 4000: este lançamento manual não tem DES_CATEG (não vem
+    // de uma linha de DES) -- mapeamento por categoria (GcContaDespesaPorCategoria)
+    // se aplica só ao Fechamento Mensal automático (GcFecharMes), que lê
+    // DES de verdade. Fora de escopo estender esta tela pra pedir categoria.
     cSql += GcSqlVal(DtoS(dData)) + ", "
     cSql += GcSqlVal("4000") + ", "
     cSql += GcSqlVal("1000") + ", "
@@ -513,8 +544,12 @@ User Function GcLancarDespesaContabil(dData, cDescricao, nValor, cReparticao, nD
             nMes := nMes + 1
         EndIf
 
-        // Monta string de data para vencimento (YYYYMMDD)
-        cVencimento := cValToChar(nAno) + PadL(cValToChar(nMes), 2, "0") + PadL(cValToChar(nDiaVenc), 2, "0")
+        // Monta string de data para vencimento (YYYY-MM-DD) -- com traços,
+        // mesmo formato que GcProximoVencimento() usa em fechamento.prw.
+        // Achado do Wilson Kraft (QA 2026-08-22): esta função gravava sem
+        // traços (YYYYMMDD), gerando cobranças com dois formatos de
+        // vencimento distintos pra mesma unidade/competência.
+        cVencimento := cValToChar(nAno) + "-" + PadL(cValToChar(nMes), 2, "0") + "-" + PadL(cValToChar(nDiaVenc), 2, "0")
 
         // Insere cobrança na tabela COB
         cSql := "INSERT INTO COB ("
@@ -524,7 +559,9 @@ User Function GcLancarDespesaContabil(dData, cDescricao, nValor, cReparticao, nD
         cSql += GcSqlVal(cExercicio) + ", "
         cSql += cValToChar(nValorUnit) + ", "
         cSql += GcSqlVal(cVencimento) + ", "
-        cSql += GcSqlVal("PENDENTE") + ", "
+        // Minúsculo, mesmo padrão que GcFecharMes() usa (fechamento.prw) --
+        // mesmo achado do Wilson Kraft acima, no campo COB_STATUS.
+        cSql += GcSqlVal("pendente") + ", "
         cSql += GcSqlVal(" ") + ", "
         cSql += "0, "
         cSql += GcSqlVal(FWxFilial('COB'))
@@ -1109,6 +1146,15 @@ User Function GcLancarDespesaUI()
 
     If nDiaVenc < 1 .Or. nDiaVenc > 28
         MsgAlert("Dia de vencimento deve estar entre 1 e 28.", "Lançar Despesa")
+        Return .F.
+    EndIf
+
+    // Mensagem específica pro tipo de rateio ainda não implementado --
+    // achado do Wilson Kraft (QA 2026-08-16): FIXO/METRAGEM aparecem
+    // selecionáveis mas falhavam com "Não foi possível lançar a despesa",
+    // sem indicar que o tipo em si é a causa.
+    If cRepart != "FRACAO"
+        MsgStop("Tipo de rateio '" + cRepart + "' ainda não implementado nesta versão. Use FRACAO.", "Lançar Despesa")
         Return .F.
     EndIf
 

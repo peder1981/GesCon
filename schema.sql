@@ -74,7 +74,22 @@ CREATE TABLE IF NOT EXISTS DES (
     DES_CATEG TEXT,
     DES_VALOR REAL NOT NULL DEFAULT 0,
     DES_COMPET TEXT NOT NULL,
-    DES_DTLANC TEXT
+    DES_DTLANC TEXT,
+    DES_LANCADO_CONTABIL NUMERIC DEFAULT 0
+);
+
+-- Categoria (DES_CATEG, texto livre) -> conta de despesa do Plano de Contas.
+-- Usada pelo Fechamento Mensal (GcFecharMes) pra debitar a conta certa em
+-- vez de sempre 4000 -- proposta do Wilson Kraft, QA 2026-08-23. Sem linha
+-- pra uma categoria, GcContaDespesaPorCategoria() cai no fallback 4000.
+CREATE TABLE IF NOT EXISTS CATEG_CONTA (
+    R_E_C_N_O_ INTEGER PRIMARY KEY AUTOINCREMENT,
+    D_E_L_E_T_ TEXT DEFAULT ' ',
+    R_E_C_D_E_L_ INTEGER DEFAULT 0,
+    FILIAL TEXT,
+    CGC_CATEGORIA TEXT NOT NULL,
+    CGC_CONTA TEXT NOT NULL,
+    UNIQUE(FILIAL, CGC_CATEGORIA)
 );
 
 CREATE TABLE IF NOT EXISTS COB (
@@ -269,6 +284,7 @@ INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL
 ('DES', 3, 'DES_VALOR',   'N', 14, 2, 'Valor'),
 ('DES', 4, 'DES_COMPET',  'C', 7,  0, 'Competência'),
 ('DES', 5, 'DES_DTLANC',  'C', 10, 0, 'Data Lançamento'),
+('DES', 6, 'DES_LANCADO_CONTABIL', 'N', 1, 0, 'Lançado Contábil'),
 
 ('COB', 1, 'COB_UNIDADE', 'C', 10, 0, 'Unidade'),
 ('COB', 2, 'COB_COMPET',  'C', 7,  0, 'Competência'),
@@ -712,3 +728,7 @@ INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL
 -- USR_SENHA fica fora de proposito -- hash nao se mostra em tela.
 INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
 ('USR', 1, 'USR_LOGIN', 'C', 50, 0, 'Login');
+
+INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
+('CATEG_CONTA', 1, 'CGC_CATEGORIA', 'C', 30, 0, 'Categoria'),
+('CATEG_CONTA', 2, 'CGC_CONTA',     'C', 10, 0, 'Conta Contábil');

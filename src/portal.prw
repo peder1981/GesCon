@@ -87,7 +87,7 @@ Return .T.
 
 /*/{Protheus.doc} GcPortalBrowse
     Abre browse limitado: apenas cobranças da unidade do condômino autenticado.
-    Recalcula RPT_COND_COBRANCAS antes do browse.
+    Recalcula RPT_COND_COBRANCAS antes E depois do browse.
     @type User Function
     @author GesCon
     @since 2026-07-24
@@ -109,6 +109,16 @@ User Function GcPortalBrowse()
     oBrowse:SetAlias("RPT_COND_COBRANCAS")
     oBrowse:SetDescription(cTitulo)
     oBrowse:Activate()
+
+    // Mitigação (Wilson Kraft, QA 2026-08-23): o comentário deste módulo
+    // promete "read-only", mas FWMBrowse (AdvPP) não expõe nenhum jeito de
+    // desabilitar Incluir/Editar/Excluir -- mesma limitação já aceita pra
+    // Cobrança (ver ARQUITETURA.md). Sem persistência real (RPT_COND_COBRANCAS
+    // é sempre recriado do zero a partir de COB), mas o dado forjado ficava
+    // visível até o próximo login. Recalcular de novo aqui, assim que o
+    // condômino fecha a tela, reduz a janela de exposição pra "durante esta
+    // tela", não "até o próximo login".
+    GcPortalCalcCobrancas()
 Return
 
 /*/{Protheus.doc} GcPortalCalcCobrancas

@@ -70,7 +70,9 @@ User Function GcGerarToken()
     For nJ := 1 To Len(aCond)
         cLista += Str(nJ, 3) + ". " + aCond[nJ]:CON_NOME + " (Uni: " + aCond[nJ]:UNI_CODIGO + ")" + Chr(10)
     Next
-    cLista += "\nSelecione o número:"
+    // Chr(10), não "\n" -- AdvPL/AdvPP não interpreta "\n" como escape de
+    // quebra de linha (achado do Wilson Kraft, QA 2026-08-22).
+    cLista += Chr(10) + "Selecione o número:"
 
     Local cSel := FWGetText(cLista, "")
     Local nIdx := Val(cSel)
@@ -137,7 +139,7 @@ User Function GcRevogarToken()
         cLista += Str(nJ, 3) + ". " + Left(aTokens[nJ]:TOKEN, 8) + "... Uni:" + aTokens[nJ]:UNI_CODIGO + ;
             " Con:" + aTokens[nJ]:CON_CODIGO + " Val:" + aTokens[nJ]:VALIDO_ATE + Chr(10)
     Next
-    cLista += "\nSelecione o número para revogar:"
+    cLista += Chr(10) + "Selecione o número para revogar:"
 
     Local cSel := FWGetText(cLista, "")
     Local nIdx := Val(cSel)
@@ -225,7 +227,10 @@ User Function GcCriarAdminNovo(cPerfil)
         Return .F.
     EndIf
 
-    cLogin := FWGetText("Login do novo admin:", "admin2")
+    // Default vazio -- "admin2" era resíduo de teste do próprio autor
+    // (achado do Wilson Kraft, QA 2026-08-22): se o operador só confirmasse
+    // sem reparar, o sistema sempre tentava criar um usuário "admin2".
+    cLogin := FWGetText("Login do novo admin:", "")
     If Empty(cLogin)
         Return .F.
     EndIf

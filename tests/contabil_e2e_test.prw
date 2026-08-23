@@ -156,6 +156,26 @@ User Function TesteE2EFluxoCompleto()
     EndIf
     ConOut("  PASS: Despesa com rateio lançada (1000.00)")
 
+    // 3.1 COB_VENCTO/COB_STATUS: mesmo formato que GcFecharMes usa
+    // (com traços, minúsculo) -- achado do Wilson Kraft, QA 2026-08-22:
+    // GcLancarDespesaContabil gravava "YYYYMMDD"/"PENDENTE", diferente do
+    // resto do sistema.
+    Local aCobFormato := TCSqlQuery("SELECT COB_VENCTO, COB_STATUS FROM COB WHERE COB_COMPET = '" + GcSqlLit(cExercicio) + "' AND COB_UNIDADE IN ('T01','T02') AND D_E_L_E_T_ = ' '")
+    Local lFormatoOk := .T.
+    Local nJ
+    For nJ := 1 To Len(aCobFormato)
+        If "-" $ aCobFormato[nJ]:COB_VENCTO .And. aCobFormato[nJ]:COB_STATUS == "pendente"
+            // ok
+        Else
+            lFormatoOk := .F.
+        EndIf
+    Next
+    If Len(aCobFormato) > 0 .And. lFormatoOk
+        ConOut("  PASS: COB_VENCTO com traços e COB_STATUS minúsculo em GcLancarDespesaContabil")
+    Else
+        ConOut("  FAIL: formato de COB_VENCTO/COB_STATUS inconsistente em GcLancarDespesaContabil")
+    EndIf
+
     // 4. Valida integridade antes do fechamento
     lRet := GcValidarIntegridade(cExercicio)
     If !lRet

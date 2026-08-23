@@ -70,16 +70,28 @@ User Function FechamentoTest()
     TCSqlExec("INSERT OR IGNORE INTO PLANO_CONTAS (FILIAL, PLA_CODIGO, PLA_NOME, PLA_TIPO, PLA_ATIVO, D_E_L_E_T_) VALUES ('      ', '4000', 'Despesa Comum', 'DESPESA', 1, ' ')")
     TCSqlExec("INSERT OR IGNORE INTO PLANO_CONTAS (FILIAL, PLA_CODIGO, PLA_NOME, PLA_TIPO, PLA_ATIVO, D_E_L_E_T_) VALUES ('      ', '5000', 'Contas a Receber', 'ATIVO', 1, ' ')")
     TCSqlExec("INSERT INTO EXERCICIO (FILIAL, EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) VALUES ('      ', '2099-03', '20990101', '20991231', 1, 0, ' ')")
-    TCSqlExec("INSERT INTO DES (FILIAL, DES_DESCR, DES_VALOR, DES_COMPET) VALUES ('      ', 'Teste3', 1000, '2099-03')")
+    // DES_CATEG + CATEG_CONTA: conta por categoria (Wilson Kraft, QA
+    // 2026-08-23) em vez de sempre 4000 -- 4500 é Manutenção.
+    TCSqlExec("INSERT OR IGNORE INTO PLANO_CONTAS (FILIAL, PLA_CODIGO, PLA_NOME, PLA_TIPO, PLA_ATIVO, D_E_L_E_T_) VALUES ('      ', '4500', 'Manutenção', 'DESPESA', 1, ' ')")
+    TCSqlExec("DELETE FROM CATEG_CONTA WHERE CGC_CATEGORIA = 'MANUTENCAO' AND FILIAL = '      '")
+    TCSqlExec("INSERT INTO CATEG_CONTA (FILIAL, CGC_CATEGORIA, CGC_CONTA) VALUES ('      ', 'MANUTENCAO', '4500')")
+    TCSqlExec("INSERT INTO DES (FILIAL, DES_DESCR, DES_CATEG, DES_VALOR, DES_COMPET) VALUES ('      ', 'Teste3', 'MANUTENCAO', 1000, '2099-03')")
 
     Local lOk3 := GcFecharMes("2099-03")
     ConOut("fechou_com_exercicio=" + cValToChar(lOk3))
 
-    Local aLanDespesa := TCSqlQuery("SELECT LAN_VALOR FROM LANCAMENTOS WHERE LAN_EXERCICIO = '2099-03' AND LAN_TIPO = 'AUTOMATICO_DESPESA' AND D_E_L_E_T_ = ' '")
-    If Len(aLanDespesa) == 1 .And. Val(aLanDespesa[1]:LAN_VALOR) == 1000
-        ConOut("PASS: lançamento de despesa gravado (4000/1000, valor=1000)")
+    Local aLanDespesa := TCSqlQuery("SELECT LAN_VALOR, LAN_CONTA_DEB FROM LANCAMENTOS WHERE LAN_EXERCICIO = '2099-03' AND LAN_TIPO = 'AUTOMATICO_DESPESA' AND D_E_L_E_T_ = ' '")
+    If Len(aLanDespesa) == 1 .And. Val(aLanDespesa[1]:LAN_VALOR) == 1000 .And. AllTrim(aLanDespesa[1]:LAN_CONTA_DEB) == '4500'
+        ConOut("PASS: lançamento de despesa gravado na conta por categoria (4500/1000)")
     Else
-        ConOut("FAIL: lançamento de despesa esperado (1 linha, valor=1000), achou " + cValToChar(Len(aLanDespesa)))
+        ConOut("FAIL: lançamento de despesa esperado (1 linha, conta 4500, valor=1000), achou " + cValToChar(Len(aLanDespesa)))
+    EndIf
+
+    Local aDesFlag := TCSqlQuery("SELECT DES_LANCADO_CONTABIL FROM DES WHERE DES_COMPET = '2099-03' AND DES_DESCR = 'Teste3' AND D_E_L_E_T_ = ' '")
+    If Len(aDesFlag) == 1 .And. Val(aDesFlag[1]:DES_LANCADO_CONTABIL) == 1
+        ConOut("PASS: DES_LANCADO_CONTABIL marcado após o fechamento (evita dupla contagem)")
+    Else
+        ConOut("FAIL: DES_LANCADO_CONTABIL esperado = 1, achou " + cValToChar(Len(aDesFlag)) + " linhas")
     EndIf
 
     Local aLanRateio := TCSqlQuery("SELECT LAN_VALOR FROM LANCAMENTOS WHERE LAN_EXERCICIO = '2099-03' AND LAN_TIPO = 'AUTOMATICO_RATEIO' AND D_E_L_E_T_ = ' ' ORDER BY LAN_VALOR DESC")
@@ -96,7 +108,39 @@ User Function FechamentoTest()
         ConOut("FAIL: Balancete esperado 0, achou " + cValToChar(nSaldo3))
     EndIf
 
+    // Arredondamento (Wilson Kraft, QA 2026-08-15): multiplicação de double
+    // por fração produz resíduo de ponto flutuante (ex: 333.3333333333333)
+    // sem Round(). 3 unidades com fração 1/3 forçam o caso.
+    TCSqlExec("DELETE FROM COB WHERE COB_UNIDADE IN ('T03','T04','T05')")
+    TCSqlExec("DELETE FROM UNI WHERE UNI_CODIGO IN ('T03','T04','T05')")
+    TCSqlExec("DELETE FROM DES WHERE DES_COMPET = '2099-04'")
+    TCSqlExec("DELETE FROM COB WHERE COB_COMPET = '2099-04'")
+    TCSqlExec("INSERT INTO UNI (FILIAL, UNI_CODIGO, UNI_FRACAO) VALUES ('      ', 'T03', 0.333333333333)")
+    TCSqlExec("INSERT INTO UNI (FILIAL, UNI_CODIGO, UNI_FRACAO) VALUES ('      ', 'T04', 0.333333333333)")
+    TCSqlExec("INSERT INTO UNI (FILIAL, UNI_CODIGO, UNI_FRACAO) VALUES ('      ', 'T05', 0.333333333333)")
+    TCSqlExec("INSERT INTO DES (FILIAL, DES_DESCR, DES_VALOR, DES_COMPET) VALUES ('      ', 'Teste4', 1000, '2099-04')")
+    GcFecharMes("2099-04")
+    // COB_UNIDADE = 'T03' explícito: T01/T02 (fração 0.6/0.4, sem resíduo)
+    // continuam ativas nesta FILIAL até o teardown final e também são
+    // rateadas junto -- sem o filtro, um LIMIT 1 sem ORDER BY podia pegar
+    // a linha de T01 (600) em vez de T03 (a que testa o resíduo).
+    Local aCobRedondo := TCSqlQuery("SELECT COB_VALOR FROM COB WHERE COB_COMPET = '2099-04' AND COB_UNIDADE = 'T03' LIMIT 1")
+    Local cValorRedondo := "(vazio)"
+    If Len(aCobRedondo) > 0
+        cValorRedondo := aCobRedondo[1]:COB_VALOR
+    EndIf
+    If Len(aCobRedondo) == 1 .And. AllTrim(cValorRedondo) == '333.33'
+        ConOut("PASS: valor rateado sem resíduo de ponto flutuante (333.33)")
+    Else
+        ConOut("FAIL: esperado COB_VALOR = '333.33', achou '" + cValorRedondo + "'")
+    EndIf
+
     // Teardown — não deixa fixture no banco real compartilhado
+    TCSqlExec("DELETE FROM COB WHERE COB_UNIDADE IN ('T03','T04','T05')")
+    TCSqlExec("DELETE FROM UNI WHERE UNI_CODIGO IN ('T03','T04','T05')")
+    TCSqlExec("DELETE FROM DES WHERE DES_COMPET = '2099-04'")
+    TCSqlExec("DELETE FROM COB WHERE COB_COMPET = '2099-04'")
+    TCSqlExec("DELETE FROM CATEG_CONTA WHERE CGC_CATEGORIA = 'MANUTENCAO' AND FILIAL = '      '")
     TCSqlExec("DELETE FROM COB WHERE COB_COMPET = '2099-01'")
     TCSqlExec("DELETE FROM DES WHERE DES_COMPET = '2099-01'")
     TCSqlExec("DELETE FROM COB WHERE COB_COMPET = '2099-02'")

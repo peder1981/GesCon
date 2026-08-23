@@ -174,10 +174,34 @@ que o fechamento em lote usava.
 débito Contas a Receber 5000/crédito Receita Condominial 3000 por unidade
 rateada), reaproveitando o mesmo padrão contábil de `GcLancarDespesaContabil`,
 *condicionado a existir um `EXERCICIO` aberto com `EXE_CODIGO` igual à
-competência* — `LANCAMENTOS` tem FK obrigatória para `EXERCICIO`, então sem
-exercício aberto o fechamento segue gerando só as Cobranças (como sempre
-fez) e avisa via `ConOut`. O Fluxo B (`GcLancarDespesaUI`) continua existindo
-para lançamento avulso, sem alteração.
+competência* — `LANCAMENTOS` tem FK obrigatória para `EXERCICIO`. O Fluxo B
+(`GcLancarDespesaUI`) continua existindo para lançamento avulso, sem alteração
+de propósito.
+
+**Refinamentos (Wilson Kraft, QA 2026-08-23,
+`Wilson/Proposta_Integracao_Contabil_Condominial_GesCon.doc`):**
+
+- **Sem exercício aberto**, o fechamento segue gerando só as Cobranças (como
+  sempre fez), mas agora avisa com `MsgAlert` visível na tela — antes só
+  logava via `ConOut`, uma falha silenciosa pro síndico.
+- **Anti-duplicidade:** `DES.DES_LANCADO_CONTABIL` é marcado (`= 1`) em cada
+  linha de `DES` processada por `GcFecharMes`. `GcLancarDespesaContabil`
+  ("Lançar Despesa com Rateio") não lê de `DES` — é só para ajustes pontuais
+  fora do fluxo normal; a flag existe pra dar rastreabilidade de que aquela
+  despesa já foi contabilizada pelo fechamento em lote, evitando que alguém
+  lance a mesma despesa duas vezes por engano entre os dois caminhos.
+- **Conta por categoria:** a nova tabela `CATEG_CONTA` mapeia
+  `DES_CATEG` (texto livre, já usado pelo relatório "Despesas por
+  Categoria") para uma conta de despesa do Plano de Contas
+  (`GcContaDespesaPorCategoria`, `src/contabil.prw`). `GcFecharMes` usa o
+  mapeamento por despesa; sem categoria ou sem linha cadastrada em
+  `CATEG_CONTA`, cai no fallback histórico (4000). `GcLancarDespesaContabil`
+  continua debitando 4000 fixo — não recebe categoria como parâmetro (não
+  vem de uma linha de `DES`), fora de escopo estender essa tela agora.
+- **Escrita cruzada em `COB`:** `GcLancarDespesaContabil` também grava
+  diretamente em `COB` além de `LANCAMENTOS` — comportamento intencional
+  (mantém as duas visões sincronizadas), sem indicação na UI. Mantido como
+  está por decisão explícita; documentado aqui pra não ficar implícito.
 
 ## Grafo de dependências (`#include`)
 
@@ -334,6 +358,22 @@ valor, DV), depois monta a linha digitável com DV via
   ligado a nada (nem dispatch nativo, nem renderer web) — tornar isso
   real exigiria trabalho novo no compilador. Aceito para a v1 (login
   único, uso pessoal/piloto).
+- **Portal do Condômino tem a mesma limitação, com risco maior** (Wilson
+  Kraft, QA 2026-08-23, `Wilson/Relatorio_Portal_Usuario_GesCon_20260823.doc`):
+  o comentário de `GcPortalBrowse` (`src/portal.prw`) promete acesso
+  "read-only", mas usa o mesmo `FWMBrowse` sem nenhuma restrição —
+  Incluir/Editar/Excluir ficam disponíveis pro condômino autenticado.
+  Testado e confirmado: **sem risco de persistência real** —
+  `RPT_COND_COBRANCAS` é um snapshot recriado do zero
+  (`GcPortalCalcCobrancas`, DELETE + INSERT a partir de `COB`) a cada
+  login, então qualquer inclusão/edição forjada nunca chega à tabela
+  financeira de verdade. O risco é de confiança/UX: durante a sessão, a
+  tela pode mostrar uma cobrança "paga" que nunca ocorreu. Mitigação
+  aplicada: `GcPortalBrowse` agora chama `GcPortalCalcCobrancas()` de novo
+  assim que o browse fecha, encolhendo a janela de exposição de "até o
+  próximo login" para "durante esta tela". A correção definitiva (um modo
+  read-only real em `FWMBrowse`) segue dependendo do mesmo trabalho no
+  compilador citado no item anterior.
 - **`GetMV()` é um stub no AdvPP** — sempre retorna o valor padrão
   passado, nunca lê configuração real (confirmado em teste direto:
   `GetMV("X", .F., "y")` retorna `.F.`, não `"y"`). Por isso a

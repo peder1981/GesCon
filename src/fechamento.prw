@@ -14,6 +14,14 @@
 // (src/contabil.prw). Sem exercício aberto pra competência, o fechamento
 // segue gerando só as Cobranças, como sempre fez -- LANCAMENTOS tem FK
 // obrigatória pra EXERCICIO, não dá pra gravar sem ele.
+//
+// Refinamentos (Wilson Kraft, QA 2026-08-23, docs/superpowers/... ver
+// Wilson/Proposta_Integracao_Contabil_Condominial_GesCon.doc):
+// - Conta de débito por categoria (GcContaDespesaPorCategoria, contabil.prw),
+//   fallback 4000 sem categoria/mapeamento.
+// - DES.DES_LANCADO_CONTABIL marcado por linha, pra "Lançar Despesa com
+//   Rateio" não duplicar uma despesa que já passou por aqui.
+// - Sem exercício aberto, MsgAlert visível em vez de só ConOut.
 #include "totvs.ch"
 
 /*/{Protheus.doc} GcFecharMes
@@ -71,25 +79,38 @@ User Function GcFecharMes(cCompetencia, nDiaVencimento)
     Local lLancarContabil := (Len(aExercicio) > 0)
 
     If lLancarContabil
-        Local aDespesasDet := TCSqlQuery("SELECT DES_DESCR, DES_VALOR FROM DES WHERE DES_COMPET = '" + GcSqlLit(cCompetencia) + "' AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('DES')) + "'")
+        // Traz DES_CATEG e R_E_C_N_O_ pra mapear conta por categoria
+        // (GcContaDespesaPorCategoria) e marcar DES_LANCADO_CONTABIL,
+        // evitando que "Lançar Despesa com Rateio" duplique a mesma
+        // despesa depois (proposta do Wilson Kraft, QA 2026-08-23).
+        Local aDespesasDet := TCSqlQuery("SELECT R_E_C_N_O_, DES_DESCR, DES_VALOR, DES_CATEG FROM DES WHERE DES_COMPET = '" + GcSqlLit(cCompetencia) + "' AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('DES')) + "'")
         Local k
+        Local cContaDeb := ""
         For k := 1 To Len(aDespesasDet)
             If Val(aDespesasDet[k]:DES_VALOR) > 0
-                // Débito 4000 (Despesa Comum) / Crédito 1000 (Caixa) — mesmo padrão de GcLancarDespesaContabil
+                cContaDeb := GcContaDespesaPorCategoria(aDespesasDet[k]:DES_CATEG)
+                // Débito conta de despesa (por categoria, fallback 4000) / Crédito 1000 (Caixa)
                 TCSqlExec("INSERT INTO LANCAMENTOS (LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, R_E_C_N_O_, FILIAL) VALUES ('" + ;
-                    GcSqlLit(cDataLan) + "', '4000', '1000', " + cValToChar(Val(aDespesasDet[k]:DES_VALOR)) + ", '" + ;
+                    GcSqlLit(cDataLan) + "', '" + GcSqlLit(cContaDeb) + "', '1000', " + cValToChar(Val(aDespesasDet[k]:DES_VALOR)) + ", '" + ;
                     GcSqlLit(aDespesasDet[k]:DES_DESCR) + "', 'AUTOMATICO_DESPESA', '" + GcSqlLit(cCompetencia) + "', datetime('now'), 'FECHAMENTO_MENSAL', ' ', " + ;
                     "(SELECT COALESCE(MAX(R_E_C_N_O_), 0) + 1 FROM LANCAMENTOS), '" + GcSqlLit(FWxFilial('LANCAMENTOS')) + "')")
+                TCSqlExec("UPDATE DES SET DES_LANCADO_CONTABIL = 1 WHERE R_E_C_N_O_ = " + cValToChar(aDespesasDet[k]:R_E_C_N_O_))
             EndIf
         Next
         ConOut("GcFecharMes: lançamentos contábeis gravados no exercício " + cCompetencia)
     Else
-        ConOut("GcFecharMes: aviso — sem exercício aberto para " + cCompetencia + "; Balancete não vai refletir este fechamento")
+        // MsgAlert, não só ConOut: falha silenciosa no console não avisa o
+        // síndico que o Balancete não vai refletir este fechamento (achado
+        // do Wilson Kraft, QA 2026-08-23).
+        MsgAlert("Fechamento gerado, mas sem exercício aberto para " + cCompetencia + " — o Balancete não vai refletir este fechamento. Abra o exercício em Contabilidade > Abrir Exercício.", "Fechamento Mensal")
     EndIf
 
     Local i
     For i := 1 To Len(aUnidades)
-        Local nValorUnidade := nTotalDespesas * Val(aUnidades[i]:UNI_FRACAO)
+        // Round: mesmo achado de resíduo de ponto flutuante do rateio
+        // manual (GcCalcularRateio, contabil.prw) -- valor monetário
+        // sempre tem 2 casas.
+        Local nValorUnidade := Round(nTotalDespesas * Val(aUnidades[i]:UNI_FRACAO), 2)
         TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, FILIAL) VALUES ('" + ;
             GcSqlLit(aUnidades[i]:UNI_CODIGO) + "', '" + GcSqlLit(cCompetencia) + "', " + ;
             cValToChar(nValorUnidade) + ", '" + cVencimento + "', 'pendente', '" + GcSqlLit(FWxFilial('COB')) + "')")
