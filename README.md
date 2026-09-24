@@ -142,3 +142,15 @@ despesas por categoria).
 - Os relatórios também são telas de `FWMBrowse` — dá pra clicar
   Incluir/Alterar/Excluir neles, mas não faz sentido (o conteúdo é
   recalculado do zero na próxima abertura).
+
+## Homelab (Produção)
+
+O GesCon roda em produção no homelab Proxmox (LXC 105). Para qualquer
+operação de infraestrutura, deploy, diagnóstico ou manutenção, consultar:
+
+- **[HOMELAB.md](HOMELAB.md)** — guia rápido para agentes: onde está,
+  como acessar, como diagnosticar, como deployar, checklist de segurança.
+- **[deploy/README.md](deploy/README.md)** — passo a passo detalhado do
+  deploy, arquitetura, troubleshooting.
+- **[deploy/AUDITORIA_CYBERSECURITY.md](deploy/AUDITORIA_CYBERSECURITY.md)**
+  — auditoria completa de segurança com correções executadas.
