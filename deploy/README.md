@@ -12,7 +12,7 @@ homelab Proxmox, com acesso externo via Cloudflare Tunnel em
 |---------|-------|---------------|
 | vCPUs | 2 | AdvPP web + SQLite (single-thread) |
 | RAM | 2GB | AdvPP é leve, SQLite local |
-| Disco | 20GB | Código + SQLite + backups 30 dias |
+| Disco | 20GB | Código + SQLite + backups (7 cópias) |
 | OS | Debian 12 | Padrão do homelab |
 | Rede | 192.168.2.105/24 | Subnet do homelab |
 | Privilegiado | Não (unprivileged) | Padrão segurança |
@@ -109,7 +109,7 @@ Internet
   │                 ├── advplc serve (porta 8080)
   │                 └── SQLite (~/.advpp/ADVPP.db)
   │
-  └── Backup diário (03:00, retenção 30 dias)
+  └── Backup diário (systemd timer 04:30 UTC, 7 cópias em /var/backups/gescon)
 ```
 
 ## Segurança
@@ -122,7 +122,7 @@ Internet
 | Auth | Login de administrador no GesCon (hash SHA-256) |
 | Credenciais | Token cloudflared em arquivo 600 root:root |
 | Filesystem | LXC unprivileged, ProtectSystem=strict |
-| Backup | Diário com retenção 30 dias |
+| Backup | Diário (timer systemd 04:30 UTC), 7 cópias em /var/backups/gescon |
 
 ## Comandos Úteis
 
