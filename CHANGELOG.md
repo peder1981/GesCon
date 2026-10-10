@@ -2,6 +2,75 @@
 
 Mudanças notáveis do GesCon.
 
+## [1.2.1] — 2026-10-10
+
+Terceira rodada de QA do Wilson Kraft (relatório
+`Wilson/Relatorio_QA_GesCon_v1.2.0_20261010.md`, testes da v1.2.0 em
+AdvPP 4.4.6 sobre um banco anterior à v1.1.0). Dos 9 itens da v1.2.0, 8
+passaram; os bugs abaixo só aparecem em **banco que já existia** — por isso
+os testes automatizados (banco novo) não os pegavam, e agora
+`scripts/check-migracao-filial.sh` cobre os dois cenários. Obrigado de novo,
+Wilson: diagnóstico, correção sugerida e validação em cópia de treino
+estavam prontos; só precisei integrar e blindar.
+
+### Corrigido
+
+- **A1 (crítico) — migração multi-condomínio travava o sistema para
+  sempre** em base pré-v1.1.0 com unidade vinculada a condômino. A
+  restauração de `UNI_OLD` rodava antes do saneamento de `CON.FILIAL`, e a
+  trigger da `UNI` nova (que exige `CON.FILIAL = UNI.FILIAL`) abortava;
+  nos boots seguintes o saneamento nunca mais rodava. Agora sanea antes de
+  restaurar, **e também quando sobrou uma `_OLD`** — bancos que já
+  travaram se recuperam sozinhos no próximo boot. Risco residual apontado
+  pelo Wilson tratado: unidade ligada a condômino excluído/inexistente é
+  restaurada sem o vínculo, em vez de abortar a migração.
+- **A2 (crítico) — `DES_LANCADO_CONTABIL` não era criada em banco
+  atualizado** (`CREATE TABLE IF NOT EXISTS` não acrescenta coluna), o
+  Fechamento quebrava no meio e duplicava lançamentos a cada tentativa.
+  Nova `GcAdicionarColunaSeFaltar` (mesmo padrão de `FILIAL`) no boot.
+  Além disso a contabilização ficou **idempotente e transacional**
+  (`GcContabilizarCompetencia`): despesa só entra se a flag é `0`,
+  lançamento + flag na mesma transação, rateio por unidade só se ainda não
+  existe.
+- **A3 — a flag anti-duplicidade agora é lida.** "Lançar Despesa com
+  Rateio" recusa despesa idêntica (descrição, valor, competência) já
+  contabilizada, e registra a despesa em `DES` já com a flag `1`, de modo
+  que a proteção vale nos dois sentidos.
+- **A4 — `DES_COMPET` em `MM/AAAA`** é normalizada para `AAAA-MM` (no boot
+  e a cada Fechamento; o prompt do Fechamento também aceita `MM/AAAA`).
+  Antes a despesa era ignorada em silêncio.
+- **A5 — Fechamento sem exercício aberto**: agora pergunta **antes** de
+  gravar ("Continuar mesmo assim?") em vez de avisar depois. Se a
+  competência já foi fechada sem contabilizar, fechar de novo depois de
+  abrir o exercício oferece **contabilizar** (antes: beco sem saída, com a
+  mensagem "já fechada ou sem unidade"). As recusas agora dizem a causa
+  real: já fechada / sem unidade / cancelada.
+- **A6 — resíduo de arredondamento do rateio**: a diferença (ex.: 100,01
+  em 20 × 5,00) vai para a unidade de maior fração; a soma das cobranças
+  fecha exata no total, no Fechamento e no rateio manual.
+- **A7 — cobranças antigas com dízima** (`25.000500000000002`) são
+  arredondadas a 2 casas na migração, em `COB`, `LANCAMENTOS`,
+  `RATEIO_DETALHE` e snapshots do Portal. (`COB_VALOR` é travada por
+  trigger: o saneamento a derruba e o schema a recria no mesmo Exec.)
+- **A8 — "Lançado Contábil" editável**: a flag saiu do SX3 (é interna), então
+  não aparece mais no formulário de Despesas.
+- **Validade do token 3h à frente** (ponto em aberto do relatório): o
+  "Válido até" mostrava UTC; passa a mostrar hora local. O valor gravado
+  continua em UTC, que é o que o Portal compara.
+
+### Não alterado (registrado)
+
+- **M1 — renderer web do AdvPP** (`Chr(10)` ignorado nos diálogos, prompt
+  do `FWGetText` no título do modal, casas decimais do SX3 na grade): são do
+  motor (`advplc serve`), não do GesCon — encaminhar ao repositório AdvPP.
+- **Conta diferente entre os dois caminhos** (manual debita 4000; Fechamento
+  usa `CATEG_CONTA`): o formulário manual ainda não pede categoria.
+- Tela para cadastrar `CATEG_CONTA`: ainda não existe (cadastro via SQL).
+- Mensagens de console em inglês do lançamento manual (só `ConOut`).
+- Despesas fechadas antes da v1.2.0 ficam com a flag `0` (sem retroativo).
+- Oferta do Wilson de portar `SetColumnReadOnly`/`SetColumnCombo`/
+  `AddBitmapColumn` do `FWMBrowse` para a v4: bem-vinda, vai para o AdvPP.
+
 ## [1.2.0] — 2026-08-23
 
 Segunda rodada do QA do Wilson Kraft: três relatórios (sessões de 15, 16,

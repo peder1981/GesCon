@@ -21,7 +21,12 @@
 //   fallback 4000 sem categoria/mapeamento.
 // - DES.DES_LANCADO_CONTABIL marcado por linha, pra "Lançar Despesa com
 //   Rateio" não duplicar uma despesa que já passou por aqui.
-// - Sem exercício aberto, MsgAlert visível em vez de só ConOut.
+// - Sem exercício aberto, pergunta ANTES de fechar (MsgYesNo) e, se já foi
+//   fechada sem contabilizar, oferece contabilizar depois de abrir o exercício.
+//
+// QA v1.2.0 (Wilson Kraft, 2026-10-10): contabilização idempotente e
+// transacional (GcContabilizarCompetencia), resíduo de arredondamento do
+// rateio, normalização de DES_COMPET.
 #include "totvs.ch"
 
 /*/{Protheus.doc} GcFecharMes
@@ -42,8 +47,36 @@
 */
 User Function GcFecharMes(cCompetencia, nDiaVencimento)
     Local nTotalDespesas := 0
+    Local aUnidades := {}
+    Local aExercicio := {}
+    Local aValores := {}
+    Local aFracoes := {}
+    Local nSomaFracoes := 0
+    Local cVencimento := ""
+    Local lLancarContabil := .F.
+    Local j
+    Local i
+
+    // "MM/AAAA" digitado no prompt vira "AAAA-MM" (mesmo achado A4).
+    If Len(cCompetencia) == 7 .And. SubStr(cCompetencia, 3, 1) == "/"
+        cCompetencia := Right(cCompetencia, 4) + "-" + Left(cCompetencia, 2)
+    EndIf
+    GcNormalizarCompetDespesas()
+
     Local aExistente := TCSqlQuery("SELECT COB_UNIDADE FROM COB WHERE COB_COMPET = '" + GcSqlLit(cCompetencia) + "' AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('COB')) + "'")
     If Len(aExistente) > 0
+        // Já fechada. Se agora há exercício aberto e a competência nunca foi
+        // contabilizada (fechada antes de abrir o exercício), oferece
+        // contabilizar -- sem isto a orientação "abra o exercício" do
+        // alerta levava a um beco sem saída (achado A5, Wilson Kraft).
+        If GcCompetenciaPendenteContabil(cCompetencia)
+            If MsgYesNo("A competência " + cCompetencia + " já foi fechada, mas ainda não foi contabilizada (o exercício estava fechado/inexistente). Contabilizar agora?", "Fechamento Mensal")
+                GcContabilizarCompetencia(cCompetencia)
+                Return .T.
+            EndIf
+        Else
+            MsgAlert("A competência " + cCompetencia + " já foi fechada.", "Fechamento Mensal")
+        EndIf
         ConOut("GcFecharMes: competência " + cCompetencia + " já foi fechada")
         Return .F.
     EndIf
@@ -54,14 +87,13 @@ User Function GcFecharMes(cCompetencia, nDiaVencimento)
         ConOut("GcFecharMes: aviso — competência " + cCompetencia + " não tem nenhuma despesa lançada, fechando mesmo assim")
     EndIf
 
-    Local aUnidades := TCSqlQuery("SELECT UNI_CODIGO, UNI_FRACAO FROM UNI WHERE D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('UNI')) + "'")
+    aUnidades := TCSqlQuery("SELECT UNI_CODIGO, UNI_FRACAO FROM UNI WHERE D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('UNI')) + "'")
     If Len(aUnidades) == 0
         ConOut("GcFecharMes: nenhuma unidade cadastrada")
+        MsgAlert("Não foi possível fechar " + cCompetencia + ": não há unidade cadastrada neste condomínio.", "Fechamento Mensal")
         Return .F.
     EndIf
 
-    Local nSomaFracoes := 0
-    Local j
     For j := 1 To Len(aUnidades)
         nSomaFracoes += Val(aUnidades[j]:UNI_FRACAO)
     Next
@@ -69,60 +101,130 @@ User Function GcFecharMes(cCompetencia, nDiaVencimento)
         ConOut("GcFecharMes: aviso — soma das frações ideais das unidades ativas é " + cValToChar(nSomaFracoes) + ", não 1.0 (100%)")
     EndIf
 
-    Local cVencimento := GcProximoVencimento(cCompetencia, nDiaVencimento)
-    GcBackupBanco(cCompetencia) // ver src/db.prw — antes de gravar qualquer Cobrança
-
-    // Ponte pra Contabilidade formal: só grava LANCAMENTOS se existir um
-    // exercício aberto com EXE_CODIGO igual à competência (FK obrigatória).
-    Local cDataLan := StrTran(cCompetencia, "-", "") + "01"
-    Local aExercicio := TCSqlQuery("SELECT EXE_CODIGO FROM EXERCICIO WHERE EXE_CODIGO = '" + GcSqlLit(cCompetencia) + "' AND EXE_FECHADO = 0 AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('EXERCICIO')) + "'")
-    Local lLancarContabil := (Len(aExercicio) > 0)
-
-    If lLancarContabil
-        // Traz DES_CATEG e R_E_C_N_O_ pra mapear conta por categoria
-        // (GcContaDespesaPorCategoria) e marcar DES_LANCADO_CONTABIL,
-        // evitando que "Lançar Despesa com Rateio" duplique a mesma
-        // despesa depois (proposta do Wilson Kraft, QA 2026-08-23).
-        Local aDespesasDet := TCSqlQuery("SELECT R_E_C_N_O_, DES_DESCR, DES_VALOR, DES_CATEG FROM DES WHERE DES_COMPET = '" + GcSqlLit(cCompetencia) + "' AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('DES')) + "'")
-        Local k
-        Local cContaDeb := ""
-        For k := 1 To Len(aDespesasDet)
-            If Val(aDespesasDet[k]:DES_VALOR) > 0
-                cContaDeb := GcContaDespesaPorCategoria(aDespesasDet[k]:DES_CATEG)
-                // Débito conta de despesa (por categoria, fallback 4000) / Crédito 1000 (Caixa)
-                TCSqlExec("INSERT INTO LANCAMENTOS (LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, R_E_C_N_O_, FILIAL) VALUES ('" + ;
-                    GcSqlLit(cDataLan) + "', '" + GcSqlLit(cContaDeb) + "', '1000', " + cValToChar(Val(aDespesasDet[k]:DES_VALOR)) + ", '" + ;
-                    GcSqlLit(aDespesasDet[k]:DES_DESCR) + "', 'AUTOMATICO_DESPESA', '" + GcSqlLit(cCompetencia) + "', datetime('now'), 'FECHAMENTO_MENSAL', ' ', " + ;
-                    "(SELECT COALESCE(MAX(R_E_C_N_O_), 0) + 1 FROM LANCAMENTOS), '" + GcSqlLit(FWxFilial('LANCAMENTOS')) + "')")
-                TCSqlExec("UPDATE DES SET DES_LANCADO_CONTABIL = 1 WHERE R_E_C_N_O_ = " + cValToChar(aDespesasDet[k]:R_E_C_N_O_))
-            EndIf
-        Next
-        ConOut("GcFecharMes: lançamentos contábeis gravados no exercício " + cCompetencia)
-    Else
-        // MsgAlert, não só ConOut: falha silenciosa no console não avisa o
-        // síndico que o Balancete não vai refletir este fechamento (achado
-        // do Wilson Kraft, QA 2026-08-23).
-        MsgAlert("Fechamento gerado, mas sem exercício aberto para " + cCompetencia + " — o Balancete não vai refletir este fechamento. Abra o exercício em Contabilidade > Abrir Exercício.", "Fechamento Mensal")
+    // Sem exercício aberto pra competência o Balancete não reflete o
+    // fechamento: pergunta ANTES de gravar qualquer coisa, em vez de avisar
+    // depois sem opção de cancelar (achado A5, Wilson Kraft, QA v1.2.0).
+    aExercicio := TCSqlQuery("SELECT EXE_CODIGO FROM EXERCICIO WHERE EXE_CODIGO = '" + GcSqlLit(cCompetencia) + "' AND EXE_FECHADO = 0 AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('EXERCICIO')) + "'")
+    lLancarContabil := (Len(aExercicio) > 0)
+    If !lLancarContabil
+        If !MsgYesNo("Não há exercício aberto para " + cCompetencia + " — o fechamento gerará só as cobranças e o Balancete não refletirá. Para contabilizar, abra o exercício em Contabilidade > Abrir Exercício e feche esta competência de novo (ela será contabilizada). Continuar mesmo assim?", "Fechamento Mensal")
+            ConOut("GcFecharMes: fechamento de " + cCompetencia + " cancelado pelo usuário (sem exercício aberto)")
+            Return .F.
+        EndIf
     EndIf
 
-    Local i
+    cVencimento := GcProximoVencimento(cCompetencia, nDiaVencimento)
+    GcBackupBanco(cCompetencia) // ver src/db.prw — antes de gravar qualquer Cobrança
+
+    // Round + resíduo na unidade de maior fração (A6): a soma das cobranças
+    // fecha exatamente no total das despesas.
     For i := 1 To Len(aUnidades)
         // Round: mesmo achado de resíduo de ponto flutuante do rateio
         // manual (GcCalcularRateio, contabil.prw) -- valor monetário
         // sempre tem 2 casas.
-        Local nValorUnidade := Round(nTotalDespesas * Val(aUnidades[i]:UNI_FRACAO), 2)
+        AAdd(aValores, Round(nTotalDespesas * Val(aUnidades[i]:UNI_FRACAO), 2))
+        AAdd(aFracoes, Val(aUnidades[i]:UNI_FRACAO))
+    Next
+    GcAjustarResiduoRateio(Round(nTotalDespesas, 2), aFracoes, aValores)
+
+    For i := 1 To Len(aUnidades)
         TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, FILIAL) VALUES ('" + ;
             GcSqlLit(aUnidades[i]:UNI_CODIGO) + "', '" + GcSqlLit(cCompetencia) + "', " + ;
-            cValToChar(nValorUnidade) + ", '" + cVencimento + "', 'pendente', '" + GcSqlLit(FWxFilial('COB')) + "')")
+            cValToChar(aValores[i]) + ", '" + cVencimento + "', 'pendente', '" + GcSqlLit(FWxFilial('COB')) + "')")
+    Next
 
-        If lLancarContabil .And. nValorUnidade > 0
-            // Débito 5000 (Contas a Receber) / Crédito 3000 (Receita Condominial) — rateio da unidade
-            TCSqlExec("INSERT INTO LANCAMENTOS (LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, R_E_C_N_O_, FILIAL) VALUES ('" + ;
-                GcSqlLit(cDataLan) + "', '5000', '3000', " + cValToChar(nValorUnidade) + ", '" + ;
-                GcSqlLit("Rateio " + cCompetencia + " - Unidade " + aUnidades[i]:UNI_CODIGO) + "', 'AUTOMATICO_RATEIO', '" + GcSqlLit(cCompetencia) + "', datetime('now'), 'FECHAMENTO_MENSAL', ' ', " + ;
-                "(SELECT COALESCE(MAX(R_E_C_N_O_), 0) + 1 FROM LANCAMENTOS), '" + GcSqlLit(FWxFilial('LANCAMENTOS')) + "')")
+    // Cobranças primeiro, contabilidade depois: se a contabilização falhar
+    // no meio, a competência já consta como fechada e o próximo "Fechar"
+    // oferece contabilizar -- idempotente (ver GcContabilizarCompetencia),
+    // sem duplicar lançamento como acontecia no A2.
+    If lLancarContabil
+        GcContabilizarCompetencia(cCompetencia)
+    EndIf
+Return .T.
+
+/*/{Protheus.doc} GcCompetenciaPendenteContabil
+    .T. se existe exercício aberto para a competência, ela tem cobranças e
+    o Fechamento Mensal ainda não gravou nenhum lançamento nesse exercício.
+
+    ponytail: heurística "nenhum lançamento FECHAMENTO_MENSAL no exercício".
+    Se, depois de abrir o exercício, alguém também lançar despesa manual
+    nele, a contabilização retroativa vai somar o rateio das cobranças
+    manuais -- raro; troque por marca explícita em COB se acontecer.
+    @type Function
+    @author GesCon
+    @since 2026-10-10
+    @param cCompetencia, character, "AAAA-MM"
+    @return lPendente, logical
+*/
+User Function GcCompetenciaPendenteContabil(cCompetencia)
+    Local aExe := TCSqlQuery("SELECT EXE_CODIGO FROM EXERCICIO WHERE EXE_CODIGO = '" + GcSqlLit(cCompetencia) + "' AND EXE_FECHADO = 0 AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('EXERCICIO')) + "'")
+    Local aJa := {}
+    If Len(aExe) == 0
+        Return .F.
+    EndIf
+    aJa := TCSqlQuery("SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_EXERCICIO = '" + GcSqlLit(cCompetencia) + "' AND LAN_USUARIO = 'FECHAMENTO_MENSAL' AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('LANCAMENTOS')) + "'")
+Return (Len(aJa) == 0)
+
+/*/{Protheus.doc} GcContabilizarCompetencia
+    Grava os LANCAMENTOS de uma competência já com cobranças: débito
+    despesa (conta por categoria)/crédito Caixa(1000) por despesa ainda
+    não contabilizada, e débito Contas a Receber(5000)/crédito
+    Receita(3000) por cobrança. Idempotente: a despesa só entra se
+    DES_LANCADO_CONTABIL = 0 e o rateio só entra se a unidade ainda não tem
+    o lançamento "Rateio <competência> - Unidade <x>". Cada despesa grava
+    lançamento + flag na mesma transação (A2: um erro entre os dois
+    duplicava o lançamento a cada nova tentativa).
+    @type Function
+    @author GesCon
+    @since 2026-10-10
+    @param cCompetencia, character, "AAAA-MM" (EXE_CODIGO do exercício aberto)
+    @return lOk, logical, .F. se não há exercício aberto
+*/
+User Function GcContabilizarCompetencia(cCompetencia)
+    Local cDataLan := StrTran(cCompetencia, "-", "") + "01"
+    Local cFil := GcSqlLit(FWxFilial('LANCAMENTOS'))
+    Local aExe := TCSqlQuery("SELECT EXE_CODIGO FROM EXERCICIO WHERE EXE_CODIGO = '" + GcSqlLit(cCompetencia) + "' AND EXE_FECHADO = 0 AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('EXERCICIO')) + "'")
+    Local aDesp := {}
+    Local aCob := {}
+    Local cContaDeb := ""
+    Local cDescr := ""
+    Local k
+
+    If Len(aExe) == 0
+        Return .F.
+    EndIf
+
+    // Traz DES_CATEG e R_E_C_N_O_ pra mapear conta por categoria
+    // (GcContaDespesaPorCategoria) e marcar DES_LANCADO_CONTABIL.
+    aDesp := TCSqlQuery("SELECT R_E_C_N_O_, DES_DESCR, DES_VALOR, DES_CATEG FROM DES WHERE DES_COMPET = '" + GcSqlLit(cCompetencia) + "' AND DES_LANCADO_CONTABIL = 0 AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('DES')) + "'")
+    For k := 1 To Len(aDesp)
+        If Val(aDesp[k]:DES_VALOR) > 0
+            cContaDeb := GcContaDespesaPorCategoria(aDesp[k]:DES_CATEG)
+            // Débito conta de despesa (por categoria, fallback 4000) / Crédito 1000 (Caixa)
+            TCSqlExec("BEGIN;" + Chr(10) + ;
+                "INSERT INTO LANCAMENTOS (LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, R_E_C_N_O_, FILIAL) VALUES ('" + ;
+                GcSqlLit(cDataLan) + "', '" + GcSqlLit(cContaDeb) + "', '1000', " + cValToChar(Val(aDesp[k]:DES_VALOR)) + ", '" + ;
+                GcSqlLit(aDesp[k]:DES_DESCR) + "', 'AUTOMATICO_DESPESA', '" + GcSqlLit(cCompetencia) + "', datetime('now'), 'FECHAMENTO_MENSAL', ' ', " + ;
+                "(SELECT COALESCE(MAX(R_E_C_N_O_), 0) + 1 FROM LANCAMENTOS), '" + cFil + "');" + Chr(10) + ;
+                "UPDATE DES SET DES_LANCADO_CONTABIL = 1 WHERE R_E_C_N_O_ = " + cValToChar(aDesp[k]:R_E_C_N_O_) + ";" + Chr(10) + ;
+                "COMMIT;")
         EndIf
     Next
+
+    aCob := TCSqlQuery("SELECT COB_UNIDADE, COB_VALOR FROM COB WHERE COB_COMPET = '" + GcSqlLit(cCompetencia) + "' AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('COB')) + "'")
+    For k := 1 To Len(aCob)
+        If Val(aCob[k]:COB_VALOR) > 0
+            cDescr := "Rateio " + cCompetencia + " - Unidade " + aCob[k]:COB_UNIDADE
+            If Len(TCSqlQuery("SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_TIPO = 'AUTOMATICO_RATEIO' AND LAN_EXERCICIO = '" + GcSqlLit(cCompetencia) + "' AND LAN_DESCR = '" + GcSqlLit(cDescr) + "' AND D_E_L_E_T_ = ' ' AND FILIAL = '" + cFil + "'")) == 0
+                // Débito 5000 (Contas a Receber) / Crédito 3000 (Receita Condominial) — rateio da unidade
+                TCSqlExec("INSERT INTO LANCAMENTOS (LAN_DATA, LAN_CONTA_DEB, LAN_CONTA_CRED, LAN_VALOR, LAN_DESCR, LAN_TIPO, LAN_EXERCICIO, LAN_DATA_HORA, LAN_USUARIO, D_E_L_E_T_, R_E_C_N_O_, FILIAL) VALUES ('" + ;
+                    GcSqlLit(cDataLan) + "', '5000', '3000', " + cValToChar(Val(aCob[k]:COB_VALOR)) + ", '" + ;
+                    GcSqlLit(cDescr) + "', 'AUTOMATICO_RATEIO', '" + GcSqlLit(cCompetencia) + "', datetime('now'), 'FECHAMENTO_MENSAL', ' ', " + ;
+                    "(SELECT COALESCE(MAX(R_E_C_N_O_), 0) + 1 FROM LANCAMENTOS), '" + cFil + "')")
+            EndIf
+        EndIf
+    Next
+    ConOut("GcContabilizarCompetencia: lançamentos contábeis gravados no exercício " + cCompetencia)
 Return .T.
 
 /*/{Protheus.doc} GcProximoVencimento

@@ -95,9 +95,15 @@ User Function GcGerarToken()
     // perde o tipo data e DtoS() devolve string vazia, o que gravava
     // VALIDO_ATE = "-- 10:23:45" e fazia TODO token nascer invalido -- o
     // portal do condomino nunca autenticava.
-    Local aDatas := TCSqlQuery("SELECT datetime('now') as CRIADO, datetime('now', '+2 days') as VALIDADE")
+    //
+    // O que é GRAVADO fica em UTC (datetime('now')), que é o que o portal
+    // compara; o que é MOSTRADO ao admin vai em hora local (VALIDADE_LOCAL)
+    // -- exibir o UTC dava "válido até" 3h à frente no Brasil (ponto em
+    // aberto do Wilson Kraft, QA v1.2.0).
+    Local aDatas := TCSqlQuery("SELECT datetime('now') as CRIADO, datetime('now', '+2 days') as VALIDADE, datetime('now', '+2 days', 'localtime') as VALIDADE_LOCAL")
     Local cCriadoIso   := aDatas[1]:CRIADO
     Local cValidadeIso := aDatas[1]:VALIDADE
+    Local cValidadeLocal := aDatas[1]:VALIDADE_LOCAL
     Local cLoginAtual  := GetEnv("USER")
 
     TCSqlExec("INSERT INTO GCT_TOKEN (TOKEN, USR_LOGIN, CON_CODIGO, UNI_CODIGO, CRIPTADO, VALIDO_ATE, USADO, FILIAL) " + ;
@@ -109,7 +115,7 @@ User Function GcGerarToken()
         "Token: " + cToken + Chr(10) + ;
         "Condômino: " + cConCod + " - " + aCond[nIdx]:CON_NOME + Chr(10) + ;
         "Unidade: " + cUniCod + Chr(10) + ;
-        "Válido até: " + cValidadeIso, "GesCon — Token Gerado")
+        "Válido até: " + cValidadeLocal, "GesCon — Token Gerado")
 Return
 
 /*/{Protheus.doc} GcRevogarToken
@@ -120,7 +126,7 @@ Return
     @since 2026-07-24
 */
 User Function GcRevogarToken()
-    Local aTokens := TCSqlQuery("SELECT TOKEN, USR_LOGIN, CON_CODIGO, UNI_CODIGO, VALIDO_ATE " + ;
+    Local aTokens := TCSqlQuery("SELECT TOKEN, USR_LOGIN, CON_CODIGO, UNI_CODIGO, datetime(VALIDO_ATE, 'localtime') AS VALIDO_ATE " + ;
         "FROM GCT_TOKEN " + ;
         "WHERE D_E_L_E_T_ = ' ' " + ;
         "AND USADO = 0 " + ;

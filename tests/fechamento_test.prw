@@ -135,6 +135,80 @@ User Function FechamentoTest()
         ConOut("FAIL: esperado COB_VALOR = '333.33', achou '" + cValorRedondo + "'")
     EndIf
 
+    // ---- QA v1.2.0 (Wilson Kraft, 2026-10-10) ----
+
+    // A6: resíduo de arredondamento -- 100,01 em 20 unidades de 5% dava
+    // 20 x 5,00 = 100,00. Agora a diferença vai pra unidade de maior fração.
+    Local aFrac20 := {}
+    Local aVal20 := {}
+    Local nSoma20 := 0
+    Local n20
+    For n20 := 1 To 20
+        AAdd(aFrac20, 0.05)
+        AAdd(aVal20, Round(100.01 * 0.05, 2))
+    Next n20
+    GcAjustarResiduoRateio(100.01, aFrac20, aVal20)
+    For n20 := 1 To 20
+        nSoma20 += aVal20[n20]
+    Next n20
+    If Round(nSoma20, 2) == 100.01
+        ConOut("PASS: resíduo do rateio somado na unidade de maior fração (soma = 100.01)")
+    Else
+        ConOut("FAIL: soma do rateio esperada 100.01, achou " + cValToChar(Round(nSoma20, 2)))
+    EndIf
+
+    // A4: DES_COMPET "MM/AAAA" é normalizada pra "AAAA-MM".
+    TCSqlExec("DELETE FROM DES WHERE DES_DESCR = 'Teste5'")
+    TCSqlExec("INSERT INTO DES (FILIAL, DES_DESCR, DES_VALOR, DES_COMPET) VALUES ('      ', 'Teste5', 500, '05/2099')")
+    GcNormalizarCompetDespesas()
+    Local aNorm := TCSqlQuery("SELECT DES_COMPET FROM DES WHERE DES_DESCR = 'Teste5'")
+    If Len(aNorm) == 1 .And. AllTrim(aNorm[1]:DES_COMPET) == '2099-05'
+        ConOut("PASS: DES_COMPET 05/2099 normalizada para 2099-05")
+    Else
+        ConOut("FAIL: DES_COMPET esperada 2099-05")
+    EndIf
+
+    // A5: fechada sem exercício; abrir o exercício e fechar de novo
+    // contabiliza (antes: 'já fechada ou sem unidade', beco sem saída).
+    TCSqlExec("DELETE FROM COB WHERE COB_COMPET = '2099-05'")
+    TCSqlExec("DELETE FROM LANCAMENTOS WHERE LAN_EXERCICIO = '2099-05'")
+    TCSqlExec("DELETE FROM EXERCICIO WHERE EXE_CODIGO = '2099-05'")
+    GcFecharMes("2099-05")
+    Local aSemLan := TCSqlQuery("SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_EXERCICIO = '2099-05'")
+    TCSqlExec("INSERT INTO EXERCICIO (FILIAL, EXE_CODIGO, EXE_INICIO, EXE_FIM, EXE_ATIVO, EXE_FECHADO, D_E_L_E_T_) VALUES ('      ', '2099-05', '20990101', '20991231', 1, 0, ' ')")
+    Local lRetro := GcFecharMes("2099-05")
+    Local aLanRetro := TCSqlQuery("SELECT LAN_TIPO FROM LANCAMENTOS WHERE LAN_EXERCICIO = '2099-05' AND D_E_L_E_T_ = ' '")
+    Local nEsperado := 1 + Len(TCSqlQuery("SELECT UNI_CODIGO FROM UNI WHERE D_E_L_E_T_ = ' ' AND FILIAL = '      '"))
+    If Len(aSemLan) == 0 .And. lRetro .And. Len(aLanRetro) == nEsperado
+        ConOut("PASS: competência fechada sem exercício é contabilizada ao refechar (1 despesa + 1 rateio por unidade)")
+    Else
+        ConOut("FAIL: contabilização retroativa esperada (0 antes, " + cValToChar(nEsperado) + " depois), achou " + cValToChar(Len(aSemLan)) + "/" + cValToChar(Len(aLanRetro)))
+    EndIf
+
+    // A2: contabilizar de novo não duplica nada (flag + guarda por unidade).
+    GcContabilizarCompetencia("2099-05")
+    GcContabilizarCompetencia("2099-05")
+    Local aLanIdem := TCSqlQuery("SELECT LAN_TIPO FROM LANCAMENTOS WHERE LAN_EXERCICIO = '2099-05' AND D_E_L_E_T_ = ' '")
+    If Len(aLanIdem) == nEsperado
+        ConOut("PASS: contabilizar repetidamente não duplica lançamentos")
+    Else
+        ConOut("FAIL: esperado " + cValToChar(nEsperado) + " lançamentos após re-contabilizar, achou " + cValToChar(Len(aLanIdem)))
+    EndIf
+
+    // A3: a flag é lida -- lançamento manual idêntico é recusado.
+    Local lDup := GcLancarDespesaContabil(SToD("20990515"), "Teste5", 500, "FRACAO", 10)
+    Local aLanDup := TCSqlQuery("SELECT LAN_ID FROM LANCAMENTOS WHERE LAN_EXERCICIO = '2099-05' AND D_E_L_E_T_ = ' '")
+    If !lDup .And. GcDespesaJaLancada("Teste5", 500, "2099-05") .And. Len(aLanDup) == nEsperado
+        ConOut("PASS: lançamento manual de despesa já fechada é recusado (anti-duplicidade)")
+    Else
+        ConOut("FAIL: despesa duplicada aceita ou guarda não detectou (manual=" + cValToChar(lDup) + ")")
+    EndIf
+
+    TCSqlExec("DELETE FROM COB WHERE COB_COMPET = '2099-05'")
+    TCSqlExec("DELETE FROM DES WHERE DES_DESCR = 'Teste5'")
+    TCSqlExec("DELETE FROM LANCAMENTOS WHERE LAN_EXERCICIO = '2099-05'")
+    TCSqlExec("DELETE FROM EXERCICIO WHERE EXE_CODIGO = '2099-05'")
+
     // Teardown — não deixa fixture no banco real compartilhado
     TCSqlExec("DELETE FROM COB WHERE COB_UNIDADE IN ('T03','T04','T05')")
     TCSqlExec("DELETE FROM UNI WHERE UNI_CODIGO IN ('T03','T04','T05')")

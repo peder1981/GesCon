@@ -203,6 +203,39 @@ de propósito.
   (mantém as duas visões sincronizadas), sem indicação na UI. Mantido como
   está por decisão explícita; documentado aqui pra não ficar implícito.
 
+**QA v1.2.0 (Wilson Kraft, 2026-10-10,
+`Wilson/Relatorio_QA_GesCon_v1.2.0_20261010.md`) — o que mudou nesta ponte:**
+
+- `GcFecharMes` agora só grava as Cobranças e delega a contabilidade a
+  `GcContabilizarCompetencia(cCompet)` (`src/fechamento.prw`), que é
+  **idempotente**: a despesa entra só com `DES_LANCADO_CONTABIL = 0`
+  (lançamento + flag numa transação `BEGIN…COMMIT`), e o rateio de cada
+  unidade só se ainda não existe o lançamento `Rateio <compet> - Unidade <x>`.
+  Re-executar após falha parcial não duplica (achado A2).
+- Sem exercício aberto, o Fechamento **pergunta antes** de gravar (A5). Se a
+  competência já foi fechada e `GcCompetenciaPendenteContabil` acusa que
+  nunca foi contabilizada (exercício aberto, cobranças existentes, nenhum
+  lançamento `FECHAMENTO_MENSAL`), fechar de novo oferece contabilizar.
+- A flag passou a ser **lida**: `GcDespesaJaLancada` (`src/contabil.prw`) faz
+  `GcLancarDespesaContabil` recusar despesa idêntica já contabilizada, e o
+  lançamento manual registra a despesa em `DES` já com a flag `1` (A3). A
+  flag não está no SX3 — não é editável pelo usuário (A8).
+- `GcAjustarResiduoRateio` (`src/db.prw`) soma o resíduo de arredondamento na
+  unidade de maior fração, só quando as frações somam ~100% (A6).
+- Migração de bancos antigos (`src/db.prw`): `GcAdicionarColunaSeFaltar`
+  para colunas novas de tabelas existentes (**toda coluna nova de tabela
+  pré-existente deve ser registrada em `GcBootstrapDB`, além do
+  `schema.sql`**); `GcSemearMigracaoFilialPadrao` sanea `FILIAL` **antes** de
+  restaurar as `_OLD` (a trigger de `UNI` exige `CON.FILIAL`) e também quando
+  sobrou `_OLD` de uma migração interrompida (A1); `GcSanearDadosLegados`
+  normaliza `DES_COMPET` e arredonda valores (A4, A7).
+- Teste de upgrade: `scripts/check-migracao-filial.sh` monta banco **antigo**
+  com unidade vinculada a condômino, `DES` sem a coluna nova, competência
+  `MM/AAAA` e dízima, e também um banco **já travado** pelo A1. Sugestão do
+  Wilson ainda não implementada: comparar `pragma_table_info` de cada tabela
+  entre "schema anterior + atual" e "banco novo" para pegar coluna futura
+  declarada só no `CREATE TABLE`.
+
 ## Grafo de dependências (`#include`)
 
 ```

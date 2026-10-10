@@ -362,6 +362,19 @@ User Function GcCalcularRateio(cReparticao, nValor, dData)
             AAdd(aRateio, {cUnidade, nFracao, nValorUnit})
         Next nI
 
+        // Resíduo de arredondamento (A6, Wilson Kraft): a soma das parcelas
+        // tem que fechar no total, senão despesa e a receber divergem.
+        Local aFrac := {}
+        Local aVal := {}
+        For nI := 1 To Len(aRateio)
+            AAdd(aFrac, aRateio[nI][2])
+            AAdd(aVal, aRateio[nI][3])
+        Next nI
+        GcAjustarResiduoRateio(nValor, aFrac, aVal)
+        For nI := 1 To Len(aRateio)
+            aRateio[nI][3] := aVal[nI]
+        Next nI
+
         ConOut("Repartition calculated: " + cValToChar(Len(aRateio)) + " units")
 
     Else
@@ -395,6 +408,27 @@ User Function GcContaDespesaPorCategoria(cCategoria)
         EndIf
     EndIf
 Return cConta
+
+/*/{Protheus.doc} GcDespesaJaLancada
+    Diz se já existe despesa contabilizada (DES_LANCADO_CONTABIL = 1) com
+    mesma descrição, valor e competência. É a leitura da flag que o
+    Fechamento Mensal grava -- sem ela a flag era escrita mas ninguém a
+    lia, e "Lançar Despesa com Rateio" duplicava despesa já fechada
+    (achado A3, Wilson Kraft, QA v1.2.0).
+    @type Function
+    @author GesCon
+    @since 2026-10-10
+    @param cDescricao, character, descrição da despesa
+    @param nValor, numeric, valor total
+    @param cCompet, character, competência "AAAA-MM"
+    @return lJa, logical, .T. se já foi lançada
+*/
+User Function GcDespesaJaLancada(cDescricao, nValor, cCompet)
+    Local aDes := TCSqlQuery("SELECT R_E_C_N_O_ FROM DES WHERE DES_DESCR = " + GcSqlVal(cDescricao) + ;
+        " AND ROUND(DES_VALOR, 2) = " + cValToChar(Round(nValor, 2)) + ;
+        " AND DES_COMPET = " + GcSqlVal(cCompet) + ;
+        " AND DES_LANCADO_CONTABIL = 1 AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('DES')))
+Return (Len(aDes) > 0)
 
 /*/{Protheus.doc} GcLancarDespesaContabil
     Cria lançamento de despesa com rateio automático em partida dupla.
@@ -437,10 +471,19 @@ User Function GcLancarDespesaContabil(dData, cDescricao, nValor, cReparticao, nD
     Local dVencimento := Date()
     Local cVencimento := ""
     Local aVerificacao := {}
+    Local cCompetDes := ""
 
     // Validação de parâmetros
     If Empty(cDescricao) .Or. nValor <= 0 .Or. nDiaVenc <= 0 .Or. nDiaVenc > 31
         ConOut("ERROR: Invalid parameters for expense entry")
+        Return .F.
+    EndIf
+
+    // Anti-duplicidade (A3): despesa idêntica já contabilizada (pelo
+    // Fechamento ou por um lançamento manual anterior) não entra de novo.
+    cCompetDes := Left(DtoS(dData), 4) + "-" + SubStr(DtoS(dData), 5, 2)
+    If GcDespesaJaLancada(cDescricao, nValor, cCompetDes)
+        ConOut("ERROR: Expense already posted: " + cDescricao + " / " + cCompetDes)
         Return .F.
     EndIf
 
@@ -572,6 +615,13 @@ User Function GcLancarDespesaContabil(dData, cDescricao, nValor, cReparticao, nD
 
         ConOut("Repartition entry created: Unit " + cUnidade + ", Value " + cValToChar(nValorUnit) + ", Due " + cVencimento)
     Next nI
+
+    // Registra a despesa em DES já marcada como contabilizada: a flag passa
+    // a proteger nos dois sentidos (manual -> Fechamento e Fechamento ->
+    // manual). Sem categoria (o formulário manual não pede); conta 4000.
+    TCSqlExec("INSERT INTO DES (FILIAL, DES_DESCR, DES_VALOR, DES_COMPET, DES_DTLANC, DES_LANCADO_CONTABIL) VALUES (" + ;
+        GcSqlVal(FWxFilial('DES')) + ", " + GcSqlVal(cDescricao) + ", " + cValToChar(nValor) + ", " + ;
+        GcSqlVal(cCompetDes) + ", " + GcSqlVal(DtoS(dData)) + ", 1)")
 
     ConOut("Expense entry created successfully: " + cDescricao + " (" + cValToChar(nValor) + ")")
     lRet := .T.
@@ -1155,6 +1205,11 @@ User Function GcLancarDespesaUI()
     // sem indicar que o tipo em si é a causa.
     If cRepart != "FRACAO"
         MsgStop("Tipo de rateio '" + cRepart + "' ainda não implementado nesta versão. Use FRACAO.", "Lançar Despesa")
+        Return .F.
+    EndIf
+
+    If GcDespesaJaLancada(cDescr, nValor, Left(cData, 4) + "-" + SubStr(cData, 5, 2))
+        MsgStop("Esta despesa (mesma descrição, valor e competência) já foi contabilizada — pelo Fechamento Mensal ou por um lançamento anterior. Nada foi gravado.", "Lançar Despesa")
         Return .F.
     EndIf
 

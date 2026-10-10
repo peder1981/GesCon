@@ -84,10 +84,16 @@ User Function GcBootstrapDB()
     EndIf
 
     GcMigrarParaFilial()
+    // Colunas novas em tabelas que já existem: CREATE TABLE IF NOT EXISTS
+    // do schema.sql não as adiciona num banco antigo (achado A2 do Wilson
+    // Kraft, QA v1.2.0). Antes do schema.sql: o SX3 que ele recria já
+    // referencia a coluna.
+    GcAdicionarColunaSeFaltar("DES", "DES_LANCADO_CONTABIL", "NUMERIC DEFAULT 0")
     lOk := TCSqlExec(GcSchemaSQL())
     If !lOk
         ConOut("GesCon: falha ao aplicar o schema no banco.")
     EndIf
+    GcSanearDadosLegados()
 
     // A restauração das _OLD roda SEMPRE, mesmo fora de uma migração
     // "nova" -- é a rede de segurança de uma migração anterior que tenha
@@ -102,6 +108,93 @@ User Function GcBootstrapDB()
     // agora -- por isso os dois viram parâmetro, não dois gates iguais.
     GcSemearMigracaoFilialPadrao(lPrecisaMigrar)
 Return lOk
+
+/*/{Protheus.doc} GcSanearDadosLegados
+    Saneamento idempotente de dados gravados por versões anteriores (cada
+    UPDATE só toca linha ainda errada, então rodar em todo boot é barato
+    e não esconde nada):
+    - A4: DES_COMPET em "MM/AAAA" vira "AAAA-MM" -- o Fechamento compara
+      por igualdade e ignorava a despesa em silêncio.
+    - A7: valores monetários com dízima (25.000500000000002) arredondados
+      a 2 casas -- o Portal do condômino exibia esses valores.
+    Achados do Wilson Kraft, QA v1.2.0 (2026-10-10).
+    @type Function
+    @author GesCon
+    @since 2026-10-10
+*/
+User Function GcSanearDadosLegados()
+    GcNormalizarCompetDespesas()
+    // TRG_COB_TRAVA_VALOR proíbe alterar COB_VALOR (de propósito: valor
+    // travado no fechamento). Este saneamento é a única exceção: derruba a
+    // trigger, arredonda e reaplica o schema no MESMO Exec (mesma conexão),
+    // que recria a trigger. Só entra nesse caminho se houver dízima.
+    If Len(TCSqlQuery("SELECT 1 FROM COB WHERE COB_VALOR <> ROUND(COB_VALOR, 2) LIMIT 1")) > 0
+        TCSqlExec("DROP TRIGGER IF EXISTS TRG_COB_TRAVA_VALOR;" + Chr(10) + ;
+            "UPDATE COB SET COB_VALOR = ROUND(COB_VALOR, 2) WHERE COB_VALOR <> ROUND(COB_VALOR, 2);" + Chr(10) + ;
+            GcSchemaSQL())
+    EndIf
+    TCSqlExec("UPDATE LANCAMENTOS SET LAN_VALOR = ROUND(LAN_VALOR, 2) WHERE LAN_VALOR <> ROUND(LAN_VALOR, 2)")
+    TCSqlExec("UPDATE RATEIO_DETALHE SET RAT_VALOR = ROUND(RAT_VALOR, 2) WHERE RAT_VALOR <> ROUND(RAT_VALOR, 2)")
+    TCSqlExec("UPDATE RPT_PORTAL_EXTRATOS SET REX_VALOR = ROUND(REX_VALOR, 2) WHERE REX_VALOR <> ROUND(REX_VALOR, 2)")
+    TCSqlExec("UPDATE RPT_PORTAL_AGENDA SET REA_VALOR = ROUND(REA_VALOR, 2) WHERE REA_VALOR <> ROUND(REA_VALOR, 2)")
+Return
+
+/*/{Protheus.doc} GcNormalizarCompetDespesas
+    Converte DES_COMPET gravado como "MM/AAAA" (a tela de Despesas é um
+    FWMBrowse sem validação de campo) para o "AAAA-MM" que Fechamento e
+    Relatórios comparam por igualdade (achado A4, Wilson Kraft). Chamada
+    no boot e antes de cada Fechamento, pra pegar o que foi digitado
+    depois do boot.
+    @type Function
+    @author GesCon
+    @since 2026-10-10
+*/
+User Function GcNormalizarCompetDespesas()
+    TCSqlExec("UPDATE DES SET DES_COMPET = SUBSTR(DES_COMPET, 4, 4) || '-' || SUBSTR(DES_COMPET, 1, 2) " + ;
+        "WHERE DES_COMPET GLOB '[0-9][0-9]/[0-9][0-9][0-9][0-9]'")
+Return
+
+/*/{Protheus.doc} GcAjustarResiduoRateio
+    Soma o resíduo de arredondamento na unidade de maior fração, pra que
+    a soma das parcelas feche exatamente no total (achado A6, Wilson
+    Kraft: 100,01 rateado em 20 unidades de 5% somava 100,00). Só age
+    quando as frações somam ~100% -- com rateio parcial de propósito o
+    total não deve ser completado.
+    @type Function
+    @author GesCon
+    @since 2026-10-10
+    @param nTotal, numeric, valor total que foi rateado
+    @param aFracoes, array, fração de cada unidade (numérica ou texto)
+    @param aValores, array, valor já arredondado de cada unidade -- alterado in-place
+*/
+User Function GcAjustarResiduoRateio(nTotal, aFracoes, aValores)
+    Local nSomaFrac := 0
+    Local nSomaVal := 0
+    Local nMaior := 1
+    Local nDif := 0
+    Local i
+
+    If Len(aValores) == 0
+        Return
+    EndIf
+
+    For i := 1 To Len(aValores)
+        nSomaFrac += Val(cValToChar(aFracoes[i]))
+        nSomaVal += aValores[i]
+        If Val(cValToChar(aFracoes[i])) > Val(cValToChar(aFracoes[nMaior]))
+            nMaior := i
+        EndIf
+    Next i
+
+    If nSomaFrac < 0.999 .Or. nSomaFrac > 1.001
+        Return
+    EndIf
+
+    nDif := Round(nTotal - nSomaVal, 2)
+    If nDif != 0
+        aValores[nMaior] := Round(aValores[nMaior] + nDif, 2)
+    EndIf
+Return
 
 /*/{Protheus.doc} GcPrecisaMigrarFilial
     Detecta se a migração multi-condomínio vai rodar nesta chamada —
@@ -249,6 +342,34 @@ Static Function GcAdicionarFilialSeFaltar(cTabela)
     TCSqlExec("ALTER TABLE " + cTabela + " ADD COLUMN FILIAL TEXT")
 Return
 
+/*/{Protheus.doc} GcAdicionarColunaSeFaltar
+    ALTER TABLE ADD COLUMN genérico, só se a tabela existir e ainda não
+    tiver a coluna. Toda coluna nova de tabela pré-existente deve ser
+    registrada em GcBootstrapDB com esta função, além do schema.sql.
+    @type Static Function
+    @author GesCon
+    @since 2026-10-10
+    @param cTabela, character, nome da tabela
+    @param cColuna, character, nome da coluna
+    @param cDefinicao, character, tipo e default (ex.: "NUMERIC DEFAULT 0")
+*/
+Static Function GcAdicionarColunaSeFaltar(cTabela, cColuna, cDefinicao)
+    Local aCols := TCSqlQuery("PRAGMA table_info(" + cTabela + ")")
+    Local i
+
+    If Len(aCols) == 0
+        Return  // tabela ainda não existe (banco novo) -- schema.sql cria já com a coluna
+    EndIf
+
+    For i := 1 To Len(aCols)
+        If Upper(aCols[i]:NAME) == Upper(cColuna)
+            Return  // coluna já existe
+        EndIf
+    Next i
+
+    TCSqlExec("ALTER TABLE " + cTabela + " ADD COLUMN " + cColuna + " " + cDefinicao)
+Return
+
 /*/{Protheus.doc} GcRenomearSeAntiga
     Renomeia cTabela para cTabela_OLD se ela existir e ainda não tiver
     FILIAL -- primeira metade da migração das 9 tabelas "compostas" (ver
@@ -341,6 +462,10 @@ User Function GcSemearMigracaoFilialPadrao(lSanear)
     Local i
     Local aExiste
     Local cSql := ""
+    Local cSqlRestaura := ""
+    Local cColunas := ""
+    Local cSelect := ""
+    Local lTemOld := .F.
 
     // Tudo num TCSqlExec só, entre PRAGMA foreign_keys=OFF/ON: chamadas
     // TCSqlExec separadas podem cair em conexões diferentes do pool do
@@ -353,22 +478,42 @@ User Function GcSemearMigracaoFilialPadrao(lSanear)
     // a mesma conexão do início ao fim.
     cSql := "PRAGMA foreign_keys=OFF;" + Chr(10)
 
+    // Monta a restauração das _OLD separada do saneamento: o saneamento
+    // (FILIAL NULL -> '010101' em CON etc.) precisa vir ANTES dela. A
+    // trigger TRG_UNI_CONDOMINO_INS, já ativa na UNI recriada, exige
+    // CON.FILIAL = NEW.FILIAL; restaurando primeiro, todo condômino ainda
+    // está com FILIAL NULL e a 1ª unidade vinculada aborta (achado A1 do
+    // Wilson Kraft, QA v1.2.0, 2026-10-10). PRAGMA foreign_keys=OFF não
+    // desliga trigger.
     For i := 1 To Len(aCompostas)
         aExiste := TCSqlQuery("SELECT name FROM sqlite_master WHERE type='table' AND name = '" + ;
             aCompostas[i][1] + "_OLD'")
         If Len(aExiste) > 0
-            cSql += "INSERT INTO " + aCompostas[i][1] + " (" + aCompostas[i][2] + ", FILIAL) SELECT " + ;
-                aCompostas[i][2] + ", '010101' FROM " + aCompostas[i][1] + "_OLD;" + Chr(10)
-            cSql += "DROP TABLE " + aCompostas[i][1] + "_OLD;" + Chr(10)
+            lTemOld := .T.
+            cColunas := aCompostas[i][2]
+            cSelect := cColunas
+            If aCompostas[i][1] == "UNI"
+                // Só preserva o vínculo se o condômino ainda existe ativo:
+                // a trigger também recusaria unidade excluída ligada a
+                // condômino excluído (risco residual apontado no A1).
+                cSelect := StrTran(cColunas, "UNI_CONDOMINO", ;
+                    "CASE WHEN EXISTS (SELECT 1 FROM CON WHERE CON_CODIGO = UNI_OLD.UNI_CONDOMINO AND D_E_L_E_T_ = ' ') THEN UNI_CONDOMINO ELSE NULL END")
+            EndIf
+            cSqlRestaura += "INSERT INTO " + aCompostas[i][1] + " (" + cColunas + ", FILIAL) SELECT " + ;
+                cSelect + ", '010101' FROM " + aCompostas[i][1] + "_OLD;" + Chr(10)
+            cSqlRestaura += "DROP TABLE " + aCompostas[i][1] + "_OLD;" + Chr(10)
         EndIf
-    Next i
+    Next
 
-    If lSanear
+    // Também saneia na recuperação de uma migração interrompida (_OLD
+    // sobrevivente): sem isso, bancos já travados pelo A1 nunca destravam.
+    If lSanear .Or. lTemOld
         For i := 1 To Len(aTodas)
             cSql += "UPDATE " + aTodas[i] + " SET FILIAL = '010101' WHERE FILIAL IS NULL OR FILIAL = '';" + Chr(10)
-        Next i
+        Next
     EndIf
 
+    cSql += cSqlRestaura
     cSql += "PRAGMA foreign_keys=ON;" + Chr(10)
 
     TCSqlExec(cSql)

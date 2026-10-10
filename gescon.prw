@@ -95,10 +95,10 @@ User Function GesCon()
                         If !Empty(cCompetencia)
                             cDiaVenc := FWGetText("Dia do vencimento no mês seguinte? (1-28)", "10")
                             nDiaVenc := Val(cDiaVenc)
+                            // GcFecharMes já explica ao usuário cada recusa
+                            // (já fechada / sem unidade / cancelada).
                             If GcFecharMes(cCompetencia, nDiaVenc)
                                 MsgInfo("Competência " + cCompetencia + " fechada com sucesso.", "Fechamento Mensal")
-                            Else
-                                MsgAlert("Não foi possível fechar " + cCompetencia + " — já fechada ou sem unidade cadastrada.", "Fechamento Mensal")
                             EndIf
                         EndIf
                     Case nOpcao == 6

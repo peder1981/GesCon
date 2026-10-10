@@ -79,7 +79,16 @@ Regras:
 
 - **Só pode ser feito uma vez por competência.** Tentar fechar uma
   competência que já tem Cobrança gerada é bloqueado — não recalcula,
-  não duplica.
+  não duplica. Única exceção: se ela foi fechada **sem exercício aberto** e
+  o exercício foi aberto depois, fechar de novo oferece **contabilizar** a
+  competência (gera só os lançamentos, nunca novas Cobranças).
+- **Sem exercício aberto**, o sistema pergunta antes de fechar: as Cobranças
+  são geradas, mas o Balancete não reflete o fechamento até contabilizar.
+- **A soma das Cobranças fecha exata no total das despesas:** o resíduo de
+  arredondamento (ex.: 100,01 rateado em 20 unidades de 5%) vai para a
+  unidade de maior fração.
+- **Competência das despesas:** use `AAAA-MM`; `MM/AAAA` é convertida
+  automaticamente.
 - **O valor gerado fica travado.** Mesmo que a fração ideal de uma
   unidade mude depois, as Cobranças já geradas não são recalculadas
   retroativamente — reflete como fechamento contábil real funciona, e

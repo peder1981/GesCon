@@ -284,7 +284,10 @@ INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL
 ('DES', 3, 'DES_VALOR',   'N', 14, 2, 'Valor'),
 ('DES', 4, 'DES_COMPET',  'C', 7,  0, 'Competência'),
 ('DES', 5, 'DES_DTLANC',  'C', 10, 0, 'Data Lançamento'),
-('DES', 6, 'DES_LANCADO_CONTABIL', 'N', 1, 0, 'Lançado Contábil'),
+-- DES_LANCADO_CONTABIL fica de fora do SX3 de propósito: é flag interna do
+-- Fechamento/Lançamento (anti-duplicidade). Com linha no SX3 ela aparecia
+-- editável no formulário de Despesas e o usuário podia marcar 1 numa
+-- despesa nunca lançada, ou voltar a 0 (achado A8, Wilson Kraft, QA v1.2.0).
 
 ('COB', 1, 'COB_UNIDADE', 'C', 10, 0, 'Unidade'),
 ('COB', 2, 'COB_COMPET',  'C', 7,  0, 'Competência'),

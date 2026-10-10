@@ -142,3 +142,11 @@ despesas por categoria).
 - Os relatórios também são telas de `FWMBrowse` — dá pra clicar
   Incluir/Alterar/Excluir neles, mas não faz sentido (o conteúdo é
   recalculado do zero na próxima abertura).
+
+## Agradecimentos
+
+O GesCon é testado em campo por **Wilson Kraft**, cujos relatórios de QA
+(`Wilson/`, resumidos no [CHANGELOG](CHANGELOG.md)) motivaram as versões
+1.0.x–1.2.x: bugs de migração em bancos já instalados, integração
+Contábil × Condominial, conta por categoria, anti-duplicidade e rateio.
+Obrigado, Wilson.
