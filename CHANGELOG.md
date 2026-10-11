@@ -58,6 +58,13 @@ estavam prontos; só precisei integrar e blindar.
   "Válido até" mostrava UTC; passa a mostrar hora local. O valor gravado
   continua em UTC, que é o que o Portal compara.
 
+### Compilador
+
+- Binários da release compilados com o **AdvPP 4.4.6** (`ADVPP_VERSION`,
+  antes fixado em 2.0.22) — a mesma linha em que o Wilson testou e que roda
+  em produção (4.4.x). `check.sh`, as 15 suítes e `check-migracao-filial.sh`
+  passam com ele.
+
 ### Não alterado (registrado)
 
 - **M1 — renderer web do AdvPP** (`Chr(10)` ignorado nos diálogos, prompt
