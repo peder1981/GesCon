@@ -54,12 +54,23 @@ User Function GcFecharMes(cCompetencia, nDiaVencimento)
     Local nSomaFracoes := 0
     Local cVencimento := ""
     Local lLancarContabil := .F.
+    Local cSqlCob := ""
     Local j
     Local i
 
     // "MM/AAAA" digitado no prompt vira "AAAA-MM" (mesmo achado A4).
+    If ValType(cCompetencia) != "C"
+        cCompetencia := ""
+    EndIf
+    cCompetencia := AllTrim(cCompetencia)
     If Len(cCompetencia) == 7 .And. SubStr(cCompetencia, 3, 1) == "/"
         cCompetencia := Right(cCompetencia, 4) + "-" + Left(cCompetencia, 2)
+    EndIf
+    // Competência fora de AAAA-MM gerava cobranças com vencimento
+    // 0000-01-10 ("abc") ou mês 13.
+    If !GcCompetenciaValida(cCompetencia)
+        MsgAlert("Competência inválida: use AAAA-MM (ex.: 2026-11).", "Fechamento Mensal")
+        Return .F.
     EndIf
     GcNormalizarCompetDespesas()
 
@@ -97,8 +108,13 @@ User Function GcFecharMes(cCompetencia, nDiaVencimento)
     For j := 1 To Len(aUnidades)
         nSomaFracoes += Val(aUnidades[j]:UNI_FRACAO)
     Next
+    // Fração ideal fora de 100% rateava errado em silêncio: com 120% cobrava
+    // 20% a mais dos condôminos, com 50% arrecadava metade da despesa.
     If nSomaFracoes < 0.999 .Or. nSomaFracoes > 1.001
-        ConOut("GcFecharMes: aviso — soma das frações ideais das unidades ativas é " + cValToChar(nSomaFracoes) + ", não 1.0 (100%)")
+        ConOut("GcFecharMes: soma das frações ideais é " + cValToChar(nSomaFracoes) + ", não 1 (100%) -- fechamento recusado")
+        MsgAlert("A soma das frações ideais das unidades é " + AllTrim(Transform(nSomaFracoes * 100, "@E 9999.9999")) + ;
+            "%, não 100%. Corrija as frações em Unidades antes de fechar " + cCompetencia + ".", "Fechamento Mensal")
+        Return .F.
     EndIf
 
     // Sem exercício aberto pra competência o Balancete não reflete o
@@ -127,11 +143,20 @@ User Function GcFecharMes(cCompetencia, nDiaVencimento)
     Next
     GcAjustarResiduoRateio(Round(nTotalDespesas, 2), aFracoes, aValores)
 
+    // Um único INSERT com todas as unidades: no SQLite um comando é atômico,
+    // então ou todas as cobranças entram ou nenhuma. Antes era um INSERT
+    // por unidade; uma queda no meio deixava a competência "fechada" com
+    // unidades sem cobrança. (BEGIN/COMMIT num TCSqlExec não serviria: no
+    // AdvPP um erro de SQL encerra o programa antes do COMMIT.)
+    cSqlCob := "INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, FILIAL) VALUES "
     For i := 1 To Len(aUnidades)
-        TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, FILIAL) VALUES ('" + ;
-            GcSqlLit(aUnidades[i]:UNI_CODIGO) + "', '" + GcSqlLit(cCompetencia) + "', " + ;
-            cValToChar(aValores[i]) + ", '" + cVencimento + "', 'pendente', '" + GcSqlLit(FWxFilial('COB')) + "')")
+        If i > 1
+            cSqlCob += ", "
+        EndIf
+        cSqlCob += "('" + GcSqlLit(aUnidades[i]:UNI_CODIGO) + "', '" + GcSqlLit(cCompetencia) + "', " + ;
+            cValToChar(aValores[i]) + ", '" + cVencimento + "', 'pendente', '" + GcSqlLit(FWxFilial('COB')) + "')"
     Next
+    TCSqlExec(cSqlCob)
 
     // Cobranças primeiro, contabilidade depois: se a contabilização falhar
     // no meio, a competência já consta como fechada e o próximo "Fechar"
@@ -226,6 +251,31 @@ User Function GcContabilizarCompetencia(cCompetencia)
     Next
     ConOut("GcContabilizarCompetencia: lançamentos contábeis gravados no exercício " + cCompetencia)
 Return .T.
+
+/*/{Protheus.doc} GcCompetenciaValida
+    .T. se a competência está em AAAA-MM, com ano 2000-2099 e mês 01-12.
+    @type User Function
+    @author GesCon
+    @since 2026-11-21
+    @param cCompetencia, character, competência
+    @return logical, .T. se válida
+*/
+User Function GcCompetenciaValida(cCompetencia)
+    Local nAno := 0 as numeric
+    Local nMes := 0 as numeric
+    Local nI   := 0 as numeric
+
+    If ValType(cCompetencia) != "C" .Or. Len(cCompetencia) != 7 .Or. SubStr(cCompetencia, 5, 1) != "-"
+        Return .F.
+    EndIf
+    For nI := 1 To 7
+        If nI != 5 .And. !(SubStr(cCompetencia, nI, 1) $ "0123456789")
+            Return .F.
+        EndIf
+    Next nI
+    nAno := Val(Left(cCompetencia, 4))
+    nMes := Val(Right(cCompetencia, 2))
+Return nAno >= 2000 .And. nAno <= 2099 .And. nMes >= 1 .And. nMes <= 12
 
 /*/{Protheus.doc} GcProximoVencimento
     Calcula um dia do mês seguinte à competência informada — dia
