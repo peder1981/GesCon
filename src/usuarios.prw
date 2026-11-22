@@ -225,40 +225,31 @@ Return
     @return lSucesso, logical, .T. se criado com sucesso
 */
 User Function GcCriarAdminNovo(cPerfil)
-    Local cLogin
-    Local cSenha
+    Local cLogin := "" as character
+    Local cSenha := "" as character
+    Local cMot   := "" as character
 
-    If Empty(cPerfil)
+    If Empty(cPerfil) .Or. cPerfil == "ADMIN"
         cPerfil := "SUPERADMIN"
     EndIf
-
-    // I5 (revisão final), defesa em profundidade: GcCriarUsuario já
-    // esconde a opção "Super Admin" de quem não é SUPERADMIN, mas esta
-    // função também é acessível por chamada direta -- confere de novo
-    // aqui. cLoginAtual vazio (chamada fora de uma sessão logada de
-    // verdade, ex.: bootstrap/teste) passa direto, pois não há sessão
-    // nenhuma se autopromovendo.
-    If cPerfil == "SUPERADMIN" .And. !Empty(cLoginAtual) .And. GcPerfilDoLogin(cLoginAtual) != "SUPERADMIN"
+    If cPerfil == "SUPERADMIN" .And. GcPerfilDoLogin(GcUsuarioSessao()) != "SUPERADMIN"
         MsgAlert("Apenas um super admin pode criar outro super admin.", "Criar Usuário")
         Return .F.
     EndIf
-
-    // Default vazio -- "admin2" era resíduo de teste do próprio autor
-    // (achado do Wilson Kraft, QA 2026-08-22): se o operador só confirmasse
-    // sem reparar, o sistema sempre tentava criar um usuário "admin2".
-    cLogin := FWGetText("Login do novo admin:", "")
+    cLogin := FWGetText("Login do novo admin (3 a 30 letras minúsculas, números, ponto, hífen ou sublinhado):", "")
     If Empty(cLogin)
         Return .F.
     EndIf
-
-    cSenha := FWGetText("Senha:", "", .T.)
+    cSenha := FWGetText("Senha inicial (ele troca no primeiro acesso):", "", .T.)
     If Empty(cSenha)
         Return .F.
     EndIf
-
-    TCSqlExec("INSERT INTO USR (USR_LOGIN, USR_SENHA, USR_PERFIL) " + ;
-        "VALUES ('" + GcSqlLit(cLogin) + "', '" + GcSqlLit(FWHash(cSenha)) + "', '" + GcSqlLit(cPerfil) + "')")
-    MsgInfo("Administrador '" + cLogin + "' criado.", "GesCon")
+    cMot := GcCriarUsuarioBase(cLogin, cSenha, cPerfil)
+    If !Empty(cMot)
+        MsgStop(cMot, "Criar Usuário")
+        Return .F.
+    EndIf
+    MsgInfo("Administrador '" + GcLoginNormal(cLogin) + "' criado. A senha será trocada no primeiro acesso.", "GesCon")
 Return .T.
 
 /*/{Protheus.doc} GcParseIndicesSindico
@@ -296,50 +287,60 @@ Return aIdx
     @return lOk, logical
 */
 User Function GcCriarSindicoNovo()
-    Local cLogin := FWGetText("Login do novo síndico:", "")
-    Local cSenha
-    Local aCond
-    Local cLista := ""
-    Local nJ
-    Local cSel
-    Local aIdx
-    Local i
+    Local cLogin := "" as character
+    Local cSenha := "" as character
+    Local cMot   := "" as character
+    Local cEu    := GcUsuarioSessao() as character
+    Local aCond  := {} as array
+    Local cLista := "" as character
+    Local cSel   := "" as character
+    Local aIdx   := {} as array
+    Local nJ     := 0 as numeric
+    Local i      := 0 as numeric
 
+    // Síndico só vincula o usuário novo aos condomínios dele; antes a lista
+    // trazia todos, e um síndico dava a si mesmo (por outro login) acesso a
+    // condomínios de outros clientes.
+    If GcPerfilDoLogin(cEu) == "SUPERADMIN"
+        aCond := TCSqlQuery("SELECT COND_FILIAL, COND_NOME FROM COND WHERE COND_ATIVO = 1 AND D_E_L_E_T_ = ' ' ORDER BY COND_NOME")
+    Else
+        aCond := TCSqlQuery("SELECT C.COND_FILIAL, C.COND_NOME FROM COND C " + ;
+            "INNER JOIN USR_COND UC ON UC.FILIAL = C.COND_FILIAL AND UC.D_E_L_E_T_ = ' ' " + ;
+            "WHERE lower(UC.USR_LOGIN) = '" + GcSqlLit(GcLoginNormal(cEu)) + "' AND C.COND_ATIVO = 1 AND C.D_E_L_E_T_ = ' ' " + ;
+            "ORDER BY C.COND_NOME")
+    EndIf
+    If Len(aCond) == 0
+        MsgAlert("Nenhum condomínio disponível para vincular.", "Criar Síndico")
+        Return .F.
+    EndIf
+    cLogin := FWGetText("Login do novo síndico (3 a 30 letras minúsculas, números, ponto, hífen ou sublinhado):", "")
     If Empty(cLogin)
         Return .F.
     EndIf
-
-    cSenha := FWGetText("Senha:", "", .T.)
+    cSenha := FWGetText("Senha inicial (ele troca no primeiro acesso):", "", .T.)
     If Empty(cSenha)
         Return .F.
     EndIf
-
-    aCond := TCSqlQuery("SELECT COND_FILIAL, COND_NOME FROM COND WHERE COND_ATIVO = 1 AND D_E_L_E_T_ = ' ' ORDER BY COND_NOME")
-    If Len(aCond) == 0
-        MsgAlert("Nenhum condomínio cadastrado ainda.", "Criar Síndico")
-        Return .F.
-    EndIf
-
     For nJ := 1 To Len(aCond)
         cLista += Str(nJ, 3) + ". " + aCond[nJ]:COND_NOME + Chr(10)
     Next nJ
-    cLista += "\nNúmeros dos condomínios (separados por vírgula, ex: 1,3):"
-
+    cLista += Chr(10) + "Números dos condomínios (separados por vírgula, ex: 1,3):"
     cSel := FWGetText(cLista, "")
-    If Empty(cSel)
+    aIdx := GcParseIndicesSindico(cSel, Len(aCond))
+    If Len(aIdx) == 0
+        MsgAlert("Escolha ao menos um condomínio.", "Criar Síndico")
         Return .F.
     EndIf
-
-    TCSqlExec("INSERT INTO USR (USR_LOGIN, USR_SENHA, USR_PERFIL) VALUES ('" + ;
-        GcSqlLit(cLogin) + "', '" + GcSqlLit(FWHash(cSenha)) + "', 'SINDICO')")
-
-    aIdx := GcParseIndicesSindico(cSel, Len(aCond))
+    cMot := GcCriarUsuarioBase(cLogin, cSenha, "SINDICO")
+    If !Empty(cMot)
+        MsgStop(cMot, "Criar Síndico")
+        Return .F.
+    EndIf
     For i := 1 To Len(aIdx)
         TCSqlExec("INSERT INTO USR_COND (USR_LOGIN, FILIAL) VALUES ('" + ;
-            GcSqlLit(cLogin) + "', '" + GcSqlLit(aCond[aIdx[i]]:COND_FILIAL) + "')")
+            GcSqlLit(GcLoginNormal(cLogin)) + "', '" + GcSqlLit(aCond[aIdx[i]]:COND_FILIAL) + "')")
     Next i
-
-    MsgInfo("Síndico '" + cLogin + "' criado e vinculado.", "GesCon")
+    MsgInfo("Síndico '" + GcLoginNormal(cLogin) + "' criado e vinculado. A senha será trocada no primeiro acesso.", "GesCon")
 Return .T.
 
 /*/{Protheus.doc} GcGerarTokenId

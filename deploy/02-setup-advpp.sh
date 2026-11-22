@@ -97,6 +97,29 @@ echo ""
 
 # --- 7. Criar systemd service ---
 echo "[7/7] Criando systemd service..."
+# Segredos fora da unidade (Environment= na unidade qualquer usuário lê com
+# `systemctl show`): /etc/gescon/gescon.env, 0600, só root. Na primeira
+# instalação gera a senha inicial do administrador (login admin, troca
+# obrigatória no primeiro acesso). O prefixo garante a política de senha.
+mkdir -p /etc/gescon
+chmod 700 /etc/gescon
+if [ ! -f /etc/gescon/gescon.env ]; then
+    umask 077
+    SENHA_INICIAL="Gc#7$(head -c 18 /dev/urandom | base64 | tr -d '/+=\n')"
+    cat > /etc/gescon/gescon.env << ENVEOF
+# Senha inicial do administrador (usada só com a tabela de usuários vazia).
+GESCON_ADMIN_SENHA=${SENHA_INICIAL}
+# Mala direta (descomente e preencha):
+# GESCON_SMTP_HOST=smtp.exemplo.com
+# GESCON_SMTP_PORT=587
+# GESCON_SMTP_USER=usuario
+# GESCON_SMTP_PASS=senha
+# GESCON_SMTP_FROM=gescon@seucondominio.com
+ENVEOF
+    chmod 600 /etc/gescon/gescon.env
+    echo "Senha inicial do administrador gravada em /etc/gescon/gescon.env (login: admin)."
+fi
+
 cat > /etc/systemd/system/gescon.service << 'EOF'
 [Unit]
 Description=GesCon - Sistema de Gestão Condominial
@@ -118,14 +141,11 @@ ProtectSystem=strict
 ProtectHome=false
 ReadWritePaths=/opt/gescon /root/.advpp
 
-# Variáveis de ambiente (mala direta)
 Environment=ADVPP_DB=/root/.advpp/ADVPP.db
-# Descomente para mala direta:
-# Environment=GESCON_SMTP_HOST=smtp.exemplo.com
-# Environment=GESCON_SMTP_PORT=587
-# Environment=GESCON_SMTP_USER=usuario
-# Environment=GESCON_SMTP_PASS=senha
-# Environment=GESCON_SMTP_FROM=gescon@seucondominio.com
+# Mensagens internas (ConOut) vão só para o journal, nunca para o navegador.
+Environment=ADVPP_WEBUI_HIDE_LOG=1
+# Senha inicial do administrador e SMTP: arquivo 0600 (ver acima).
+EnvironmentFile=-/etc/gescon/gescon.env
 
 [Install]
 WantedBy=multi-user.target

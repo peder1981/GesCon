@@ -1,41 +1,67 @@
-// tests/login_test.prw — GcLogin/GcCriarAdmin/GcAutenticar dependem de
-// FWGetText, que em execução headless sempre retorna o valor default
-// (sem UIProvider) — não dá pra testar o fluxo interativo via
-// `advplc run` (mesmo motivo de GcUnidades/GcCondominos/etc nunca serem
-// testadas assim). Este teste valida o mecanismo que GcAutenticar usa
-// por baixo: FWHash + comparação de hash na tabela USR.
+// tests/login_test.prw — fluxo de login da tela (src/login.prw). Em
+// execução headless o FWGetText devolve sempre o valor padrão (""), então
+// aqui se testa o que não depende de digitação: sem usuários e sem
+// GESCON_ADMIN_SENHA, ninguém vira administrador pela tela (antes o
+// primeiro visitante criava o super administrador com a senha que
+// quisesse); com usuários, login vazio não entra. Hash, política e
+// bloqueio: tests/seguranca_test.prw.
 #include "totvs.ch"
 
-// Os #include dos modulos ficam no FIM do arquivo, de proposito.
-// `advplc run` escolhe sozinho o ponto de entrada: a primeira User
-// Function cuja linha seja >= a primeira linha de codigo do arquivo raiz
-// (pkg/compiler/codegen.go). Como #include cola o texto incluido no lugar,
-// includes no topo empurram as funcoes dos modulos para antes do runner
-// deste arquivo -- e a suite inteira roda em silencio, executando algo
-// como GcSqlLit no lugar dos testes. Com os includes no fim, o runner
-// abaixo e sempre a primeira funcao do compilado. scripts/test.sh
-// confere isso a cada execucao.
+// Os #include dos modulos ficam no FIM do arquivo, de proposito (ver a
+// nota em tests/boleto_test.prw).
 
+/*/{Protheus.doc} LoginTest
+    Ponto de entrada da suite. Precisa ser a primeira User Function.
+    @type User Function
+    @author GesCon
+    @since 2026-07-24
+*/
 User Function LoginTest()
-    TCSqlExec("DELETE FROM USR WHERE USR_LOGIN = 'testeuser'")
-    TCSqlExec("INSERT INTO USR (USR_LOGIN, USR_SENHA) VALUES ('testeuser', '" + FWHash("senha_certa") + "')")
+    Local nFalhas := 0 as numeric
+    Private cLoginAtual := ""
 
-    // Senha certa: deve achar a linha
-    Local aOk := TCSqlQuery("SELECT USR_LOGIN FROM USR WHERE USR_LOGIN = 'testeuser' AND USR_SENHA = '" + ;
-        FWHash("senha_certa") + "' AND D_E_L_E_T_ = ' '")
-    ConOut("senha_certa_qtd=" + Str(Len(aOk)))
+    GcAdicionarColunasSeguranca()
+    TCSqlExec("DELETE FROM USR")
+    If !Empty(GetEnv("GESCON_ADMIN_SENHA"))
+        ConOut("FALHA ambiente: GESCON_ADMIN_SENHA definida no ambiente do teste")
+        Return
+    EndIf
 
-    // Senha errada: não deve achar nada
-    Local aErrada := TCSqlQuery("SELECT USR_LOGIN FROM USR WHERE USR_LOGIN = 'testeuser' AND USR_SENHA = '" + ;
-        FWHash("senha_errada") + "' AND D_E_L_E_T_ = ' '")
-    ConOut("senha_errada_qtd=" + Str(Len(aErrada)))
+    nFalhas += Confere("sem usuarios e sem senha inicial: nao entra", GcLogin(), .F.)
+    nFalhas += Confere("nenhum usuario criado pela tela", Len(TCSqlQuery("SELECT 1 FROM USR")), 0)
+    nFalhas += Confere("sessao sem login", cLoginAtual, "")
 
-    // Confirma que a senha NÃO fica gravada em texto puro
-    Local aRaw := TCSqlQuery("SELECT USR_SENHA FROM USR WHERE USR_LOGIN = 'testeuser'")
-    ConOut("senha_nao_e_texto_puro=" + cValToChar(aRaw[1]:USR_SENHA != "senha_certa"))
+    GcCriarUsuarioBase("admin", "Inicial#2026x", "SUPERADMIN")
+    nFalhas += Confere("com usuario, login vazio nao entra", GcLogin(), .F.)
+    nFalhas += Confere("sessao continua sem login", cLoginAtual, "")
+    nFalhas += Confere("trocar senha sem sessao recusado", GcTrocarSenha(), .F.)
 
-    TCSqlExec("DELETE FROM USR WHERE USR_LOGIN = 'testeuser'")
+    TCSqlExec("DELETE FROM USR")
+    If nFalhas == 0
+        ConOut("login: todos os casos ok")
+    Else
+        ConOut("FALHA login: " + cValToChar(nFalhas) + " caso(s)")
+    EndIf
 Return
 
+/*/{Protheus.doc} Confere
+    Compara obtido x esperado e imprime ok/FALHA.
+    @type Static Function
+    @author GesCon
+    @since 2026-11-21
+    @param cNome, character, nome do caso
+    @param xObtido, variant, valor obtido
+    @param xEsperado, variant, valor esperado
+    @return numeric, 0 se bateu, 1 se falhou
+*/
+Static Function Confere(cNome, xObtido, xEsperado)
+    If ValType(xObtido) == ValType(xEsperado) .And. xObtido == xEsperado
+        ConOut("ok    " + cNome)
+        Return 0
+    EndIf
+    ConOut("FALHA " + cNome + ": obtido [" + cValToChar(xObtido) + "] esperado [" + cValToChar(xEsperado) + "]")
+Return 1
+
 #include "../src/db.prw"
+#include "../src/seguranca.prw"
 #include "../src/login.prw"

@@ -5,6 +5,7 @@
 #include "totvs.ch"
 #include "src/db.prw"
 #include "src/schema-embed.prw"
+#include "src/seguranca.prw"
 #include "src/login.prw"
 #include "src/unidades.prw"
 #include "src/condominos.prw"

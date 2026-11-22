@@ -4,7 +4,7 @@ Mudanças notáveis do GesCon.
 
 ## [Não lançado]
 
-Refatoração sobre o AdvPP 4.8.5, etapa 1 de 4 (bugs e segurança). Detalhes
+Refatoração sobre o AdvPP 4.8.5, etapas 1 (bugs e segurança) e 2 (login) de 4. Detalhes
 e o que fica para as etapas de login, interface e reforma tributária em
 `docs/superpowers/specs/2026-11-21-refatoracao-advpp485-achados.md`.
 
@@ -36,6 +36,27 @@ e o que fica para as etapas de login, interface e reforma tributária em
 - **Avisos**: "Arquivar Aviso" listava avisos de todos os condomínios.
 - **Mala direta**: valor e datas sem formatação; e-mail não validado antes
   do cabeçalho (um endereço com quebra de linha injetava cabeçalho).
+
+- **Escalada de privilégio por login repetido** (crítico): um síndico
+  criava outro usuário com o login de um super administrador e a senha que
+  quisesse; ao entrar, o perfil lido pelo login era o do super. Login agora
+  é único (sem diferenciar maiúsculas), com índice único no banco.
+- **Síndico vinculava usuário a condomínio alheio**: a criação de síndico
+  listava todos os condomínios; agora só os do síndico que cria.
+- **Primeiro acesso**: com a tabela de usuários vazia, qualquer visitante
+  criava o super administrador pela tela. Agora o administrador só nasce
+  com a senha de `GESCON_ADMIN_SENHA` (ambiente do servidor), com troca
+  obrigatória no primeiro login; o deploy gera essa senha em
+  `/etc/gescon/gescon.env` (0600).
+- **Senha**: SHA-256 sem salt trocado por Argon2id com salt por usuário
+  (hashes antigos são regravados no primeiro login); política de senha
+  (10+ caracteres, maiúscula, minúscula, número, especial, sem o login);
+  5 erros seguidos bloqueiam o usuário por 15 minutos; usuário inexistente
+  e senha errada dão a mesma resposta; "Trocar Senha" troca só a do usuário
+  logado (antes pedia o login e trocava a de qualquer um de quem se
+  soubesse a senha atual).
+- Segredos do SMTP saíram da unidade systemd (`systemctl show` mostrava a
+  todos) para o arquivo 0600; `ADVPP_WEBUI_HIDE_LOG=1` no serviço.
 
 ### Alterado
 

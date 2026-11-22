@@ -103,12 +103,14 @@ User Function GcBootstrapDB()
     // Kraft, QA v1.2.0). Antes do schema.sql: o SX3 que ele recria já
     // referencia a coluna.
     GcAdicionarColunaSeFaltar("DES", "DES_LANCADO_CONTABIL", "NUMERIC DEFAULT 0")
+    GcAdicionarColunasSeguranca()
     lOk := TCSqlExec(GcSchemaSQL())
     If !lOk
         ConOut("GesCon: falha ao aplicar o schema no banco.")
     EndIf
     GcSanearDadosLegados()
     GcCriarIndiceUnicoCob()
+    GcCriarIndiceUnicoUsr()
 
     // A restauração das _OLD roda SEMPRE, mesmo fora de uma migração
     // "nova" -- é a rede de segurança de uma migração anterior que tenha

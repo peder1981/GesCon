@@ -58,7 +58,31 @@ gravação em um único comando (atômico no SQLite). Correção proposta no
 AdvPP (`pkg/vm/natives.go`, `TCSQLEXEC`): devolver negativo e expor
 `TCSqlError()`, como o Protheus.
 
-## Projeto 2 — login (próxima etapa)
+## Projeto 2 — login (concluído: `src/seguranca.prw`, `tests/seguranca_test.prw`)
+
+Feito: Argon2id v1 (`argon2id$v1$` + base64; 64 MiB, 2 iterações, 2 lanes,
+32 bytes; ~0,16 s por login) com salt por usuário e migração do SHA-256 no
+primeiro login; política (10+, maiúscula, minúscula, número, especial, sem
+o login); bloqueio de 15 min após 5 erros (relógio do banco); mesma
+resposta e mesmo custo para usuário inexistente e senha errada; troca
+obrigatória no primeiro acesso; administrador inicial só via
+`GESCON_ADMIN_SENHA` (sem senha padrão); login único sem diferenciar
+maiúsculas (índice `UQ_USR_LOGIN`; base antiga com duplicata: o login
+ambíguo não entra e o boot avisa); "Trocar Senha" só do usuário logado;
+deploy com segredos em `/etc/gescon/gescon.env` (0600) e
+`ADVPP_WEBUI_HIDE_LOG=1`.
+
+Achados no caminho: **escalada de privilégio** (síndico criava usuário
+com o login de um super e a senha que quisesse; o perfil é lido pelo
+login) e **síndico vinculando usuário a condomínio alheio** (a lista de
+condomínios na criação de síndico trazia todos).
+
+Fica para a etapa 3 (é da interface): expiração de sessão por inatividade
+na web e o mapa de permissões por perfil no menu (hoje as funções
+sensíveis já conferem SUPERADMIN: cadastro de condomínios, criar super,
+vincular-se a condomínio).
+
+### Levantamento original da etapa 2
 
 - Senha em SHA-256 **sem salt** (`FWHash`): trocar por Argon2id com salt por usuário (`Argon2id` + `UUIDRandom`, nativos do runtime, como no GEBAN), migrando o hash no próximo login bem-sucedido.
 - Primeiro acesso: com `USR` vazia, **qualquer visitante** cria o super administrador pela web. Trocar por credencial de primeiro acesso gerada no servidor, como o `GEBSECBOOT` do GEBAN.

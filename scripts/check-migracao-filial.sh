@@ -41,6 +41,7 @@ Return
 
 #include "$(pwd)/src/db.prw"
 #include "$(pwd)/src/schema-embed.prw"
+#include "$(pwd)/src/seguranca.prw"
 PRW
 
 saida=$(advplc run /tmp/migra_filial_check.prw --db-path "$banco" -I "$(pwd)/src" 2>&1) || { echo "FALHA: advplc run retornou erro"; echo "$saida"; exit 1; }

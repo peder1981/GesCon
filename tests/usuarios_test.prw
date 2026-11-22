@@ -182,6 +182,7 @@ User Function AT07ParseIndicesSindico()
 Return lOk
 
 #include "../src/db.prw"
+#include "../src/seguranca.prw"
 #include "../src/login.prw"
 #include "../src/usuarios.prw"
 #include "../src/condominios-cadastro.prw"

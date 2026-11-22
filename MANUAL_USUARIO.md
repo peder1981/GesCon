@@ -9,8 +9,13 @@ Para instalar e compilar, veja [GUIA_UTILIZACAO.md](GUIA_UTILIZACAO.md).
 
 Abra com `./gescon`. A primeira tela pergunta como você quer acessar:
 
-- **Administrador** — login e senha, dá acesso a todo o sistema
+- **Administrador** — login e senha (super administrador ou síndico)
 - **Sou condômino** — token temporário, mostra só as cobranças da sua unidade
+
+No primeiro acesso de um usuário novo, o GesCon pede para definir uma senha
+própria: no mínimo 10 caracteres, com letra maiúscula, letra minúscula,
+número e caractere especial, sem conter o login. Cinco senhas erradas
+seguidas bloqueiam o usuário por 15 minutos.
 
 Navegue com as setas e Enter, ou com o mouse. Em qualquer menu, **Voltar**
 retorna ao anterior.
@@ -145,7 +150,10 @@ Comunicados do condomínio. **Criar Aviso** pede título e texto;
 **Gerar Token** cria um acesso temporário para um condômino usar a opção
 *Sou condômino*. O token vale 48 horas e serve uma vez só.
 **Revogar Token** cancela um token antes do prazo.
-**Criar Usuário** cadastra um novo administrador.
+**Criar Usuário** cadastra um super administrador (só um super
+administrador pode) ou um síndico, com senha inicial que o usuário troca no
+primeiro acesso. O login é único, sem diferenciar maiúsculas. Um síndico só
+vincula o usuário novo aos condomínios dele.
 
 ---
 
