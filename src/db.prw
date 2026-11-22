@@ -172,14 +172,19 @@ User Function GcSanearDadosLegados()
     // travado no fechamento). Este saneamento é a única exceção: derruba a
     // trigger, arredonda e reaplica o schema no MESMO Exec (mesma conexão),
     // que recria a trigger. Só entra nesse caminho se houver dízima.
+    // check-filial: global -- saneamento de boot, todas as filiais
     If Len(TCSqlQuery("SELECT 1 FROM COB WHERE COB_VALOR <> ROUND(COB_VALOR, 2) LIMIT 1")) > 0
         TCSqlExec("DROP TRIGGER IF EXISTS TRG_COB_TRAVA_VALOR;" + Chr(10) + ;
             "UPDATE COB SET COB_VALOR = ROUND(COB_VALOR, 2) WHERE COB_VALOR <> ROUND(COB_VALOR, 2);" + Chr(10) + ;
             GcSchemaSQL())
     EndIf
+    // check-filial: global -- saneamento de boot, todas as filiais
     TCSqlExec("UPDATE LANCAMENTOS SET LAN_VALOR = ROUND(LAN_VALOR, 2) WHERE LAN_VALOR <> ROUND(LAN_VALOR, 2)")
+    // check-filial: global -- saneamento de boot, todas as filiais
     TCSqlExec("UPDATE RATEIO_DETALHE SET RAT_VALOR = ROUND(RAT_VALOR, 2) WHERE RAT_VALOR <> ROUND(RAT_VALOR, 2)")
+    // check-filial: global -- saneamento de boot, todas as filiais
     TCSqlExec("UPDATE RPT_PORTAL_EXTRATOS SET REX_VALOR = ROUND(REX_VALOR, 2) WHERE REX_VALOR <> ROUND(REX_VALOR, 2)")
+    // check-filial: global -- saneamento de boot, todas as filiais
     TCSqlExec("UPDATE RPT_PORTAL_AGENDA SET REA_VALOR = ROUND(REA_VALOR, 2) WHERE REA_VALOR <> ROUND(REA_VALOR, 2)")
 Return
 
@@ -194,6 +199,7 @@ Return
     @since 2026-10-10
 */
 User Function GcNormalizarCompetDespesas()
+    // check-filial: global -- saneamento de boot, todas as filiais
     TCSqlExec("UPDATE DES SET DES_COMPET = SUBSTR(DES_COMPET, 4, 4) || '-' || SUBSTR(DES_COMPET, 1, 2) " + ;
         "WHERE DES_COMPET GLOB '[0-9][0-9]/[0-9][0-9][0-9][0-9]'")
 Return
