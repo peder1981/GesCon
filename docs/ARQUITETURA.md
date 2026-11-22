@@ -12,7 +12,7 @@ ver [`FUNCIONAL.md`](FUNCIONAL.md).
   TOTVS Protheus).
 - **Compilador/runtime**: [AdvPP](https://github.com/peder1981/AdvPP)
   — compilador e VM open-source para AdvPL/TLPP, escrito em Go. GesCon
-  requer **`advplc` v4.8.5** (fixado em `ADVPP_VERSION`).
+  requer **`advplc` v4.8.6** (fixado em `ADVPP_VERSION`).
 - **Banco de dados**: SQLite, via a camada de banco compartilhada do
   AdvPP (mesmo arquivo `.db` usado por outras ferramentas AdvPP —
   `~/.advpp/ADVPP.db` por padrão) — igual nos dois modos de UI abaixo,

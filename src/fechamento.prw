@@ -156,7 +156,13 @@ User Function GcFecharMes(cCompetencia, nDiaVencimento)
         cSqlCob += "('" + GcSqlLit(aUnidades[i]:UNI_CODIGO) + "', '" + GcSqlLit(cCompetencia) + "', " + ;
             cValToChar(aValores[i]) + ", '" + cVencimento + "', 'pendente', '" + GcSqlLit(FWxFilial('COB')) + "')"
     Next
-    TCSqlExec(cSqlCob)
+    // AdvPP 4.8.6+: erro de SQL volta como .F. (antes encerrava o programa).
+    // Ex.: o índice único barrando cobrança já gravada por outra sessão.
+    If !TCSqlExec(cSqlCob)
+        ConOut("GcFecharMes: cobranças de " + cCompetencia + " não gravadas: " + TCSqlError())
+        MsgAlert("As cobranças de " + cCompetencia + " não foram gravadas (nenhuma unidade foi cobrada): " + TCSqlError(), "Fechamento Mensal")
+        Return .F.
+    EndIf
 
     // Cobranças primeiro, contabilidade depois: se a contabilização falhar
     // no meio, a competência já consta como fechada e o próximo "Fechar"

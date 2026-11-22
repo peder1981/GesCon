@@ -60,7 +60,9 @@ e o que fica para as etapas de login, interface e reforma tributária em
 
 ### Alterado
 
-- AdvPP 4.8.5 fixado em `ADVPP_VERSION`, lido pela CI de testes (antes
+- AdvPP 4.8.6 fixado em `ADVPP_VERSION` (a 4.8.6 saiu deste trabalho: erro de
+  SQL volta para o programa em vez de encerrá-lo; o Fechamento passa a avisar
+  quando a gravação das cobranças falha, sem gravar nenhuma), lido pela CI de testes (antes
   compilava o AdvPP do master), pelo release e pelo deploy (que instalava
   o 3.0.0 do pacote que não roda no Debian 12; agora `advpp-cli`).
 - `scripts/check-filial.sh` checa comando a comando, incluindo

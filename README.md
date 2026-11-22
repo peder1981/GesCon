@@ -50,14 +50,15 @@ O portal do condômino na web está adiado — ver
 
 ## Requisitos
 
-- [`advplc`](https://github.com/peder1981/AdvPP) **v4.8.5**, a versão
+- [`advplc`](https://github.com/peder1981/AdvPP) **v4.8.6**, a versão
   fixada em [`ADVPP_VERSION`](ADVPP_VERSION) (a CI, o release e o script
   de deploy leem esse arquivo). O GesCon usa do 4.8.x: `.And.`/`.Or.` com
   curto-circuito, conta de datas (`data - data` = dias, usada no fator de
   vencimento do boleto), `Transform` com picture `@E` (valores em reais),
   `UUIDRandom` (token do condômino), `UPDATE ... RETURNING` via
   `TCSqlQuery` (consumo atômico do token, registro de pagamento) e
-  `NULL` do banco como texto vazio. Histórico das versões que o projeto
+  `NULL` do banco como texto vazio e, do 4.8.6, erro de SQL devolvido ao
+  programa (`TCSqlExec` = `.F.` + `TCSqlError()`) em vez de encerrá-lo. Histórico das versões que o projeto
   motivou no AdvPP: ver [`ARQUITETURA.md`](docs/ARQUITETURA.md).
 - `sqlite3` (CLI, só para o bootstrap do schema).
 

@@ -46,6 +46,17 @@ User Function FechamentoValidacaoTest()
     TCSqlExec("INSERT INTO UNI (FILIAL, UNI_CODIGO, UNI_FRACAO) VALUES ('      ', 'V03', 0.7)")
     nFalhas += Confere("fracoes 120% recusado", GcFecharMes("2098-01"), .F.)
 
+    // Falha no meio da gravação (gatilho recusa a cobrança de V02): nenhuma
+    // cobrança gravada e o fechamento devolve .F. (AdvPP 4.8.6+: o erro de
+    // SQL volta para o programa em vez de encerrá-lo).
+    TCSqlExec("UPDATE UNI SET UNI_FRACAO = 0.5 WHERE FILIAL = '      ' AND UNI_CODIGO = 'V03'")
+    TCSqlExec("CREATE TRIGGER TRG_TESTE_RECUSA BEFORE INSERT ON COB WHEN NEW.COB_UNIDADE = 'V02' " + ;
+        "BEGIN SELECT RAISE(ABORT, 'recusa de teste'); END")
+    nFalhas += Confere("falha no meio devolve .F.", GcFecharMes("2098-01"), .F.)
+    aQtd := TCSqlQuery("SELECT COUNT(*) AS Q FROM COB WHERE FILIAL = '      '")
+    nFalhas += Confere("falha no meio nao grava nenhuma", Val(aQtd[1]:Q), 0)
+    TCSqlExec("DROP TRIGGER TRG_TESTE_RECUSA")
+
     // Frações em 100%: fecha, uma cobrança por unidade, soma = despesa
     TCSqlExec("UPDATE UNI SET UNI_FRACAO = 0.5 WHERE FILIAL = '      ' AND UNI_CODIGO = 'V03'")
     nFalhas += Confere("fracoes 100% fecha", GcFecharMes("2098-01"), .T.)
