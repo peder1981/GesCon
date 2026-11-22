@@ -27,42 +27,8 @@ apt-get install -y -qq \
     apt-transport-https \
     unzip
 
-# --- 2. Instalar AdvPP ---
-echo "[2/7] Instalando AdvPP v3.0.0..."
-ADVPP_VERSION="3.0.0"
-ARCH=$(uname -m)
-
-case "$ARCH" in
-    x86_64)  ADVPP_ARCH="linux-amd64" ;;
-    aarch64) ADVPP_ARCH="linux-arm64" ;;
-    *)       echo "ERRO: Arquitetura $ARCH não suportada"; exit 1 ;;
-esac
-
-# Download do release
-RELEASE_URL="https://github.com/peder1981/AdvPP/releases/download/v${ADVPP_VERSION}/advpp-${ADVPP_VERSION}-${ADVPP_ARCH}.tar.gz"
-echo "Baixando: $RELEASE_URL"
-curl -fsSL "$RELEASE_URL" -o /tmp/advpp.tar.gz
-
-# Extrair e instalar
-mkdir -p /opt/advpp
-tar xzf /tmp/advpp.tar.gz -C /opt/advpp --strip-components=1
-rm /tmp/advpp.tar.gz
-
-# Symlink para binários
-ln -sf /opt/advpp/advplc /usr/local/bin/advplc
-ln -sf /opt/advpp/adveditor /usr/local/bin/adveditor 2>/dev/null || true
-ln -sf /opt/advpp/advpp-ide /usr/local/bin/advpp-ide 2>/dev/null || true
-
-# Verificar
-echo "AdvPP instalado:"
-advplc version 2>/dev/null || echo "(advplc version não disponível)"
-
-# --- 3. Configurar diretório AdvPP ---
-echo "[3/7] Configurando diretório AdvPP..."
-mkdir -p /root/.advpp
-
-# --- 4. Clonar GesCon ---
-echo "[4/7] Clonando GesCon..."
+# --- 2. Clonar GesCon ---
+echo "[2/7] Clonando GesCon..."
 mkdir -p /opt/gescon
 cd /opt/gescon
 
@@ -73,6 +39,40 @@ if [ -d ".git" ]; then
 else
     git clone https://github.com/peder1981/GesCon.git .
 fi
+
+# --- 3. Instalar AdvPP ---
+# Versão fixada pelo próprio GesCon (ADVPP_VERSION), a mesma da CI e do
+# release. Pacote advpp-cli: binário estático, sem a GUI -- o pacote completo
+# exige GLIBC 2.38 e a LXC é Debian 12 (GLIBC 2.36).
+ADVPP_VERSION="$(tr -d ' \n\r' < /opt/gescon/ADVPP_VERSION)"
+echo "[3/7] Instalando AdvPP v${ADVPP_VERSION} (advpp-cli)..."
+ARCH=$(uname -m)
+
+case "$ARCH" in
+    x86_64)  ADVPP_ARCH="linux-amd64" ;;
+    aarch64) ADVPP_ARCH="linux-arm64" ;;
+    *)       echo "ERRO: Arquitetura $ARCH não suportada"; exit 1 ;;
+esac
+
+RELEASE_URL="https://github.com/peder1981/AdvPP/releases/download/v${ADVPP_VERSION}/advpp-cli-${ADVPP_VERSION}-${ADVPP_ARCH}.tar.gz"
+echo "Baixando: $RELEASE_URL"
+TMP_ADVPP="$(mktemp -d)"
+curl -fsSL "$RELEASE_URL" -o "$TMP_ADVPP/advpp-cli.tar.gz"
+tar xzf "$TMP_ADVPP/advpp-cli.tar.gz" -C "$TMP_ADVPP"
+mkdir -p /opt/advpp
+install -m 755 "$TMP_ADVPP/advplc" /opt/advpp/advplc
+rm -rf "$TMP_ADVPP"
+ln -sf /opt/advpp/advplc /usr/local/bin/advplc
+
+echo "AdvPP instalado:"
+/opt/advpp/advplc --version
+if ! /opt/advpp/advplc --version | grep -q "v${ADVPP_VERSION}"; then
+    echo "ERRO: advplc instalado não é a versão ${ADVPP_VERSION}"; exit 1
+fi
+
+# --- 4. Configurar diretório AdvPP ---
+echo "[4/7] Configurando diretório AdvPP..."
+mkdir -p /root/.advpp
 
 # --- 5. Bootstrap do banco ---
 echo "[5/7] Aplicando schema no SQLite..."

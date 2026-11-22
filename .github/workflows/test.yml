@@ -7,12 +7,14 @@ on:
       - '**.prw'
       - 'schema.sql'
       - 'scripts/**'
+      - 'ADVPP_VERSION'
       - '.github/workflows/test.yml'
   pull_request:
     paths:
       - '**.prw'
       - 'schema.sql'
       - 'scripts/**'
+      - 'ADVPP_VERSION'
       - '.github/workflows/test.yml'
 
 jobs:
@@ -31,10 +33,19 @@ jobs:
       # vive em outro repositorio. Sem ele nao ha como validar sintaxe nem
       # gerar o executavel -- o lint por grep que existia aqui antes nao
       # compilava nada, e deixava passar erro de sintaxe.
+      # Mesma versao fixa do release.yml (ADVPP_VERSION): sem ref, a CI
+      # testava contra o master do AdvPP do momento, nao contra o
+      # compilador com que o GesCon e publicado.
+      - name: Le a versao do AdvPP
+        id: advpp
+        shell: bash
+        run: echo "versao=v$(tr -d ' \n\r' < GesCon/ADVPP_VERSION)" >> "$GITHUB_OUTPUT"
+
       - name: Checkout AdvPP (compilador)
         uses: actions/checkout@v4
         with:
           repository: peder1981/AdvPP
+          ref: ${{ steps.advpp.outputs.versao }}
           path: AdvPP
 
       - uses: actions/setup-go@v5

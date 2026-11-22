@@ -50,15 +50,15 @@ O portal do condômino na web está adiado — ver
 
 ## Requisitos
 
-- [`advplc`](https://github.com/peder1981/AdvPP) **v1.24.0+** —
-  v1.22.1 corrigiu um bug real de ponto de entrada que impedia rodar
-  qualquer projeto AdvPL multi-arquivo como o GesCon; v1.23.0 adicionou
-  `FWMenuSelect`/`FWGetText` (menu de navegação); v1.23.1-v1.23.4
-  trouxeram identidade visual própria (web e desktop) e corrigiram um
-  bug real de diálogo não bloqueante no desktop; v1.23.5 adicionou
-  `FWHash` (usado pelo login); v1.24.0 adicionou 3º argumento `bIsPassword`
-  em `FWGetText` (campo de senha mascarado em web e desktop). Todos
-  achados/motivados durante este projeto.
+- [`advplc`](https://github.com/peder1981/AdvPP) **v4.8.5**, a versão
+  fixada em [`ADVPP_VERSION`](ADVPP_VERSION) (a CI, o release e o script
+  de deploy leem esse arquivo). O GesCon usa do 4.8.x: `.And.`/`.Or.` com
+  curto-circuito, conta de datas (`data - data` = dias, usada no fator de
+  vencimento do boleto), `Transform` com picture `@E` (valores em reais),
+  `UUIDRandom` (token do condômino), `UPDATE ... RETURNING` via
+  `TCSqlQuery` (consumo atômico do token, registro de pagamento) e
+  `NULL` do banco como texto vazio. Histórico das versões que o projeto
+  motivou no AdvPP: ver [`ARQUITETURA.md`](docs/ARQUITETURA.md).
 - `sqlite3` (CLI, só para o bootstrap do schema).
 
 ## Rodando
