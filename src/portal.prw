@@ -87,11 +87,7 @@ User Function GcAuthPortalToken(cToken)
         g_cCondNomePortal := aCond[1]:COND_NOME
     EndIf
 
-    If Empty(g_cCondNomePortal)
-        MsgInfo("Autenticado como condômino " + g_cConPortal + ". Bem-vindo!", "Portal Condômino")
-    Else
-        MsgInfo("Autenticado como condômino " + g_cConPortal + " (" + g_cCondNomePortal + "). Bem-vindo!", "Portal Condômino")
-    EndIf
+    // Sem diálogo aqui: a função também serve à interface web, que avisa do jeito dela.
 Return .T.
 
 /*/{Protheus.doc} GcPortalBrowse

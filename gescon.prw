@@ -26,15 +26,50 @@
 #include "src/plano-contas.prw"
 #include "src/exercicios.prw"
 #include "src/auditoria-menu.prw"
+#include "src/cadastros.prw"
+#include "src/consultas.prw"
+#include "src/ui.prw"
 
 /*/{Protheus.doc} GesCon
-    Ponto de entrada do GesCon — sobe com `advplc serve gescon.prw`,
-    mostra um menu navegando entre todas as telas.
-    @type Function
+    Ponto de entrada do GesCon — `advplc serve gescon.prw`. Declara o
+    estado da sessão (cada sessão do navegador é um programa próprio),
+    prepara o banco e abre a interface web (src/ui.prw).
+    Durante a etapa 3 da refatoração, GESCON_UI_ANTIGA=1 abre o menu de
+    diálogos antigo (GcUIAntiga); ele sai na fase 3e.
+    @type User Function
     @author GesCon
     @since 2026-07-24
 */
 User Function GesCon()
+    Private g_cUniPortal      := ""
+    Private g_cConPortal      := ""
+    Private g_lAutoPortal     := .F.
+    Private g_cFilialAtiva    := ""
+    Private g_cCondNomePortal := ""
+    Private cLoginAtual       := ""
+    Private cGcPerfil         := ""
+    Private cGcCondNome       := ""
+    Private nGcUltimaAcao     := GcAgora()
+    Private aGcRecarga        := {}
+
+    ConOut("GesCon — Sistema de Gestão Condominial")
+    // Antes de qualquer tela: sem isto a instalação nova abre contra um
+    // banco sem tabela nenhuma.
+    GcBootstrapDB()
+    If GetEnv("GESCON_UI_ANTIGA") == "1"
+        GcUIAntiga()
+    Else
+        GcUI()
+    EndIf
+Return
+
+/*/{Protheus.doc} GcUIAntiga
+    Menu de diálogos anterior à interface web (sai na fase 3e da etapa 3).
+    @type User Function
+    @author GesCon
+    @since 2026-07-24
+*/
+User Function GcUIAntiga()
     Local aMenu := {"Unidades", "Condôminos", "Despesas", "Cobranças", "Fechamento Mensal", ;
         "Mala Direta", "Relatórios", "Contabilidade", "Auditoria", "Boletos", "Avisos", ;
         "Usuários", "Condomínios", "Trocar Senha", "Trocar Condomínio", "Sair"}
@@ -47,18 +82,6 @@ User Function GesCon()
     Local nPortal
     Local aPortal
 
-    Private g_cUniPortal      := ""
-    Private g_cConPortal      := ""
-    Private g_lAutoPortal     := .F.
-    Private g_cFilialAtiva    := ""
-    Private g_cCondNomePortal := ""
-    Private cLoginAtual    := ""
-
-    ConOut("GesCon — Sistema de Gestão Condominial")
-
-    // Antes de qualquer tela: sem isto o executável distribuído abre a
-    // tela de login contra um banco sem tabela nenhuma.
-    GcBootstrapDB()
 
     // Caminho de acesso: admin (login) ou condômino (token)
     Local aEscolha := {"Administrador", "Sou condômino"}
