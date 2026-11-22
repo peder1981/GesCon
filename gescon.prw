@@ -28,6 +28,7 @@
 #include "src/auditoria-menu.prw"
 #include "src/cadastros.prw"
 #include "src/consultas.prw"
+#include "src/operacoes.prw"
 #include "src/ui.prw"
 
 /*/{Protheus.doc} GesCon

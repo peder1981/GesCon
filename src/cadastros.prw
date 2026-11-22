@@ -369,3 +369,20 @@ User Function GcSalvarCondominio(cFilial, cNome, cCnpj, cEndereco)
         Return "Não foi possível gravar: " + TCSqlError()
     EndIf
 Return ""
+
+/*/{Protheus.doc} GcDataDigitada
+    Data digitada em DD/MM/AAAA, AAAA-MM-DD ou AAAAMMDD; data inexistente
+    volta vazia.
+    @type User Function
+    @author GesCon
+    @since 2026-11-21
+    @param cTexto, character, data digitada
+    @return date, a data ou vazia
+*/
+User Function GcDataDigitada(cTexto)
+    Local c := AllTrim(cTexto) as character
+
+    If Len(c) == 10 .And. SubStr(c, 3, 1) == "/" .And. SubStr(c, 6, 1) == "/"
+        c := Right(c, 4) + SubStr(c, 4, 2) + Left(c, 2)
+    EndIf
+Return GcBoletoDataVenc(c)
