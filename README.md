@@ -54,7 +54,8 @@ Segurança: senha em Argon2id com salt, política de senha, bloqueio após 5
 erros, troca obrigatória no primeiro acesso, sessão encerrada após 30 minutos
 sem uso, cada tela e operação conferida pelo perfil.
 
-Telas: [Manual do usuário](MANUAL_USUARIO.md).
+Passo a passo de todas as telas, com capturas anotadas: [Manual do usuário](MANUAL_USUARIO.md)
+(também em [PDF](MANUAL_USUARIO.pdf)).
 
 ## Desenvolvimento
 

@@ -7,6 +7,16 @@ Mudanças notáveis do GesCon.
 Refatoração sobre o AdvPP 4.8.x, etapas 1 (bugs e segurança), 2 (login),
 3 (interface) e 4 (reforma tributária). Exige o AdvPP 4.8.7.
 
+### Manual do usuário
+
+- `MANUAL_USUARIO.md` reescrito como passo a passo de todas as telas, com 38
+  capturas reais anotadas (moldura numerada e balão no menu, campo ou botão
+  a usar), roteiros completos (implantar condomínio, fechar o mês, atender
+  condômino) e perguntas frequentes; também em `MANUAL_USUARIO.pdf`.
+- Corrigido: o token emitido em Comunicação > Portal do condômino não
+  aparecia na tela (componente criado depois de a página montada); a
+  administração não tinha como copiá-lo. Achado ao produzir o manual.
+
 ### Reforma tributária (etapa 4)
 
 Base conferida no texto: LC 214/2025, art. 26 (redação da LC 227/2026);
