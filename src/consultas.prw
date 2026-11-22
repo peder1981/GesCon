@@ -406,3 +406,37 @@ User Function GcIndicadores()
         "SUM(CASE WHEN COB_STATUS = 'atrasado' THEN 1 ELSE 0 END) AS QATR FROM COB WHERE D_E_L_E_T_ = ' ' AND FILIAL = '" + cFil + "'")
     aD := TCSqlQuery("SELECT IFNULL(SUM(DES_VALOR), 0) AS D FROM DES WHERE DES_COMPET = '" + cComp + "' AND D_E_L_E_T_ = ' ' AND FILIAL = '" + cFil + "'")
 Return {Val(aU[1]:Q), Round(Val(aU[1]:F) * 100, 4), Round(Val(aC[1]:ABE), 2), Round(Val(aC[1]:ATR), 2), Val(aC[1]:QATR), Round(Val(aD[1]:D), 2)}
+
+/*/{Protheus.doc} GcQReceitas
+    Receitas do condomínio fora das cobranças (teste dos 80%).
+    @type User Function
+    @author GesCon
+    @since 2026-11-22
+    @return array, {colunas, linhas}
+*/
+User Function GcQReceitas()
+Return GcConsulta({{"R_E_C_N_O_", "Nº"}, {"REC_COMPET", "Competência"}, {"REC_DESCR", "Descrição"}, ;
+    {"ORIGEM", "Origem"}, {"REC_VALOR", "Valor (R$)", "R$"}}, ;
+    "SELECT R_E_C_N_O_, REC_COMPET, REC_DESCR, CASE REC_TIPO WHEN 'C' THEN 'C - condôminos' WHEN 'T' THEN 'T - terceiros' " + ;
+    "ELSE 'F - financeira' END AS ORIGEM, REC_VALOR FROM REC WHERE D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('REC')) + ;
+    "' ORDER BY REC_COMPET DESC, R_E_C_N_O_ DESC LIMIT 2000")
+
+/*/{Protheus.doc} GcQNfse
+    Cobranças de uma competência com a situação da NFS-e.
+    @type User Function
+    @author GesCon
+    @since 2026-11-22
+    @param cComp, character, competência AAAA-MM
+    @return array, {colunas, linhas}
+*/
+User Function GcQNfse(cComp)
+Return GcConsulta({{"R_E_C_N_O_", "Nº"}, {"COB_UNIDADE", "Unidade"}, {"CON_NOME", "Condômino"}, {"COB_VALOR", "Valor (R$)", "R$"}, ;
+    {"NFS_SITUACAO", "NFS-e"}, {"NFS_NDPS", "DPS nº"}, {"NFS_CHAVE", "Chave de acesso"}, {"NFS_RETORNO", "Retorno"}}, ;
+    "SELECT C.R_E_C_N_O_, C.COB_UNIDADE, IFNULL(N.CON_NOME, '') AS CON_NOME, C.COB_VALOR, " + ;
+    "IFNULL(F.NFS_STATUS, 'não emitida') AS NFS_SITUACAO, IFNULL(F.NFS_NDPS, '') AS NFS_NDPS, IFNULL(F.NFS_CHAVE, '') AS NFS_CHAVE, " + ;
+    "CASE WHEN IFNULL(F.NFS_STATUS, '') = 'autorizada' THEN '' ELSE substr(IFNULL(F.NFS_RETORNO, ''), 1, 200) END AS NFS_RETORNO FROM COB C " + ;
+    "LEFT JOIN UNI U ON U.UNI_CODIGO = C.COB_UNIDADE AND U.FILIAL = C.FILIAL AND U.D_E_L_E_T_ = ' ' " + ;
+    "LEFT JOIN CON N ON N.CON_CODIGO = U.UNI_CONDOMINO AND N.FILIAL = C.FILIAL AND N.D_E_L_E_T_ = ' ' " + ;
+    "LEFT JOIN NFS F ON F.NFS_COB = C.R_E_C_N_O_ AND F.FILIAL = C.FILIAL AND F.D_E_L_E_T_ = ' ' " + ;
+    "WHERE C.D_E_L_E_T_ = ' ' AND C.FILIAL = '" + GcSqlLit(FWxFilial('COB')) + "' AND C.COB_COMPET = '" + GcSqlLit(AllTrim(cComp)) + ;
+    "' ORDER BY C.COB_UNIDADE")

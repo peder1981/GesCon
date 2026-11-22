@@ -70,6 +70,11 @@ jobs:
       - name: Sintaxe de todos os fontes
         run: GesCon/scripts/check.sh
 
+      # scripts/check-nfse.py valida a DPS no XSD e confere a assinatura com
+      # bibliotecas que não são o AdvPP.
+      - name: Dependências do verificador da NFS-e
+        run: python3 -m pip install --user lxml cryptography
+
       - name: Suite de testes
         run: GesCon/scripts/test.sh
 

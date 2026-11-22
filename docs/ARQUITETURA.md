@@ -29,6 +29,8 @@ usuário](../MANUAL_USUARIO.md); padrão de tela: [PADRAO_GUI.md](PADRAO_GUI.md)
 | `src/consultas.prw` | Consultas `{colunas, linhas}` das tabelas e relatórios |
 | `src/cadastros.prw` | Gravação validada: condômino, unidade, despesa, condomínio; CPF/CNPJ |
 | `src/operacoes.prw` | Token do portal, dados bancários, exercício, usuários, plano de contas, lançamento manual |
+| `src/fiscal.prw` | Reforma tributária: dados fiscais, regime (opção/renúncia), receitas, teste dos 80% |
+| `src/nfse.prw` | NFS-e nacional: DPS (99.05.01), assinatura XMLDSig, envio à Sefin, resposta |
 | `src/seguranca.prw` | Senha (Argon2id), bloqueio, política, primeiro acesso, perfis (`GcPode`) |
 | `src/fechamento.prw` | Fechamento mensal (rateio, cobranças, contabilização) |
 | `src/cobrancas.prw` | Registro de pagamento |

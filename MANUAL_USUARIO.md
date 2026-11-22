@@ -117,6 +117,43 @@ cobranças sem par, rateio, datas fora do período, alterações em período
 fechado) e lista anomalias e alertas. **Conferir fechamento do período**
 conta as anomalias críticas que impedem fechar o exercício.
 
+## Reforma tributária
+
+![Reforma tributária](docs/img/12-reforma-tributaria.png)
+
+- **Dados fiscais**: regime do IBS e da CBS — "Não optante" é a regra da
+  lei para condomínio; "Optante pelo regime regular" pede a data da opção
+  e só pode ser desfeito depois de 12 meses (a renúncia vale a partir de 1º
+  de janeiro do ano seguinte). Informe o município (código IBGE de 7
+  dígitos), o ambiente da NFS-e (comece pela **produção restrita**, de
+  teste), a série e o caminho do certificado A1 (.pfx) no computador onde o
+  GesCon roda. A senha do certificado não fica gravada.
+- **Teste dos 80%**: compara o que o condomínio cobra dos condôminos com a
+  receita total do período (padrão: últimos 12 meses). Abaixo de 80%, sem a
+  opção pelo regime regular, o condomínio paga IBS e CBS sobre as receitas
+  de terceiros — leve ao contador.
+
+## Receitas
+
+![Receitas](docs/img/13-receitas.png)
+
+O que o condomínio recebe fora das cobranças do fechamento: **de terceiros**
+(antena, publicidade, aluguel de espaço), **financeira** (rendimentos) ou
+**dos condôminos** (multa, reserva de salão). Entra no teste dos 80%.
+
+## NFS-e
+
+![NFS-e](docs/img/15-nfse.png)
+
+A partir de 01/01/2027 cada cobrança precisa de NFS-e. Informe a competência
+e a senha do certificado e emita a cobrança selecionada ou todas as
+pendentes. A tabela mostra a situação (autorizada, rejeitada com o motivo,
+não emitida) e a chave de acesso. Antes: cadastre o CNPJ do condomínio
+(Condomínios) e o CPF ou CNPJ do condômino de cada unidade.
+
+Certificado exportado pelo OpenSSL 3 (cifra AES) não abre: reexporte com
+`openssl pkcs12 -export -legacy` (o exportado pelo Windows funciona).
+
 ## Usuários
 
 ![Usuários](docs/img/10-usuarios.png)

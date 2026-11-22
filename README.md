@@ -45,6 +45,8 @@ programa não apaga os dados. O sistema só aceita conexões da própria máquin
 | Relatórios | Inadimplência com dias de atraso, extrato da unidade, despesas por categoria, resultado do mês |
 | Contabilidade | Lançamentos manuais, plano de contas, exercícios, balancete por conta |
 | Auditoria | Equilíbrio contábil, lançamentos e cobranças sem par, alterações em período fechado |
+| Reforma tributária | Regime do IBS e da CBS (não optante ou optante pelo regime regular, com as regras de opção e renúncia), teste dos 80% e receitas fora do fechamento |
+| NFS-e | NFS-e de padrão nacional das cobranças (código 99.05.01, obrigatória a partir de 01/01/2027), assinada com o certificado A1 e enviada à Sefin Nacional |
 | Usuários | Super administrador (todos os condomínios) e síndico (os condomínios dele) |
 | Portal do condômino | Cobranças, boleto e avisos da própria unidade, só leitura |
 
@@ -57,7 +59,7 @@ Telas: [Manual do usuário](MANUAL_USUARIO.md).
 ## Desenvolvimento
 
 Requer o [`advplc`](https://github.com/peder1981/AdvPP) na versão fixada em
-[`ADVPP_VERSION`](ADVPP_VERSION) (hoje **v4.8.6**; a CI, o release e o deploy
+[`ADVPP_VERSION`](ADVPP_VERSION) (hoje **v4.8.7**; a CI, o release e o deploy
 leem esse arquivo) e `sqlite3`.
 
 ```bash
@@ -71,7 +73,8 @@ packaging/build-package.sh 1.3.0               # pacotes e instalador em packagi
 O GesCon usa do AdvPP 4.8.x: componentes PO-UI (`PoApp`), `.And.`/`.Or.` com
 curto-circuito, conta de datas, `Transform` com picture `@E`, `UUIDRandom`,
 `Argon2id`, `UPDATE ... RETURNING` via `TCSqlQuery` e, do 4.8.6, erro de SQL
-devolvido ao programa (`TCSqlExec` = `.F.` + `TCSqlError()`).
+devolvido ao programa (`TCSqlExec` = `.F.` + `TCSqlError()`) e, do 4.8.7,
+certificado A1 em PFX com a cadeia (assinatura da NFS-e e TLS com a Sefin).
 
 Documentação técnica: [arquitetura](docs/ARQUITETURA.md),
 [padrão de tela](docs/PADRAO_GUI.md), [funcional](docs/FUNCIONAL.md).
@@ -97,8 +100,9 @@ Sem `GESCON_SMTP_HOST`, nada é enviado.
 - Boleto: Itaú (exceto carteiras de nosso número com 15 posições) e Bradesco;
   o arquivo de remessa CNAB ainda não é gerado.
 - Taxa extra (cobrança fora do fechamento mensal) ainda não existe.
-- Reforma tributária (IBS/CBS, NFS-e de condomínio a partir de 01/12/2026):
-  em andamento.
+- NFS-e: emissão (sem cancelamento/substituição). O XSD oficial publicado
+  ainda não traz o grupo de condomínios da NT 009; faça a primeira emissão
+  na produção restrita.
 
 ## Agradecimentos
 

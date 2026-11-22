@@ -21,6 +21,8 @@
 #include "src/cadastros.prw"
 #include "src/consultas.prw"
 #include "src/operacoes.prw"
+#include "src/fiscal.prw"
+#include "src/nfse.prw"
 #include "src/ui.prw"
 
 /*/{Protheus.doc} GesCon

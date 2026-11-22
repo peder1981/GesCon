@@ -297,8 +297,188 @@ Return { ;
     {"Relatórios", "an an-chart-bar", "relatorios", {|o| GcUIPgRelatorios(o)}}, ;
     {"Contabilidade", "an an-calculator", "contabilidade", {|o| GcUIPgContabil(o)}}, ;
     {"Auditoria", "an an-shield-check", "auditoria", {|o| GcUIPgAuditoria(o)}}, ;
+    {"Reforma tributária", "an an-scales", "fiscal", {|o| GcUIPgFiscal(o)}}, ;
+    {"Receitas", "an an-coins", "receitas", {|o| GcUIPgReceitas(o)}}, ;
+    {"NFS-e", "an an-invoice", "nfse", {|o| GcUIPgNfse(o)}}, ;
     {"Usuários", "an an-user-gear", "usuarios", {|o| GcUIPgUsuarios(o)}}, ;
     {"Condomínios", "an an-city", "condominios", {|o| GcUIPgCondominios(o)}} }
+
+/*/{Protheus.doc} GcUIPgFiscal
+    Reforma tributária: dados fiscais do condomínio (regime, município,
+    NFS-e) e o teste dos 80% (LC 214/2025, art. 26).
+    @type Static Function
+    @author GesCon
+    @since 2026-11-22
+*/
+Static Function GcUIPgFiscal(oApp)
+    Local oPg   := PoPage():New(oApp, "Reforma tributária (IBS e CBS)") as object
+    Local aCfg  := GcFiscalCfg() as array
+    Local oF    := PoWidget():New(oPg, "Dados fiscais do condomínio") as object
+    Local oReg  := PoSelect():New(oF, "Regime do IBS e da CBS", {{"Não optante (regra da lei)", "N"}, ;
+        {"Optante pelo regime regular", "R"}}, aCfg[1]) as object
+    Local oDt   := PoInput():New(oF, "Data da opção pelo regime regular (DD/MM/AAAA)") as object
+    Local oMun  := PoInput():New(oF, "Município do condomínio (código IBGE, 7 dígitos)") as object
+    Local oAmb  := PoSelect():New(oF, "Ambiente da NFS-e", {{"Produção restrita (teste)", "2"}, {"Produção", "1"}}, aCfg[5]) as object
+    Local oSer  := PoInput():New(oF, "Série da DPS") as object
+    Local oCert := PoInput():New(oF, "Certificado A1 (.pfx): caminho no servidor") as object
+    Local oT    := PoWidget():New(oPg, "Teste dos 80% (art. 26, § 2º, II)") as object
+    Local oIni  := PoInput():New(oT, "De (AAAA-MM)") as object
+    Local oFim  := PoInput():New(oT, "Até (AAAA-MM)") as object
+    Local aI    := {} as array
+    Local oB    := Nil
+    Local dHoje := Date() as date
+
+    oF:SetCols(6)
+    oT:SetCols(6)
+    If !Empty(aCfg[2])
+        oDt:SetValue(DToC(SToD(aCfg[2])))
+    EndIf
+    oMun:SetValue(aCfg[4])
+    oSer:SetValue(aCfg[6])
+    oCert:SetValue(aCfg[8])
+    oB := PoButton():New(oF, "Gravar dados fiscais", {|| GcUIMsg(oApp, GcSalvarFiscal(GcStr(oReg:GetValue()), GcStr(oDt:GetValue()), ;
+        GcStr(oMun:GetValue()), GcStr(oAmb:GetValue()), GcStr(oSer:GetValue()), GcStr(oCert:GetValue())), "Dados fiscais gravados.")})
+    oB:Set("kind", "primary")
+    oB:Set("icon", "an an-floppy-disk")
+    PoInfo():New(oF, "", "O condomínio edilício não é contribuinte do IBS e da CBS (LC 214/2025, art. 26), mas pode optar pelo " + ;
+        "regime regular: a opção vale da data informada, com permanência mínima de 12 meses, e a renúncia só produz efeito em " + ;
+        "1º de janeiro do ano seguinte. A NFS-e das cobranças é obrigatória a partir de 01/01/2027 (Ato Conjunto RFB/CGIBS 7/2026). " + ;
+        "A senha do certificado não é gravada: é pedida a cada emissão.")
+
+    oFim:SetValue(Left(DToS(dHoje), 4) + "-" + SubStr(DToS(dHoje), 5, 2))
+    oIni:SetValue(Left(DToS(GcMaisMeses(dHoje, -11)), 4) + "-" + SubStr(DToS(GcMaisMeses(dHoje, -11)), 5, 2))
+    aAdd(aI, PoInfo():New(oT, "Taxas e demais valores cobrados dos condôminos", ""))
+    aAdd(aI, PoInfo():New(oT, "Receitas de terceiros", ""))
+    aAdd(aI, PoInfo():New(oT, "Receitas financeiras", ""))
+    aAdd(aI, PoInfo():New(oT, "Parcela dos condôminos na receita total", ""))
+    aAdd(aI, PoInfo():New(oT, "Situação", ""))
+    oB := PoButton():New(oT, "Calcular", {|| GcUITeste80(oApp, GcStr(oIni:GetValue()), GcStr(oFim:GetValue()), aI)})
+    oB:Set("kind", "secondary")
+    oB:Set("icon", "an an-percent")
+    PoInfo():New(oT, "", "A lei não fixa o período: o padrão são os últimos 12 meses. Cadastre em Receitas o que entra fora " + ;
+        "das cobranças do fechamento (antena, publicidade, aluguel de espaço, rendimentos, multas). A decisão final é do contador.")
+    GcUIRegistra(oPg, {|| GcUITeste80(Nil, GcStr(oIni:GetValue()), GcStr(oFim:GetValue()), aI)})
+Return oPg
+
+Static Function GcUITeste80(oApp, cIni, cFim, aI)
+    Local aT := {} as array
+
+    GcUIToque()
+    If !GcCompetenciaValida(cIni) .Or. !GcCompetenciaValida(cFim) .Or. cIni > cFim
+        If oApp != Nil
+            oApp:Notify("Período inválido: use AAAA-MM e o início antes do fim.", "error")
+        EndIf
+        Return
+    EndIf
+    aT := GcTeste80(cIni, cFim)
+    aI[1]:SetValue("R$ " + AllTrim(Transform(aT[1], "@E 999,999,999.99")))
+    aI[2]:SetValue("R$ " + AllTrim(Transform(aT[2], "@E 999,999,999.99")))
+    aI[3]:SetValue("R$ " + AllTrim(Transform(aT[3], "@E 999,999,999.99")))
+    If aT[4] > 0
+        aI[4]:SetValue(AllTrim(Transform(aT[5], "@E 999.99")) + "% de R$ " + AllTrim(Transform(aT[4], "@E 999,999,999.99")))
+    Else
+        aI[4]:SetValue("-")
+    EndIf
+    aI[5]:SetValue(aT[6])
+Return
+
+/*/{Protheus.doc} GcUIPgReceitas
+    Receitas do condomínio fora das cobranças (teste dos 80%).
+    @type Static Function
+    @author GesCon
+    @since 2026-11-22
+*/
+Static Function GcUIPgReceitas(oApp)
+    Local cHoje := Left(DToS(Date()), 4) + "-" + SubStr(DToS(Date()), 5, 2) as character
+Return GcUICadastro(oApp, "Receitas do condomínio", {|| GcQReceitas()}, ;
+    {{"", "K", 1}, {"Competência (AAAA-MM)", "C", 2, cHoje}, {"Descrição", "C", 3}, ;
+    {"Origem", {{"Dos condôminos (multa, reserva de salão...)", "C - condôminos"}, ;
+    {"De terceiros (antena, publicidade, aluguel de espaço)", "T - terceiros"}, ;
+    {"Financeira (rendimento de aplicação)", "F - financeira"}}, 4}, {"Valor (R$)", "N", 5}}, ;
+    {|a| GcSalvarReceita(Val(a[1]), a[2], a[3], a[4], a[5])}, {|a| GcExcluirReceita(Val(a[1]))}, ;
+    "O que o condomínio recebe fora das cobranças do fechamento. Entra no teste dos 80% (Reforma tributária): " + ;
+    "as cobranças e as receitas dos condôminos contra a receita total.")
+
+/*/{Protheus.doc} GcUIPgNfse
+    Emissão da NFS-e de padrão nacional das cobranças (código 99.05.01).
+    @type Static Function
+    @author GesCon
+    @since 2026-11-22
+*/
+Static Function GcUIPgNfse(oApp)
+    Local oPg   := PoPage():New(oApp, "NFS-e das cobranças") as object
+    Local oF    := PoWidget():New(oPg, "Emissão") as object
+    Local cComp := Left(DToS(Date()), 4) + "-" + SubStr(DToS(Date()), 5, 2) as character
+    Local oComp := PoInput():New(oF, "Competência (AAAA-MM)") as object
+    Local oSen  := PoPassword():New(oF, "Senha do certificado A1") as object
+    Local oWT   := PoWidget():New(oPg, "Cobranças da competência") as object
+    Local oTab  := PoTable():New(oWT) as object
+    Local aSel  := {0} as array
+    Local oB    := Nil
+
+    oF:SetCols(12)
+    oWT:SetCols(12)
+    oComp:SetValue(cComp)
+    oComp:OnChange({|o, x| GcUIToque(), GcUITabela(oTab, GcQNfse(GcStr(x)))})
+    oTab:OnSelect({|o, aLin| aSel[1] := GcNum(aLin[1])})
+    oB := PoButton():New(oF, "Emitir a selecionada", {|| GcUINfse(oApp, oTab, GcStr(oComp:GetValue()), aSel[1], GcStr(oSen:GetValue()))})
+    oB:Set("kind", "primary")
+    oB:Set("icon", "an an-invoice")
+    oB := PoButton():New(oF, "Emitir todas as pendentes", {|| GcUINfse(oApp, oTab, GcStr(oComp:GetValue()), -1, GcStr(oSen:GetValue()))})
+    oB:Set("kind", "secondary")
+    PoInfo():New(oF, "", "Obrigatória a partir de 01/01/2027: uma NFS-e por cobrança, código 99.05.01, emitida na Sefin " + ;
+        "Nacional com o certificado A1 do condomínio (Reforma tributária: município, ambiente e certificado). " + ;
+        "Comece pela produção restrita para testar.")
+    GcUIRegistra(oPg, {|| GcUITabela(oTab, GcQNfse(GcStr(oComp:GetValue())))})
+Return oPg
+
+Static Function GcUINfse(oApp, oTab, cComp, nCob, cSenha)
+    Local aQ    := {} as array
+    Local nI    := 0 as numeric
+    Local nOk   := 0 as numeric
+    Local nNao  := 0 as numeric
+    Local cMot  := "" as character
+    Local cErro := "" as character
+
+    GcUIToque()
+    If Empty(cSenha)
+        oApp:Notify("Informe a senha do certificado A1.", "warning")
+        Return
+    EndIf
+    If nCob == 0
+        oApp:Notify("Selecione uma cobrança na tabela.", "warning")
+        Return
+    EndIf
+    If nCob > 0
+        cMot := GcNfseEmitir(nCob, cSenha)
+        GcUIMsg(oApp, cMot, "NFS-e autorizada.")
+    Else
+        aQ := GcQNfse(cComp)[2]
+        For nI := 1 To Len(aQ)
+            If GcStr(aQ[nI][5]) == "autorizada"
+                Loop
+            EndIf
+            cMot := GcNfseEmitir(GcNum(aQ[nI][1]), cSenha)
+            If Empty(cMot)
+                nOk++
+            Else
+                nNao++
+                If Empty(cErro)
+                    cErro := cMot
+                EndIf
+            EndIf
+            If "certificado" $ cMot .Or. "Sem resposta" $ cMot
+                Exit
+            EndIf
+        Next
+        If Empty(cErro)
+            oApp:Notify(cValToChar(nOk) + " NFS-e autorizada(s).", "success")
+        Else
+            oApp:Notify(cValToChar(nOk) + " autorizada(s), " + cValToChar(nNao) + " não emitida(s). Primeiro motivo: " + cErro, "error")
+        EndIf
+    EndIf
+    GcUITabela(oTab, GcQNfse(cComp))
+Return
 
 /*/{Protheus.doc} GcUIPgFechamento
     Fechamento mensal: rateio das despesas da competência pelas frações.

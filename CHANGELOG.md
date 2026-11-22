@@ -4,8 +4,33 @@ Mudanças notáveis do GesCon.
 
 ## [Não lançado]
 
-Refatoração sobre o AdvPP 4.8.x, etapas 1 (bugs e segurança), 2 (login) e
-3 (interface) de 4.
+Refatoração sobre o AdvPP 4.8.x, etapas 1 (bugs e segurança), 2 (login),
+3 (interface) e 4 (reforma tributária). Exige o AdvPP 4.8.7.
+
+### Reforma tributária (etapa 4)
+
+Base conferida no texto: LC 214/2025, art. 26 (redação da LC 227/2026);
+Decreto 12.955/2026, arts. 25 e 115; Ato Conjunto RFB/CGIBS 4/2026 alterado
+pelo 7/2026; NT SE/CGNFS-e 009 v1.01; tabela cClassTrib do portal DF-e.
+
+- **Dados fiscais do condomínio** (tela Reforma tributária): regime do IBS e
+  da CBS (não optante, a regra da lei, ou optante pelo regime regular com
+  data da opção; renúncia só depois de 12 meses e com efeito em 1º de
+  janeiro do ano seguinte), município (IBGE), ambiente e série da NFS-e,
+  certificado A1. A senha do certificado não é gravada.
+- **Teste dos 80%** (art. 26, § 2º, II): taxas e demais valores cobrados dos
+  condôminos sobre a receita total do período, com a situação explicada. A
+  tela **Receitas** registra o que entra fora do fechamento (terceiros,
+  financeiras, outras dos condôminos).
+- **NFS-e de padrão nacional das cobranças** (obrigatória a partir de
+  01/01/2027): DPS com o código 99.05.01 e o grupo `condominios`, CST 410 /
+  cClassTrib 410012 (não optante) ou 200 / 200046 (optante), assinada com o
+  A1 e enviada à Sefin Nacional; chave de acesso ou motivo da rejeição
+  gravados por cobrança. Numeração não se perde com senha errada; DPS
+  rejeitada reaproveita o número.
+- Verificação independente (`scripts/check-nfse.py`, roda no `test.sh`): XSD
+  oficial da DPS, assinatura conferida com lxml e cryptography, envio a uma
+  Sefin simulada que exige certificado de cliente.
 
 ### Interface nova (etapa 3)
 

@@ -95,6 +95,32 @@ aberto). Sempre do condomínio aberto, calculados na hora.
   passivo e receita com saldo credor.
 - Fechar o exercício impede novos lançamentos nele.
 
+## Reforma tributária
+
+![Reforma tributária](img/12-reforma-tributaria.png)
+
+- **Regime**: o condomínio edilício não é contribuinte do IBS e da CBS (LC
+  214/2025, art. 26, I). Pode optar pelo regime regular: a opção vale da
+  data informada; a renúncia só é aceita depois de 12 meses de opção e o
+  condomínio continua optante até 31/12 do ano da renúncia (Decreto
+  12.955/2026, art. 25).
+- **Teste dos 80%** (art. 26, § 2º, II): numerador = cobranças do fechamento
+  + receitas de origem "condôminos"; denominador = tudo (inclusive
+  terceiros e financeiras). 80% ou mais: sem IBS e CBS. Menos de 80%, não
+  optante: IBS e CBS sobre as operações que o condomínio realizar, com
+  crédito proporcional — o GesCon avisa e não calcula: é para o contador.
+  Optante: IBS e CBS sobre todas as taxas e demais valores.
+- **NFS-e** (Decreto 12.955/2026, art. 115, VI, "d"; a partir de 01/01/2027
+  pelo Ato Conjunto RFB/CGIBS 7/2026): uma por cobrança, emitida na Sefin
+  Nacional com o certificado A1 do condomínio. Código 99.05.01, NBS
+  1.1001.90.00, local do imóvel (cIndOp 020201), ISSQN não incide, grupo
+  `condominios` com vencimento original e a cobrança (tipo 01, condomínio
+  ordinário). Não optante: CST 410 / cClassTrib 410012; optante: CST 200 /
+  cClassTrib 200046. A Sefin calcula o IBS e a CBS.
+- Exige: CNPJ do condomínio (Condomínios), município, certificado, e CPF ou
+  CNPJ válido do condômino de cada unidade. Cobrança com NFS-e autorizada
+  não é emitida de novo.
+
 ## Limitações conhecidas
 
 - Taxa extra (cobrança fora do fechamento mensal): fora da interface até a
@@ -103,4 +129,11 @@ aberto). Sempre do condomínio aberto, calculados na hora.
 - Repartição só por fração ideal.
 - Boleto sem arquivo de remessa CNAB; Itaú sem as carteiras de nosso número
   com 15 posições.
-- Reforma tributária (IBS/CBS, NFS-e de condomínio): em andamento.
+- NFS-e: só emissão. Cancelamento e substituição (eventos), detalhamento
+  da cobrança por tipo (gDetCobranca) e descontos ainda não existem.
+- O XSD oficial publicado (produção restrita, 20/10/2026) ainda não traz o
+  grupo `condominios` da NT 009: o GesCon segue a NT; quando sair o XSD
+  definitivo, conferir (`tests/fixtures/nfse`).
+- O nome do campo do envio (`dpsXmlGZipB64`) não está no manual público da
+  API (a documentação Swagger exige certificado); vem de integradores.
+  Primeira emissão real deve ser feita na produção restrita.

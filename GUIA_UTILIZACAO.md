@@ -57,6 +57,7 @@ recusa Host que não seja da própria máquina. Detalhes em
 | `GESCON_SMTP_HOST`, `_PORT`, `_USER`, `_PASS`, `_FROM` | Mala direta |
 | `ADVPP_DB` | Banco SQLite (no pacote, o iniciador usa a pasta de dados) |
 | `GESCON_PORTA` | Porta do pacote (padrão 8086) |
+| `GESCON_NFSE_URL` | Endereço da API da NFS-e no lugar da Sefin Nacional (só para testes) |
 | `ADVPP_WEBUI_HIDE_LOG=1` | Mensagens internas fora do navegador (o pacote e o deploy já definem) |
 
 Sem usuários e sem `GESCON_ADMIN_SENHA`, a tela de entrada explica o que
@@ -77,6 +78,7 @@ GESCON_ADMIN_SENHA='Uma#SenhaForte1' ./gescon   # http://127.0.0.1:8086
 scripts/test.sh                                # exige o advplc de ADVPP_VERSION
 scripts/check.sh                               # sintaxe, alcance, isolamento por condomínio
 scripts/check-migracao-filial.sh               # banco antigo sobe limpo
+python3 scripts/check-nfse.py <banco>          # NFS-e: XSD, assinatura e envio (exige lxml e cryptography)
 packaging/build-package.sh <versão>            # pacotes e instalador
 ```
 

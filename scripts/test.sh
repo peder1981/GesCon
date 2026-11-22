@@ -70,6 +70,16 @@ for f in tests/*_test.prw; do
     printf '  ok    %-28s (%s linhas)\n' "$nome" "$(wc -l < "$saida")"
 done
 
+# NFS-e: XSD, assinatura (lxml + cryptography) e envio a uma Sefin simulada
+# com mTLS. Banco próprio: a suíte acima já sujou o compartilhado.
+total=$((total + 1))
+banco_nfse=$(mktemp -u --suffix=.db)
+sqlite3 "$banco_nfse" < schema.sql
+if ! python3 scripts/check-nfse.py "$banco_nfse"; then
+    falhas=$((falhas + 1))
+fi
+rm -f "$banco_nfse" "$banco_nfse"-wal "$banco_nfse"-shm
+
 echo
 if [ "$falhas" -eq 0 ]; then
     echo "test: $total suites, 0 falha"
