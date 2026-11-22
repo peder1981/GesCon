@@ -273,140 +273,58 @@ Static Function SemDigito(cTexto)
     EndIf
 Return Digitos(cRet)
 
-/*/{Protheus.doc} GcBoletoConfigurar
-    Tela de configuracao do beneficio para boletos.
-    Salva configuracao no banco CFG_BOLETO.
+/*/{Protheus.doc} GcBoletoDados
+    Monta o boleto de uma cobrança do condomínio da sessão, sem diálogo.
+    O nosso número é o R_E_C_N_O_ da cobrança (único e estável). Com
+    cUnidade, só aceita cobrança dessa unidade (portal do condômino).
     @type User Function
     @author GesCon
-    @since 2026-07-24
+    @since 2026-11-21
+    @param nRecno, numeric, R_E_C_N_O_ da cobrança em COB
+    @param cUnidade, character, (opcional) unidade a que a cobrança tem de pertencer
+    @return array, {lOk, cMensagem, cLinha, cCodBarras, dVenc, nValor, cCompetencia}
 */
-User Function GcBoletoConfigurar()
-    Local oDlg
-    Local aCfg      := {}
-    Local cBanco    := "237"
-    Local cAgencia  := ""
-    Local cConta    := ""
-    Local cCobrta   := ""
-    Local cCarteira := "09"
-    Local lOk       := .F.
+User Function GcBoletoDados(nRecno, cUnidade)
+    Local aCob   := {} as array
+    Local aCfg   := {} as array
+    Local nValor := 0 as numeric
+    Local dVenc  := CToD("") as date
+    Local cBanco := "" as character
+    Local cLinha := "" as character
+    Local cBarra := "" as character
+    Local cUni   := "" as character
 
-    // Pre-carrega a configuracao atual, se houver: a tela edita o que existe
-    // em vez de comecar em branco toda vez.
-    aCfg := TCSqlQuery("SELECT CFG_BANCO, CFG_AGENCIA, CFG_CONTA, CFG_COBRT, CFG_CARTEIRA " + ;
-        "FROM CFG_BOLETO WHERE D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('CFG_BOLETO')) + "'")
-    If Len(aCfg) > 0
-        cBanco    := AllTrim(aCfg[1]["CFG_BANCO"])
-        cAgencia  := AllTrim(aCfg[1]["CFG_AGENCIA"])
-        cConta    := AllTrim(aCfg[1]["CFG_CONTA"])
-        cCobrta   := AllTrim(aCfg[1]["CFG_COBRT"])
-        cCarteira := AllTrim(aCfg[1]["CFG_CARTEIRA"])
+    If ValType(nRecno) != "N" .Or. nRecno <= 0
+        Return {.F., "Cobrança não encontrada.", "", "", dVenc, 0, ""}
     EndIf
-
-    DEFINE MSDIALOG oDlg TITLE "Configuração de Boleto" FROM 0,0 TO 260,440 PIXEL
-
-    @ 10, 10 SAY "Banco (341=Itaú, 237=Bradesco):" PIXEL
-    @ 10,140 GET cBanco SIZE 50,10                            PIXEL
-    @ 30, 10 SAY "Agência:"                        PIXEL
-    @ 30,140 GET cAgencia SIZE 70,10                          PIXEL
-    @ 50, 10 SAY "Conta corrente:"                 PIXEL
-    @ 50,140 GET cConta SIZE 90,10                            PIXEL
-    @ 70, 10 SAY "Cedente / Convênio:"             PIXEL
-    @ 70,140 GET cCobrta SIZE 90,10                           PIXEL
-    @ 90, 10 SAY "Carteira:"                       PIXEL
-    @ 90,140 GET cCarteira SIZE 50,10                         PIXEL
-    @125, 10 BUTTON "Confirmar" ACTION (lOk := .T.) SIZE 40,12 PIXEL
-    @125,140 BUTTON "Cancelar"                      SIZE 40,12 PIXEL
-
-    ACTIVATE MSDIALOG oDlg CENTERED
-
-    If !lOk
-        Return .F.
+    If ValType(cUnidade) == "C" .And. !Empty(cUnidade)
+        cUni := " AND COB_UNIDADE = '" + GcSqlLit(cUnidade) + "'"
     EndIf
-
-    cBanco    := AllTrim(cBanco)
-    cAgencia  := AllTrim(cAgencia)
-    cConta    := AllTrim(StrTran(cConta, "-", ""))
-    cCobrta   := AllTrim(cCobrta)
-    cCarteira := AllTrim(cCarteira)
-
-    If Empty(cBanco) .Or. Empty(cAgencia) .Or. Empty(cConta)
-        MsgAlert("Banco, agência e conta são obrigatórios.", "Configuração de Boleto")
-        Return .F.
-    EndIf
-
-    If cBanco != "341" .And. cBanco != "237"
-        MsgAlert("Apenas Itaú (341) e Bradesco (237) têm fórmula implementada.", "Configuração de Boleto")
-        Return .F.
-    EndIf
-    // Confere o layout do banco com um nosso numero de teste: agencia ate
-    // 4 digitos; Itau conta ate 5 e carteira ate 3 (exceto as de 15
-    // posicoes); Bradesco conta ate 7 e carteira ate 2.
-    If Empty(GcBoletoCampoLivre(cBanco, cAgencia, cConta, cCarteira, "1"))
-        MsgAlert("Agência, conta ou carteira fora do layout do banco " + cBanco + ;
-            ". Itaú: agência até 4 dígitos, conta até 5, carteira até 3 (107, 122, 142, 143, 196 e 198 não são suportadas). " + ;
-            "Bradesco: agência até 4 dígitos, conta até 7, carteira até 2.", "Configuração de Boleto")
-        Return .F.
-    EndIf
-
-    // Snapshot: uma configuracao por vez, entao limpa tudo antes de gravar
-    TCSqlExec("DELETE FROM CFG_BOLETO WHERE D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('CFG_BOLETO')) + "'")
-    TCSqlExec("INSERT INTO CFG_BOLETO (CFG_BANCO, CFG_AGENCIA, CFG_CONTA, CFG_COBRT, CFG_CARTEIRA, FILIAL) VALUES (" + ;
-        "'" + GcSqlLit(cBanco) + "', '" + GcSqlLit(cAgencia) + "', '" + GcSqlLit(cConta) + "', " + ;
-        "'" + GcSqlLit(cCobrta) + "', '" + GcSqlLit(cCarteira) + "', '" + GcSqlLit(FWxFilial('CFG_BOLETO')) + "')")
-
-    MsgInfo("Configuração de boleto salva.", "Configuração de Boleto")
-Return .T.
-
-
-/*/{Protheus.doc} GcBoletoGera
-    Gera o boleto de uma cobranca: le COB e CFG_BOLETO e mostra a linha
-    digitavel e o codigo de barras. O nosso numero e o R_E_C_N_O_ da
-    cobranca (unico e estavel no condominio).
-    @type User Function
-    @author GesCon
-    @since 2026-07-24
-    @param nRecno, numeric, numero do registro na tabela COB
-    @return logical, .T. se gerou
-*/
-User Function GcBoletoGera(nRecno)
-    Local aCob    := {} as array
-    Local aCfg    := {} as array
-    Local nValor  := 0 as numeric
-    Local dVenc   := CToD("") as date
-    Local cBanco  := "" as character
-    Local cLinha  := "" as character
-    Local cCodBar := "" as character
-
-    aCob := TCSqlQuery("SELECT COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS " + ;
-        "FROM COB WHERE R_E_C_N_O_ = " + cValToChar(Int(nRecno)) + " AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('COB')) + "'")
+    aCob := TCSqlQuery("SELECT COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS FROM COB WHERE R_E_C_N_O_ = " + ;
+        cValToChar(Int(nRecno)) + cUni + " AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('COB')) + "'")
     If Len(aCob) == 0
-        MsgStop("Cobrança não encontrada.", "Gerar Boleto")
-        Return .F.
+        Return {.F., "Cobrança não encontrada.", "", "", dVenc, 0, ""}
+    EndIf
+    If AllTrim(aCob[1]["COB_STATUS"]) == "pago"
+        Return {.F., "Esta cobrança já está paga.", "", "", dVenc, 0, ""}
     EndIf
     nValor := Val(aCob[1]["COB_VALOR"])
     dVenc  := GcBoletoDataVenc(aCob[1]["COB_VENCTO"])
     If nValor <= 0 .Or. Empty(dVenc)
-        MsgStop("Cobrança sem valor ou sem vencimento válido.", "Gerar Boleto")
-        Return .F.
+        Return {.F., "Cobrança sem valor ou sem vencimento válido.", "", "", dVenc, nValor, ""}
     EndIf
-
-    aCfg := TCSqlQuery("SELECT CFG_BANCO, CFG_AGENCIA, CFG_CONTA, CFG_COBRT, CFG_CARTEIRA " + ;
-        "FROM CFG_BOLETO WHERE D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('CFG_BOLETO')) + "'")
+    aCfg := TCSqlQuery("SELECT CFG_BANCO, CFG_AGENCIA, CFG_CONTA, CFG_CARTEIRA FROM CFG_BOLETO " + ;
+        "WHERE D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('CFG_BOLETO')) + "'")
     If Len(aCfg) == 0
-        MsgStop("Configuração de boleto não encontrada. Use Boletos > Configurar.", "Gerar Boleto")
-        Return .F.
+        Return {.F., "Dados bancários do boleto não configurados neste condomínio.", "", "", dVenc, nValor, ""}
     EndIf
-    cBanco  := AllTrim(aCfg[1]["CFG_BANCO"])
-    cLinha  := GcBoletoLinhaDigitavel(cBanco, aCfg[1]["CFG_AGENCIA"], aCfg[1]["CFG_CONTA"], ;
+    cBanco := AllTrim(aCfg[1]["CFG_BANCO"])
+    cLinha := GcBoletoLinhaDigitavel(cBanco, aCfg[1]["CFG_AGENCIA"], aCfg[1]["CFG_CONTA"], ;
         aCfg[1]["CFG_CARTEIRA"], cValToChar(Int(nRecno)), dVenc, nValor)
-    cCodBar := GcBoletoCodigoBarras(cBanco, aCfg[1]["CFG_AGENCIA"], aCfg[1]["CFG_CONTA"], ;
+    cBarra := GcBoletoCodigoBarras(cBanco, aCfg[1]["CFG_AGENCIA"], aCfg[1]["CFG_CONTA"], ;
         aCfg[1]["CFG_CARTEIRA"], cValToChar(Int(nRecno)), dVenc, nValor)
     If Empty(cLinha)
-        MsgStop("Não foi possível montar o boleto: confira banco, agência, conta e carteira em Boletos > Configurar.", "Gerar Boleto")
-        Return .F.
+        Return {.F., "Não foi possível montar o boleto: confira banco, agência, conta e carteira.", "", "", dVenc, nValor, ""}
     EndIf
-    MsgInfo("Linha digitável:" + Chr(10) + cLinha + Chr(10) + ;
-        Chr(10) + "Código de barras:" + Chr(10) + cCodBar + Chr(10) + ;
-        Chr(10) + "Vencimento: " + DToC(dVenc) + "   Valor: R$ " + AllTrim(Transform(nValor, "@E 999,999,999.99")), ;
-        "Boleto — " + AllTrim(aCob[1]["COB_COMPET"]))
-Return .T.
+Return {.T., "", cLinha, cBarra, dVenc, nValor, AllTrim(aCob[1]["COB_COMPET"])}
+

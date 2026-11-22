@@ -1,153 +1,111 @@
 # GesCon — Sistema de Gestão Condominial
 
-Sistema de gestão condominial em AdvPL/TLPP, rodando sobre o
-[AdvPP](https://github.com/peder1981/AdvPP) (compilador/VM open-source
-para AdvPL/TLPP, escrito em Go). Serve dois propósitos: uso real de
-administração de condomínio, e case de validação de robustez do
-compilador — o desenvolvimento deste projeto encontrou e corrigiu 5
-bugs reais (persistência de work-area, `Recover` sem variável nomeada,
-ponto de entrada com `#include`, comparação com `Nil` derrubando a VM,
-diálogos não bloqueantes no desktop) e motivou 4 capacidades novas
-(`TCSqlExec`/`TCSqlQuery`, `TMailMessage`, `FWMenuSelect`/`FWGetText`,
-`FWHash`) no AdvPP — ver [`ARQUITETURA.md`](docs/ARQUITETURA.md).
+Gestão de condomínios para síndicos e administradoras: cadastro de unidades
+e condôminos, despesas, fechamento mensal com rateio por fração ideal,
+cobranças com boleto (Itaú e Bradesco), portal do condômino, mala direta,
+relatórios, contabilidade em partida dobrada e auditoria. Vários condomínios
+numa instalação, cada um com os dados separados.
 
-Aplicação **desktop**: `advplc build` gera um executável autocontido que
-abre em janela nativa (Fyne), com banco SQLite local. Não há servidor nem
-navegador envolvidos.
+Escrito em AdvPL/TLPP e executado pelo [AdvPP](https://github.com/peder1981/AdvPP)
+(compilador e máquina virtual open-source). A interface é web, com
+componentes PO-UI: abre no navegador, no computador do escritório ou num
+servidor.
 
-Login de administrador e menu navegando entre as telas: cadastro de unidades
-e condôminos, lançamento de despesas, Fechamento Mensal com rateio por fração
-ideal, cobranças e registro de pagamento, mala direta com envio real de
-e-mail, relatórios (balancete, inadimplência, extrato por unidade, despesas
-por categoria), contabilidade em partida dobrada (lançamento manual, despesa
-rateada, validação de integridade, balancete e fechamento de período),
-auditoria com seis validadores de anomalia e alertas, boleto bancário
-Itaú/Bradesco, avisos do condomínio, gestão de usuários e tokens, e acesso
-do condômino às próprias cobranças por token.
+![Início](docs/img/02-inicio.png)
 
-```bash
-scripts/bootstrap-db.sh    # banco
-scripts/build.sh           # executável
-./gescon                   # abre a janela
-```
+## Instalação
 
-O portal do condômino na web está adiado — ver
-[GUIA_UTILIZACAO.md](GUIA_UTILIZACAO.md), seção 8.
+**Windows:** baixe `gescon-setup-<versão>.exe` da página de
+[releases](https://github.com/peder1981/GesCon/releases) e instale (não pede
+administrador). O atalho **GesCon** sobe o sistema e abre o navegador em
+`http://127.0.0.1:8086`. Na primeira vez abre também o arquivo
+`PRIMEIRO-ACESSO.txt` com a senha inicial do usuário `admin`; o primeiro
+login pede uma senha nova.
 
-- **[Guia de utilização](GUIA_UTILIZACAO.md)** — instalação, compilação,
-  execução e problemas comuns.
-- **[Manual do usuário](MANUAL_USUARIO.md)** — passo a passo de cada tela.
-- **[Padrão de GUI](docs/PADRAO_GUI.md)** — como escrever tela neste
-  projeto: primitivas disponíveis, o padrão de formulário e as armadilhas
-  do AdvPP, todas verificadas na janela real.
-- **[Documentação funcional](docs/FUNCIONAL.md)** — o que o sistema faz,
-  telas, regras de negócio, limitações conhecidas.
-- **[Documentação técnica](docs/ARQUITETURA.md)** — stack, estrutura de
-  arquivos, modelo de dados, decisões de implementação.
-- **[Histórico de design](docs/superpowers/)** — spec, plano de
-  implementação e ledger de execução (processo completo, não só o
-  resultado).
+**Linux e macOS:** baixe `GesCon-<versão>-<plataforma>.tar.gz`, descompacte e
+rode `GesCon` de dentro da pasta.
 
-## Requisitos
+Os dados ficam em `%LOCALAPPDATA%\GesCon` (Windows) ou
+`~/.local/share/gescon` — faça cópia de segurança dessa pasta. Desinstalar o
+programa não apaga os dados. O sistema só aceita conexões da própria máquina
+(127.0.0.1).
 
-- [`advplc`](https://github.com/peder1981/AdvPP) **v4.8.6**, a versão
-  fixada em [`ADVPP_VERSION`](ADVPP_VERSION) (a CI, o release e o script
-  de deploy leem esse arquivo). O GesCon usa do 4.8.x: `.And.`/`.Or.` com
-  curto-circuito, conta de datas (`data - data` = dias, usada no fator de
-  vencimento do boleto), `Transform` com picture `@E` (valores em reais),
-  `UUIDRandom` (token do condômino), `UPDATE ... RETURNING` via
-  `TCSqlQuery` (consumo atômico do token, registro de pagamento) e
-  `NULL` do banco como texto vazio e, do 4.8.6, erro de SQL devolvido ao
-  programa (`TCSqlExec` = `.F.` + `TCSqlError()`) em vez de encerrá-lo. Histórico das versões que o projeto
-  motivou no AdvPP: ver [`ARQUITETURA.md`](docs/ARQUITETURA.md).
-- `sqlite3` (CLI, só para o bootstrap do schema).
+**Servidor** (vários computadores ou acesso pela internet): ver
+[`deploy/README.md`](deploy/README.md) e o
+[Guia de utilização](GUIA_UTILIZACAO.md).
 
-## Rodando
+## O que tem
 
-Duas formas de rodar, mesmo banco de dados e mesmo menu por baixo:
+| Área | Faz |
+|---|---|
+| Unidades, condôminos, despesas | Cadastros validados: fração ideal entre 0 e 1, CPF/CNPJ pelo dígito (inclusive o CNPJ alfanumérico, a partir de julho de 2026), competência fechada não muda |
+| Fechamento | Rateia as despesas da competência pelas frações (recusa se não somarem 100%) e gera uma cobrança por unidade; com exercício aberto, contabiliza |
+| Cobranças | Filtro por situação, registro de pagamento, boleto (código de barras e linha digitável pelo padrão FEBRABAN) |
+| Comunicação | Avisos, token de acesso ao portal (uso único, 48 h), mala direta por e-mail |
+| Relatórios | Inadimplência com dias de atraso, extrato da unidade, despesas por categoria, resultado do mês |
+| Contabilidade | Lançamentos manuais, plano de contas, exercícios, balancete por conta |
+| Auditoria | Equilíbrio contábil, lançamentos e cobranças sem par, alterações em período fechado |
+| Reforma tributária | Regime do IBS e da CBS (não optante ou optante pelo regime regular, com as regras de opção e renúncia), teste dos 80% e receitas fora do fechamento |
+| NFS-e | NFS-e de padrão nacional das cobranças (código 99.05.01, obrigatória a partir de 01/01/2027), assinada com o certificado A1 e enviada à Sefin Nacional |
+| Usuários | Super administrador (todos os condomínios) e síndico (os condomínios dele) |
+| Portal do condômino | Cobranças, boleto e avisos da própria unidade, só leitura |
 
-**Web** (`advplc serve`) — abre num navegador, útil pra acessar de
-qualquer dispositivo na rede:
+Segurança: senha em Argon2id com salt, política de senha, bloqueio após 5
+erros, troca obrigatória no primeiro acesso, sessão encerrada após 30 minutos
+sem uso, cada tela e operação conferida pelo perfil.
+
+Telas: [Manual do usuário](MANUAL_USUARIO.md).
+
+## Desenvolvimento
+
+Requer o [`advplc`](https://github.com/peder1981/AdvPP) na versão fixada em
+[`ADVPP_VERSION`](ADVPP_VERSION) (hoje **v4.8.7**; a CI, o release e o deploy
+leem esse arquivo) e `sqlite3`.
 
 ```bash
-./scripts/bootstrap-db.sh   # cria as tabelas (uma vez, ou após mudar schema.sql)
-advplc serve gescon.prw     # sobe em http://localhost:8080
+scripts/bootstrap-db.sh                        # banco de desenvolvimento
+GESCON_ADMIN_SENHA='Uma#SenhaForte1' ./gescon   # http://127.0.0.1:8086
+scripts/test.sh                                # suíte (recusa outro advplc)
+scripts/check.sh                               # sintaxe, alcance, isolamento por condomínio
+packaging/build-package.sh 1.3.0               # pacotes e instalador em packaging/dist/
 ```
 
-**Desktop** (`advplc build`) — um executável nativo só, sem navegador,
-sem servidor rodando à parte:
+O GesCon usa do AdvPP 4.8.x: componentes PO-UI (`PoApp`), `.And.`/`.Or.` com
+curto-circuito, conta de datas, `Transform` com picture `@E`, `UUIDRandom`,
+`Argon2id`, `UPDATE ... RETURNING` via `TCSqlQuery` e, do 4.8.6, erro de SQL
+devolvido ao programa (`TCSqlExec` = `.F.` + `TCSqlError()`) e, do 4.8.7,
+certificado A1 em PFX com a cadeia (assinatura da NFS-e e TLS com a Sefin).
+
+Documentação técnica: [arquitetura](docs/ARQUITETURA.md),
+[padrão de tela](docs/PADRAO_GUI.md), [funcional](docs/FUNCIONAL.md).
+
+## Mala direta
+
+Envia por e-mail a cobrança em aberto da competência a cada condômino com
+e-mail cadastrado. Configuração no ambiente do servidor (no pacote, em
+`gescon.env` na pasta de dados):
 
 ```bash
-./scripts/bootstrap-db.sh
-export ADVPP_SRC=/caminho/pro/checkout/do/AdvPP   # necessário pra compilar
-advplc build gescon.prw -o GesConApp
-./GesConApp
+GESCON_SMTP_HOST=smtp.exemplo.com
+GESCON_SMTP_PORT=587
+GESCON_SMTP_USER=usuario
+GESCON_SMTP_PASS=senha
+GESCON_SMTP_FROM=gescon@seucondominio.com.br
 ```
 
-No primeiro acesso (nenhum usuário cadastrado ainda), o sistema pede
-pra escolher login e senha do administrador e já entra. O campo de
-senha é mascarado (3º argumento `bIsPassword=.T.` de `FWGetText`). A
-senha nunca é gravada em texto puro (hash SHA-256).
-
-## Testes
-
-```bash
-advplc run tests/db_test.prw
-advplc run tests/login_test.prw
-advplc run tests/fechamento_test.prw
-advplc run tests/pagamento_test.prw
-advplc run tests/malas_test.prw
-advplc run tests/relatorios_test.prw
-advplc run tests/portal_test.prw
-advplc run tests/contabil_test.prw             # testes unitários do sistema contábil
-advplc run tests/contabil_e2e_test.prw         # teste end-to-end: fluxo completo
-```
-
-## Mala direta (envio real de e-mail)
-
-`GcMalaDireta(cCompetencia)` envia uma mensagem personalizada por
-condômino com cobrança não paga na competência. Configuração via
-variáveis de ambiente — **não** `GetMV()`, que é um stub no AdvPP (sempre
-retorna o valor padrão, nunca lê configuração real):
-
-```bash
-export GESCON_SMTP_HOST=smtp.exemplo.com
-export GESCON_SMTP_PORT=587       # opcional, default 587
-export GESCON_SMTP_USER=usuario   # opcional, sem auth se vazio
-export GESCON_SMTP_PASS=senha
-export GESCON_SMTP_FROM=gescon@seucondominio.com
-```
-
-Sem `GESCON_SMTP_HOST`, `GcMalaDireta` não tenta enviar nada e retorna 0
-(comportamento seguro por padrão).
-
-## Escopo
-
-**Plano 1 (v1):** login, cadastros (unidades, condôminos, despesas), 
-fechamento mensal (rateio por fração ideal), cobranças + registrar 
-pagamento, mala direta, relatórios (balancete, inadimplência, extrato, 
-despesas por categoria).
-
-**Plano 2:** senha mascarada (`FWGetText bIsPassword`), boleto bancário 
-(Itaú/Bradesco, código de barras e linha digitável), gestão de usuários 
-(criar admin, gerar/revogar token temporário), portal do condômino 
-(token-based read-only access).
+Sem `GESCON_SMTP_HOST`, nada é enviado.
 
 ## Limitações conhecidas
 
-- A tela de Cobranças permite editar/excluir registros livremente pela
-  UI (mesmo `FWMBrowse` editável dos demais cadastros) — a garantia de
-  "valor travado no fechamento" é imposta pela lógica de negócio, não
-  pela UI. Aceitável para a v1 (login único, uso pessoal/piloto). Ver
-  [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) para o motivo técnico.
-- Os relatórios também são telas de `FWMBrowse` — dá pra clicar
-  Incluir/Alterar/Excluir neles, mas não faz sentido (o conteúdo é
-  recalculado do zero na próxima abertura).
+- Boleto: Itaú (exceto carteiras de nosso número com 15 posições) e Bradesco;
+  o arquivo de remessa CNAB ainda não é gerado.
+- Taxa extra (cobrança fora do fechamento mensal) ainda não existe.
+- NFS-e: emissão (sem cancelamento/substituição). O XSD oficial publicado
+  ainda não traz o grupo de condomínios da NT 009; faça a primeira emissão
+  na produção restrita.
 
 ## Agradecimentos
 
 O GesCon é testado em campo por **Wilson Kraft**, cujos relatórios de QA
 (`Wilson/`, resumidos no [CHANGELOG](CHANGELOG.md)) motivaram as versões
-1.0.x–1.2.x: bugs de migração em bancos já instalados, integração
-Contábil × Condominial, conta por categoria, anti-duplicidade e rateio.
-Obrigado, Wilson.
+1.0.x–1.2.x. Obrigado, Wilson.

@@ -16,6 +16,16 @@ set -e
 
 cd "$(dirname "$0")/.."
 
+# Mesma versão do compilador que a CI e o release usam (ADVPP_VERSION):
+# com outra, um teste que depende do comportamento da versão fixada falha
+# (ou passa) por engano.
+esperada="v$(tr -d ' \n\r' < ADVPP_VERSION)"
+atual="$(advplc --version 2>/dev/null | awk '{print $2}')"
+if [ "$atual" != "$esperada" ]; then
+    echo "test: advplc $atual no PATH, mas ADVPP_VERSION pede $esperada"
+    exit 1
+fi
+
 falhas=0
 total=0
 saida=$(mktemp)
@@ -59,6 +69,16 @@ for f in tests/*_test.prw; do
 
     printf '  ok    %-28s (%s linhas)\n' "$nome" "$(wc -l < "$saida")"
 done
+
+# NFS-e: XSD, assinatura (lxml + cryptography) e envio a uma Sefin simulada
+# com mTLS. Banco próprio: a suíte acima já sujou o compartilhado.
+total=$((total + 1))
+banco_nfse=$(mktemp -u --suffix=.db)
+sqlite3 "$banco_nfse" < schema.sql
+if ! python3 scripts/check-nfse.py "$banco_nfse"; then
+    falhas=$((falhas + 1))
+fi
+rm -f "$banco_nfse" "$banco_nfse"-wal "$banco_nfse"-shm
 
 echo
 if [ "$falhas" -eq 0 ]; then

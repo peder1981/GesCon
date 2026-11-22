@@ -4,7 +4,58 @@ Mudanças notáveis do GesCon.
 
 ## [Não lançado]
 
-Refatoração sobre o AdvPP 4.8.5, etapas 1 (bugs e segurança) e 2 (login) de 4. Detalhes
+Refatoração sobre o AdvPP 4.8.x, etapas 1 (bugs e segurança), 2 (login),
+3 (interface) e 4 (reforma tributária). Exige o AdvPP 4.8.7.
+
+### Reforma tributária (etapa 4)
+
+Base conferida no texto: LC 214/2025, art. 26 (redação da LC 227/2026);
+Decreto 12.955/2026, arts. 25 e 115; Ato Conjunto RFB/CGIBS 4/2026 alterado
+pelo 7/2026; NT SE/CGNFS-e 009 v1.01; tabela cClassTrib do portal DF-e.
+
+- **Dados fiscais do condomínio** (tela Reforma tributária): regime do IBS e
+  da CBS (não optante, a regra da lei, ou optante pelo regime regular com
+  data da opção; renúncia só depois de 12 meses e com efeito em 1º de
+  janeiro do ano seguinte), município (IBGE), ambiente e série da NFS-e,
+  certificado A1. A senha do certificado não é gravada.
+- **Teste dos 80%** (art. 26, § 2º, II): taxas e demais valores cobrados dos
+  condôminos sobre a receita total do período, com a situação explicada. A
+  tela **Receitas** registra o que entra fora do fechamento (terceiros,
+  financeiras, outras dos condôminos).
+- **NFS-e de padrão nacional das cobranças** (obrigatória a partir de
+  01/01/2027): DPS com o código 99.05.01 e o grupo `condominios`, CST 410 /
+  cClassTrib 410012 (não optante) ou 200 / 200046 (optante), assinada com o
+  A1 e enviada à Sefin Nacional; chave de acesso ou motivo da rejeição
+  gravados por cobrança. Numeração não se perde com senha errada; DPS
+  rejeitada reaproveita o número.
+- Verificação independente (`scripts/check-nfse.py`, roda no `test.sh`): XSD
+  oficial da DPS, assinatura conferida com lxml e cryptography, envio a uma
+  Sefin simulada que exige certificado de cliente.
+
+### Interface nova (etapa 3)
+
+- **Interface web PO-UI** no lugar do menu de diálogos e das grades
+  genéricas: entrada com login e acesso do condômino, menu só com o que o
+  perfil pode, Início com indicadores, cadastros com tabela e formulário,
+  fechamento, cobranças com boleto, comunicação, relatórios, contabilidade,
+  auditoria, usuários e condomínios. Sessão encerrada após 30 minutos sem uso.
+- **Portal do condômino** lê cobranças e avisos direto da consulta, filtrados
+  pela unidade do token. As tabelas de rascunho `RPT_*` (relatórios e portal)
+  eram compartilhadas por condomínio: na web, um condômino podia ver a
+  cobrança de outra unidade. Boleto só da própria unidade.
+- **Cadastros validados** (antes a grade gravava qualquer coisa): fração entre
+  0 e 1, condômino existente, competência fechada não muda despesa, CPF/CNPJ
+  pelo dígito, inclusive o CNPJ alfanumérico (julho de 2026).
+- **Distribuição**: iniciador que sobe o servidor em 127.0.0.1 e abre o
+  navegador, gera a senha inicial do administrador e a mostra uma vez;
+  pacotes para Windows, Linux e macOS e instalador Windows por usuário
+  (desinstalar não apaga os dados). A janela nativa (Fyne) saiu: ela não
+  mostra a interface PO-UI.
+- Balancete por conta com saldo pela natureza da conta (o antigo só somava as
+  faixas 3000 e 4000); abertura de exercício recusa fim antes do início.
+- "Lançar despesa com rateio" (taxa extra) saiu da interface: gerava
+  vencimento em 31/02 e colidia com a regra de uma cobrança por unidade e
+  competência. Volta com um tipo de cobrança próprio. Detalhes
 e o que fica para as etapas de login, interface e reforma tributária em
 `docs/superpowers/specs/2026-11-21-refatoracao-advpp485-achados.md`.
 

@@ -742,3 +742,64 @@ INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL
 INSERT INTO SX3 (X3_ARQUIVO, X3_ORDEM, X3_CAMPO, X3_TIPO, X3_TAMANHO, X3_DECIMAL, X3_TITULO) VALUES
 ('CATEG_CONTA', 1, 'CGC_CATEGORIA', 'C', 30, 0, 'Categoria'),
 ('CATEG_CONTA', 2, 'CGC_CONTA',     'C', 10, 0, 'Conta Contábil');
+
+-- Reforma tributária (etapa 4). Base: LC 214/2025 art. 26 (redação da LC
+-- 227/2026), Decreto 12.955/2026 arts. 25 e 115, Ato Conjunto RFB/CGIBS
+-- 4/2026 alterado pelo 7/2026 (NFS-e de condomínio a partir de 01/01/2027),
+-- NT SE/CGNFS-e 009 v1.01 (código 99.05.01, grupo "condominios").
+--
+-- FIS: dados fiscais do condomínio, um por condomínio (filial).
+--   FIS_REGIME 'N' não optante (padrão da lei) | 'R' optante pelo regime
+--   regular; FIS_DT_OPCAO e FIS_DT_RENUNCIA AAAAMMDD; FIS_CMUN código IBGE (7) do município do
+--   condomínio; FIS_AMB '2' produção restrita (teste) | '1' produção;
+--   FIS_SERIE e FIS_NDPS numeram a DPS; FIS_CERT caminho do certificado A1
+--   (.pfx) — a senha não é gravada, é pedida a cada envio.
+CREATE TABLE IF NOT EXISTS FIS (
+    R_E_C_N_O_ INTEGER PRIMARY KEY AUTOINCREMENT,
+    D_E_L_E_T_ TEXT DEFAULT ' ',
+    FILIAL TEXT NOT NULL UNIQUE,
+    FIS_REGIME TEXT NOT NULL DEFAULT 'N',
+    FIS_DT_OPCAO TEXT DEFAULT '',
+    FIS_DT_RENUNCIA TEXT DEFAULT '',
+    FIS_CMUN TEXT DEFAULT '',
+    FIS_AMB TEXT NOT NULL DEFAULT '2',
+    FIS_SERIE TEXT NOT NULL DEFAULT '1',
+    FIS_NDPS INTEGER NOT NULL DEFAULT 0,
+    FIS_CERT TEXT DEFAULT ''
+);
+
+-- REC: receitas do condomínio fora das cobranças do fechamento, para o
+-- teste dos 80% (art. 26 § 2º II): 'C' outros valores cobrados dos
+-- condôminos (multa, reserva de salão...), 'T' de terceiros (antena,
+-- publicidade, aluguel de espaço), 'F' financeiras (rendimento de aplicação).
+CREATE TABLE IF NOT EXISTS REC (
+    R_E_C_N_O_ INTEGER PRIMARY KEY AUTOINCREMENT,
+    D_E_L_E_T_ TEXT DEFAULT ' ',
+    FILIAL TEXT NOT NULL,
+    REC_COMPET TEXT NOT NULL,
+    REC_DESCR TEXT NOT NULL,
+    REC_TIPO TEXT NOT NULL CHECK (REC_TIPO IN ('C', 'T', 'F')),
+    REC_VALOR REAL NOT NULL CHECK (REC_VALOR > 0)
+);
+
+-- NFS: uma DPS por cobrança. NFS_ID é o identificador de 45 posições da DPS;
+-- NFS_STATUS 'assinada' (gerada, não aceita ainda) | 'autorizada' |
+-- 'rejeitada'. Autorizada não se refaz (índice único parcial abaixo).
+CREATE TABLE IF NOT EXISTS NFS (
+    R_E_C_N_O_ INTEGER PRIMARY KEY AUTOINCREMENT,
+    D_E_L_E_T_ TEXT DEFAULT ' ',
+    FILIAL TEXT NOT NULL,
+    NFS_COB INTEGER NOT NULL,
+    NFS_SERIE TEXT NOT NULL,
+    NFS_NDPS INTEGER NOT NULL,
+    NFS_ID TEXT NOT NULL,
+    NFS_STATUS TEXT NOT NULL DEFAULT 'assinada',
+    NFS_CHAVE TEXT DEFAULT '',
+    NFS_XML TEXT NOT NULL,
+    NFS_RETORNO TEXT DEFAULT '',
+    NFS_DHEMI TEXT NOT NULL,
+    UNIQUE (FILIAL, NFS_SERIE, NFS_NDPS)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS NFS_COB_AUTORIZADA ON NFS (FILIAL, NFS_COB) WHERE NFS_STATUS = 'autorizada';
+
+INSERT OR IGNORE INTO X2_FILIAL_COMPART (TABELA, NIVEL) VALUES ('FIS', 6), ('REC', 6), ('NFS', 6);

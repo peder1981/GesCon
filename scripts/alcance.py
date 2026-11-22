@@ -23,6 +23,13 @@ DIFERIDAS = {
     "GcIsoToDate":         "auxiliar das primitivas de auth do portal",
     "GcDataHoraIso":       "auxiliar das primitivas de auth do portal",
     "GcPortalCondominoV2": "portal do condomino v2, fase adiada",
+    # "Lançar despesa com rateio" (taxa extra) saiu da interface na etapa 3:
+    # cria cobranças fora do Fechamento, com vencimento até o dia 31 (31/02),
+    # e colide com a regra de uma cobrança por unidade e competência. Volta
+    # quando a cobrança tiver tipo próprio (taxa extra).
+    "GcLancarDespesaContabil": "taxa extra, aguarda tipo de cobranca proprio",
+    "GcCalcularRateio":        "auxiliar da taxa extra",
+    "GcDespesaJaLancada":      "auxiliar da taxa extra",
 }
 
 

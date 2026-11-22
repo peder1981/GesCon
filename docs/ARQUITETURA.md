@@ -1,88 +1,86 @@
 # Arquitetura técnica — GesCon
 
-Este documento descreve como o GesCon é construído por dentro: stack,
-estrutura de arquivos, modelo de dados, grafo de dependências entre
-fontes, e as decisões técnicas (e limitações conhecidas) que moldaram a
-implementação. Para o que o sistema faz do ponto de vista de quem usa,
-ver [`FUNCIONAL.md`](FUNCIONAL.md).
+Visão técnica para quem vai manter o código. Uso das telas: [Manual do
+usuário](../MANUAL_USUARIO.md); padrão de tela: [PADRAO_GUI.md](PADRAO_GUI.md).
 
 ## Stack
 
-- **Linguagem**: AdvPL/TLPP (dialeto Clipper/xBase usado no ecossistema
-  TOTVS Protheus).
-- **Compilador/runtime**: [AdvPP](https://github.com/peder1981/AdvPP)
-  — compilador e VM open-source para AdvPL/TLPP, escrito em Go. GesCon
-  requer **`advplc` v4.8.6** (fixado em `ADVPP_VERSION`).
-- **Banco de dados**: SQLite, via a camada de banco compartilhada do
-  AdvPP (mesmo arquivo `.db` usado por outras ferramentas AdvPP —
-  `~/.advpp/ADVPP.db` por padrão) — igual nos dois modos de UI abaixo,
-  então dados cadastrados por um aparecem no outro.
-- **UI, duas formas, mesmo `.prw`**:
-  - **Web** (`advplc serve gescon.prw`) — as telas usam `FWMBrowse`
-    (framework MVC do AdvPP), renderizado como PO-UI/Angular no
-    navegador.
-  - **Desktop** (`advplc build gescon.prw -o GesConApp`) — executável
-    nativo standalone (Fyne), sem navegador nem servidor à parte; usa o
-    mesmo bytecode compilado, embutido no binário.
-  - Em ambos, a navegação entre telas usa `FWMenuSelect`/`FWGetText`
-    (capacidades próprias do AdvPP, sem equivalente em Protheus real,
-    motivadas por este projeto — v1.23.0) e um tema visual próprio
-    (azul-petróleo, não o roxo padrão do PO-UI/Fyne — v1.23.1). Não há
-    frontend separado do GesCon em si; o `.prw` é a única fonte da UI
-    nos dois modos — a diferença de aparência vem inteiramente do
-    renderer escolhido no AdvPP.
-- **E-mail**: `TMailMessage` (classe nativa do AdvPP, `net/smtp` da
-  stdlib do Go — sem dependência externa).
+- **Linguagem**: AdvPL/TLPP (fontes UTF-8).
+- **Compilador/runtime**: [AdvPP](https://github.com/peder1981/AdvPP) — GesCon
+  requer **`advplc` v4.8.6** (fixado em `ADVPP_VERSION`; a CI, o release, o
+  deploy e `scripts/test.sh` conferem).
+- **Interface**: web, componentes PO-UI (`PoApp`, `PoPage`, `PoTable`,
+  `PoWidget`...) servidos pelo `advplc serve gescon.prw`. Cada sessão do
+  navegador é um programa próprio; o estado da sessão fica nas `Private` de
+  `GesCon()`.
+- **Banco de dados**: SQLite (`ADVPP_DB` ou `--db-path`), schema embutido no
+  programa (`src/schema-embed.prw`, gerado de `schema.sql`) e aplicado em
+  todo boot com as migrações de `src/db.prw`.
+- **Distribuição**: `packaging/` — iniciador em Go (só biblioteca padrão) que
+  sobe o servidor em 127.0.0.1 e abre o navegador, pacotes por plataforma com
+  o `advplc` da release e instalador Windows NSIS. Servidor: `deploy/`.
 
 ## Estrutura de arquivos
 
-```
-GesCon/
-├── gescon.prw              # ponto de entrada — advplc serve gescon.prw
-├── schema.sql               # DDL das 11 tabelas + metadados SX3 (labels)
-├── scripts/
-│   └── bootstrap-db.sh      # aplica schema.sql no banco compartilhado
-├── src/
-│   ├── db.prw                # GcSqlLit — escape de literal SQL
-│   ├── login.prw             # GcLogin, GcCriarAdmin, GcAutenticar, GcCredenciaisValidas,
-│   │                         #    GcTrocarSenha — gate de acesso e troca de senha
-│   ├── condominos.prw        # GcCondominos — cadastro (browse sobre CON)
-│   ├── unidades.prw          # GcUnidades — cadastro (browse sobre UNI)
-│   ├── despesas.prw          # GcDespesas — lançamento (browse sobre DES)
-│   ├── fechamento.prw        # GcFecharMes, GcProximoVencimento, GcAtualizarInadimplentes
-│   ├── cobrancas.prw         # GcCobrancas, GcRegistrarPagamento
-│   ├── malas.prw             # GcMalaDireta — mala direta com envio real
-│   ├── relatorios.prw        # Balancete/Inadimplência/Extrato/Despesas por categoria
-│   ├── usuarios.prw          # GcMenuUsuarios, GcGerarToken, GcRevogarToken, GcCriarUsuario,
-│   │                         #    GcCriarAdminNovo, GcDateToIso, GcGerarTokenId
-│   ├── portal.prw            # GcPortalCondmino, GcAuthPortalToken, GcPortalBrowse,
-│   │                         #    GcPortalCalcCobrancas, GcSairPortal
-│   ├── boleto.prw            # GcGeraBoleto, GcFormatLinhaDigitavel, GcGeraCodigoBarras
-│   │                         #    (Itaú/Bradesco)
-│   ├── contabil.prw          # GcValidarIntegridade, GcFecharPeriodo, GcGerarBalancetePeriodo
-│   │                         #    Sistema contábil em partida dupla
-│   └── auditoria.prw         # GcRegistrarAnomalia, GcAuditoriaFecharPeriodo
-│                           #    Auditoria e detecção de anomalias
-├── tests/
-│   ├── db_test.prw
-│   ├── login_test.prw
-│   ├── fechamento_test.prw
-│   ├── pagamento_test.prw
-│   ├── malas_test.prw
-│   ├── relatorios_test.prw
-│   ├── portal_test.prw       # fixture end-to-end do portal (token+auth+cobranças)
-│   ├── contabil_test.prw     # testes unitários do sistema contábil
-│   └── contabil_e2e_test.prw # teste end-to-end: fluxo completo (lançamentos → fechamento)
-└── docs/
-    ├── ARQUITETURA.md        # este arquivo
-    ├── FUNCIONAL.md
-    └── superpowers/           # histórico de design/planejamento (spec, plano, ledger)
-```
+| Caminho | Conteúdo |
+|---|---|
+| `gescon.prw` | Ponto de entrada: estado da sessão, boot do banco, `GcUI()` |
+| `src/ui.prw` | Interface (páginas, menu por perfil, sessão, portal) |
+| `src/consultas.prw` | Consultas `{colunas, linhas}` das tabelas e relatórios |
+| `src/cadastros.prw` | Gravação validada: condômino, unidade, despesa, condomínio; CPF/CNPJ |
+| `src/operacoes.prw` | Token do portal, dados bancários, exercício, usuários, plano de contas, lançamento manual |
+| `src/fiscal.prw` | Reforma tributária: dados fiscais, regime (opção/renúncia), receitas, teste dos 80% |
+| `src/nfse.prw` | NFS-e nacional: DPS (99.05.01), assinatura XMLDSig, envio à Sefin, resposta |
+| `src/seguranca.prw` | Senha (Argon2id), bloqueio, política, primeiro acesso, perfis (`GcPode`) |
+| `src/fechamento.prw` | Fechamento mensal (rateio, cobranças, contabilização) |
+| `src/cobrancas.prw` | Registro de pagamento |
+| `src/boleto.prw` | Código de barras e linha digitável (Itaú e Bradesco) |
+| `src/contabil.prw` | Lançamentos, exercício ativo, integridade, fechamento de período |
+| `src/auditoria*.prw` | Validadores e registro de anomalias |
+| `src/malas.prw` | Mala direta |
+| `src/portal.prw`, `src/auth-primitives.prw`, `src/portal-v2.prw` | Autenticação do portal por token; primitivas e geradores para um portal REST futuro |
+| `src/db.prw`, `src/schema-embed.prw`, `schema.sql` | Banco, migrações, schema |
+| `tests/*_test.prw` | Suíte (`scripts/test.sh`) |
+| `scripts/` | Testes, checagens (sintaxe, alcance, filial, migração), bootstrap |
+| `packaging/` | Iniciador, pacotes, instalador |
+| `deploy/` | Servidor Debian (LXC), Cloudflare Tunnel, backup |
 
-Cada arquivo em `src/` tem uma responsabilidade única: uma tela/rotina
-de negócio. `db.prw` é a única exceção — é a camada de escape de SQL
-usada por qualquer outro arquivo que precise interpolar texto numa
-query.
+## Interface e dados
+
+Três camadas (detalhe em [PADRAO_GUI.md](PADRAO_GUI.md)): a tela só monta e
+repassa; a gravação devolve `""` ou o motivo; a leitura devolve `{colunas,
+linhas}` direto da consulta. Até a 1.2 os relatórios e o portal gravavam
+tabelas de rascunho (`RPT_*`) compartilhadas por condomínio: na web, sessões
+simultâneas sobrescreviam umas às outras, e no portal um condômino podia ver
+a cobrança de outra unidade. As tabelas continuam no schema (bancos antigos),
+mas nada as usa.
+
+## Segurança
+
+- Senha: `argon2id$v1$` + base64 do digest (64 MiB, 2 iterações, 2 lanes, 32
+  bytes) com salt aleatório por usuário; o hash SHA-256 antigo entra uma
+  última vez e é regravado.
+- Login único sem diferenciar maiúsculas (índice `UQ_USR_LOGIN`); 5 erros
+  seguidos bloqueiam por 15 minutos; usuário inexistente e senha errada dão a
+  mesma resposta e o mesmo custo.
+- Primeiro acesso só com `GESCON_ADMIN_SENHA` (sem senha padrão), com troca
+  obrigatória.
+- Perfis: SUPERADMIN (tudo) e SINDICO (condomínios vinculados em `USR_COND`,
+  sem cadastro de condomínio nem criação de super). O menu filtra e cada
+  operação confere de novo.
+- Sessão encerrada após 30 minutos sem ação.
+- Token do portal: 64 hex de `UUIDRandom`, uso único consumido num
+  `UPDATE ... RETURNING`, 48 horas.
+- Isolamento por condomínio: todo comando SQL em tabela de condomínio filtra
+  `FILIAL` (`scripts/check-filial.py`, comando a comando).
+
+## Boleto bancário
+
+Pelos manuais CNAB 400 do Itaú (jan/2017) e do Bradesco (abr/2022): código de
+barras de 44 posições, DAC módulo 11 (pesos 2 a 9), linha digitável com DVs
+módulo 10, fator de vencimento com base 07/10/1997 e reinício em 1000 a partir
+de 22/02/2025. Nosso número = `R_E_C_N_O_` da cobrança. `tests/boleto_test.prw`
+confere com os exemplos numéricos dos manuais.
 
 ## Modelo de dados
 
@@ -97,12 +95,12 @@ ver `schema.sql` para o DDL completo.
 | `DES` | `DES_DESCR`, `DES_CATEG`, `DES_VALOR`, `DES_COMPET`, `DES_DTLANC` | Despesa lançada numa competência ("YYYY-MM") |
 | `COB` | `COB_UNIDADE`, `COB_COMPET`, `COB_VALOR`, `COB_VENCTO`, `COB_STATUS`, `COB_DTPAG` | Cobrança — gerada só pelo Fechamento Mensal |
 | `USR` | `USR_LOGIN`, `USR_SENHA`, `USR_PERFIL` | Usuário administrador — `USR_SENHA` guarda hash SHA-256 (`FWHash`), nunca texto puro; `USR_PERFIL` em `'ADMIN'` |
-| `RPT_INADIM` | `RIN_UNIDADE`, `RIN_COMPET`, `RIN_VALOR`, `RIN_VENCTO`, `RIN_ATRASO` | Snapshot do relatório de Inadimplência — recalculado a cada abertura |
-| `RPT_EXTRATO` | `REX_COMPET`, `REX_VALOR`, `REX_VENCTO`, `REX_STATUS`, `REX_DTPAG` | Snapshot do Extrato por Unidade — recalculado a cada abertura |
-| `RPT_DESCAT` | `RDC_CATEG`, `RDC_TOTAL` | Snapshot de Despesas por Categoria — recalculado a cada abertura |
+| `RPT_INADIM` (sem uso desde a 1.3) | `RIN_UNIDADE`, `RIN_COMPET`, `RIN_VALOR`, `RIN_VENCTO`, `RIN_ATRASO` | Snapshot do relatório de Inadimplência — recalculado a cada abertura |
+| `RPT_EXTRATO` (sem uso desde a 1.3) | `REX_COMPET`, `REX_VALOR`, `REX_VENCTO`, `REX_STATUS`, `REX_DTPAG` | Snapshot do Extrato por Unidade — recalculado a cada abertura |
+| `RPT_DESCAT` (sem uso desde a 1.3) | `RDC_CATEG`, `RDC_TOTAL` | Snapshot de Despesas por Categoria — recalculado a cada abertura |
 | `CFG_BOLETO` | `CFG_BANCO`, `CFG_AGENCIA`, `CFG_CONTA`, `CFG_COBRT`, `CFG_CARTEIRA` | Configuração de boleto bancário (código banco, agência, conta, carta/cartão, carteira) |
 | `GCT_TOKEN` | `TOKEN`, `USR_LOGIN`, `CON_CODIGO`, `UNI_CODIGO`, `CRIPTADO`, `VALIDO_ATE`, `USADO` | Token temporário de acesso do condômino ao portal — válido por 48h, marcado como usado na autenticação |
-| `RPT_COND_COBRANCAS` | `RCC_UNIDADE`, `RCC_COMPET`, `RCC_VALOR`, `RCC_VENCTO`, `RCC_STATUS`, `RCC_DTPAG` | Snapshot das cobranças do condômino no portal — gerado a partir de `COB` filtrado pela unidade do token |
+| `RPT_COND_COBRANCAS` (sem uso desde a 1.3) | `RCC_UNIDADE`, `RCC_COMPET`, `RCC_VALOR`, `RCC_VENCTO`, `RCC_STATUS`, `RCC_DTPAG` | Snapshot das cobranças do condômino no portal — gerado a partir de `COB` filtrado pela unidade do token |
 
 **Tabelas do Sistema Contábil (Partida Dupla):**
 
@@ -114,7 +112,7 @@ ver `schema.sql` para o DDL completo.
 | `RATEIO_DETALHE` | `RAT_LANCAMENTO`, `RAT_UNIDADE`, `RAT_VALOR`, `RAT_PERCENTUAL` | Detalhes de rateio por unidade (FK → LANCAMENTOS) |
 | `REPARTICAO` | `REP_CODIGO`, `REP_NOME`, `REP_ATIVO` | Tipos de repartição: FRACAO, METRAGEM, FIXO |
 | `AUDITORIA` | `AUD_TIPO`, `AUD_DESCRICAO`, `AUD_SEVERIDADE`, `AUD_EXERCICIO` | Trilha de auditoria: desequilibrio, lan_orfao, cob_orfao (severidades: CRITICA, AVISO, INFO) |
-| `RPT_BALANCETE` | `RPT_EXERCICIO`, `RPT_RECEITAS`, `RPT_DESPESAS`, `RPT_SALDO`, `RPT_DATA_GERACAO` | Snapshot do balancete: saldo = receitas - despesas, gerado ao fechar período |
+| `RPT_BALANCETE` (sem uso desde a 1.3) | `RPT_EXERCICIO`, `RPT_RECEITAS`, `RPT_DESPESAS`, `RPT_SALDO`, `RPT_DATA_GERACAO` | Snapshot do balancete: saldo = receitas - despesas, gerado ao fechar período |
 
 Relacionamentos: `UNI.UNI_CONDOMINO → CON.CON_CODIGO` (texto livre, sem
 FK/combo — ver "Limitações conhecidas"). `COB.COB_UNIDADE →
@@ -123,35 +121,9 @@ condomínio como um todo, rateadas por fração ideal no fechamento. `GCT_TOKEN.
 staging de cada relatório/tabulação.
 
 A tabela `SX3` (compartilhada com outras ferramentas AdvPP) guarda
-metadados de coluna (título amigável, tipo, tamanho) que o `FWMBrowse`
+metadados de coluna (título amigável, tipo, tamanho) que o antigo `FWMBrowse`
 usa para renderizar as colunas — sem essas linhas o browse cai no
 fallback de mostrar toda coluna física como texto cru.
-
-## Relatórios: por que uma tabela de snapshot, não uma VIEW
-
-`FWMBrowse` só sabe abrir uma tabela física por um alias fixo — o
-Go por trás (`pkg/vm/browse.go`) monta a query como
-`SELECT rowid AS browse_recno_, * FROM <alias>` e as ações de
-Editar/Excluir como `UPDATE/DELETE ... WHERE rowid = ?`. Não dá pra
-passar parâmetro nenhum (competência, unidade) nem apontar pra uma
-consulta agregada direto — e uma `VIEW` do SQLite não tem `rowid`
-próprio (views não têm armazenamento), então `UPDATE`/`DELETE` contra
-ela falhariam.
-
-Solução adotada, consistente com como `GcFecharMes` já grava
-`Cobrança`: cada relatório tabular (Inadimplência, Extrato por
-Unidade, Despesas por Categoria) e o portal do condômino têm sua própria
-tabela `RPT_*` de "snapshot" — a função recalcula o conteúdo do zero
-(`DELETE` + `INSERT`) toda vez que é aberto, então nunca fica
-desatualizado, e o `FWMBrowse` funciona sem nenhuma mudança no AdvPP.
-Balancete Mensal é a exceção: é um resumo de 3 números (receitas/despesas/saldo),
-não uma lista — mostrado via `MsgInfo`, sem tabela nenhuma.
-
-Cada relatório tabular vem em duas funções — `GcXxxCalc()` (só grava o
-snapshot, testável via `advplc run`) e `GcXxx()` (chama a `Calc` e abre
-o browse, só funciona em `advplc serve`/`build`) — mesmo motivo de
-`GcCondominos`/`GcUnidades`/etc nunca serem testadas via `advplc run`:
-`FWMBrowse:Activate()` exige uma sessão de UI de verdade.
 
 ## Ponte entre Fechamento Mensal e Contabilidade formal
 
@@ -236,101 +208,6 @@ de propósito.
   entre "schema anterior + atual" e "banco novo" para pegar coluna futura
   declarada só no `CREATE TABLE`.
 
-## Grafo de dependências (`#include`)
-
-```
-gescon.prw ──include──> src/db.prw
-           ──include──> src/login.prw       (que também inclui db.prw)
-           ──include──> src/unidades.prw
-           ──include──> src/condominos.prw
-           ──include──> src/despesas.prw
-           ──include──> src/cobrancas.prw
-           ──include──> src/fechamento.prw  (que também inclui db.prw)
-           ──include──> src/malas.prw       (que também inclui db.prw)
-           ──include──> src/relatorios.prw  (que também inclui db.prw)
-           ──include──> src/usuarios.prw   (que também inclui db.prw)
-           ──include──> src/portal.prw     (que também inclui db.prw)
-           ──include──> src/boleto.prw     (GcGeraBoleto — Itaú/Bradesco)
-```
-
-`gescon.prw` inclui todas as telas — é o único arquivo raiz real do
-projeto (`advplc serve gescon.prw`), então precisa trazer tudo que
-`GesCon()` (a única função declarada diretamente nele) usa, direta ou
-transitivamente.
-
-**Gotcha real do AdvPP, documentado em código onde apareceu**: `#include`
-é resolvido **relativo ao diretório do arquivo RAIZ compilado**, não de
-quem faz o `#include`. Um `#include "db.prw"` (sem caminho) dentro de
-`src/fechamento.prw` só resolve quando a raiz está em `src/` — de
-`tests/`, o mesmo símbolo precisa de um include explícito com caminho
-relativo à raiz (`#include "../src/db.prw"`), mesmo que pareça
-redundante com o include que `fechamento.prw` já faz. Ver comentário em
-`tests/fechamento_test.prw`. Isso não é peculiaridade do GesCon — é
-como o preprocessor do AdvPP resolve includes hoje.
-
-**Ponto de entrada implícito**: um `.prw` sem código de nível superior
-roda implicitamente a primeira `User Function` declarada no arquivo
-raiz (ignorando funções trazidas por `#include`) — corrigido no AdvPP
-v1.22.1 depois de descoberto durante este projeto (antes disso, uma lib
-auxiliar de uma função só podia virar, sem aviso, o "programa"
-executado no lugar da função real). Por isso `gescon.prw` e cada
-arquivo de teste têm exatamente uma `User Function` própria, declarada
-depois de todos os `#include`s.
-
-## Referência de funções
-
-| Função | Arquivo | Assinatura | Retorno |
-|---|---|---|---|
-| `GesCon` | `gescon.prw` | `GesCon()` | — (ponto de entrada; loop de menu via `FWMenuSelect`/`FWGetText`, AdvPP v1.23.0+) |
-| `GcSqlLit` | `src/db.prw` | `GcSqlLit(cValor)` | `character` — valor com aspas simples escapadas |
-| `GcLogin` | `src/login.prw` | `GcLogin()` | `logical` — `.T.` se autenticado |
-| `GcCriarAdmin` | `src/login.prw` | `GcCriarAdmin()` | `logical` — bootstrap do 1º acesso |
-| `GcAutenticar` | `src/login.prw` | `GcAutenticar()` | `logical` — confere login/senha (hash) |
-| `GcCredenciaisValidas` | `src/login.prw` | `GcCredenciaisValidas(cLogin, cSenha)` | `logical` |
-| `GcTrocarSenha` | `src/login.prw` | `GcTrocarSenha()` | `logical` — `.T.` se trocou |
-| `GcCondominos` | `src/condominos.prw` | `GcCondominos()` | — (abre browse) |
-| `GcUnidades` | `src/unidades.prw` | `GcUnidades()` | — (abre browse) |
-| `GcDespesas` | `src/despesas.prw` | `GcDespesas()` | — (abre browse) |
-| `GcFecharMes` | `src/fechamento.prw` | `GcFecharMes(cCompetencia, nDiaVenc)` | `logical` — `.T.` se fechou |
-| `GcProximoVencimento` | `src/fechamento.prw` | `GcProximoVencimento(cCompetencia)` | `character` — "YYYY-MM-DD" |
-| `GcAtualizarInadimplentes` | `src/fechamento.prw` | `GcAtualizarInadimplentes()` | — (promove pendentes→atrasados) |
-| `GcCobrancas` | `src/cobrancas.prw` | `GcCobrancas()` | — (abre browse) |
-| `GcRegistrarPagamento` | `src/cobrancas.prw` | `GcRegistrarPagamento(nRecno, dData)` | `logical` |
-| `GcMalaDireta` | `src/malas.prw` | `GcMalaDireta(cCompetencia)` | `numeric` — quantidade enviada |
-| `GcBalanceteMensal` | `src/relatorios.prw` | `GcBalanceteMensal(cCompetencia)` | `numeric` — saldo (receitas − despesas); mostra `MsgInfo` |
-| `GcInadimplenciaCalc` / `GcInadimplencia` | `src/relatorios.prw` | `GcInadimplenciaCalc()` / `GcInadimplencia()` | `numeric` (Calc) / — (abre browse) |
-| `GcExtratoUnidadeCalc` / `GcExtratoUnidade` | `src/relatorios.prw` | `GcExtratoUnidadeCalc(cUnidade)` / `GcExtratoUnidade(cUnidade)` | `numeric` (Calc) / — (abre browse) |
-| `GcDespesasCategoriaCalc` / `GcDespesasCategoria` | `src/relatorios.prw` | `GcDespesasCategoriaCalc(cCompetencia)` / `GcDespesasCategoria(cCompetencia)` | `numeric` (Calc) / — (abre browse) |
-| `GcMenuRelatorios` | `gescon.prw` | `GcMenuRelatorios()` | — (submenu de Relatórios) |
-| `GcMenuUsuarios` | `src/usuarios.prw` | `GcMenuUsuarios()` | — (submenu de usuários: gerar token, revogar, criar) |
-| `GcGerarToken` | `src/usuarios.prw` | `GcGerarToken()` | — (gera token para condômino, lista CON-UNI) |
-| `GcRevogarToken` | `src/usuarios.prw` | `GcRevogarToken()` | — (revoga token ativo por DELETE lógico) |
-| `GcCriarUsuario` | `src/usuarios.prw` | `GcCriarUsuario()` | — (cria novo usuário admin) |
-| `GcCriarAdminNovo` | `src/usuarios.prw` | `GcCriarAdminNovo()` | `logical` |
-| `GcDateToIso` | `src/usuarios.prw` | `GcDateToIso(dData)` | `character` — data em ISO (YYYY-MM-DD) |
-| `GcGerarTokenId` | `src/usuarios.prw` | `GcGerarTokenId()` | `character` — token UUID-like 36 chars |
-| `GcPortalCondmino` | `src/portal.prw` | `GcPortalCondmino()` | `logical` — gateway do portal |
-| `GcAuthPortalToken` | `src/portal.prw` | `GcAuthPortalToken(cToken)` | `logical` — valida e marca token como usado |
-| `GcPortalBrowse` | `src/portal.prw` | `GcPortalBrowse()` | — (abre browse de cobranças da unidade) |
-| `GcPortalCalcCobrancas` | `src/portal.prw` | `GcPortalCalcCobrancas()` | `numeric` — qtd linhas geradas em RPT_COND_COBRANCAS |
-| `GcSairPortal` | `src/portal.prw` | `GcSairPortal()` | — (limpa estado do portal) |
-| `GcGeraBoleto` | `src/boleto.prw` | `GcGeraBoleto(nRecnoCob)` | `logical` — abre diálogo de configuração do boleto |
-| `GcFormatLinhaDigitavel` | `src/boleto.prw` | `GcFormatLinhaDigitavel(cBanco, cAgencia, cConta, cCobrta, cCarteira, nFatorVenc, nValor, cDV)` | `character` — linha digitável formatada |
-| `GcGeraCodigoBarras` | `src/boleto.prw` | `GcGeraCodigoBarras(cBanco, cAgencia, cConta, cCobrta, cCarteira, nFatorVenc, nValor, cDV)` | `character` — 44 digits do código de barras |
-| `GcExercicioAtivo` | `src/contabil.prw` | `GcExercicioAtivo()` | `character` — código do exercício ativo ou vazio |
-| `GcPeriodoFechado` | `src/contabil.prw` | `GcPeriodoFechado(cExercicio)` | `logical` — `.T.` se período está fechado |
-| `GcValidarIntegridade` | `src/contabil.prw` | `GcValidarIntegridade(cExercicio)` | `logical` — `.T.` se débitos == créditos (tol. 0.01) |
-| `GcFecharPeriodo` | `src/contabil.prw` | `GcFecharPeriodo(cExercicio)` | `logical` — fecha período, cria próximo, gera balancete |
-| `GcGerarBalancetePeriodo` | `src/contabil.prw` | `GcGerarBalancetePeriodo(cExercicio)` | `numeric` — saldo (receitas - despesas) |
-| `GcCriarLancamentoManualDireto` | `src/contabil.prw` | `GcCriarLancamentoManualDireto(dData, cDescricao, cContaDeb, cContaCred, nValor)` | `logical` — cria lançamento manual |
-| `GcEditarLancamentoDescricao` | `src/contabil.prw` | `GcEditarLancamentoDescricao(nRecno, cDescricao)` | `logical` — edita descrição (preserva contas) |
-| `GcDeletarLancamento` | `src/contabil.prw` | `GcDeletarLancamento(nRecno)` | `logical` — soft-delete de lançamento |
-| `GcCalcularRateio` | `src/contabil.prw` | `GcCalcularRateio(cReparticao, nValor, dData)` | `array` — {unidade, fração, valor} para cada unidade |
-| `GcLancarDespesaContabil` | `src/contabil.prw` | `GcLancarDespesaContabil(dData, cDescricao, nValor, cReparticao, nDiaVenc)` | `logical` — cria despesa com rateio automático |
-| `GcRegistrarAnomalia` | `src/auditoria.prw` | `GcRegistrarAnomalia(cTipo, cDescricao, cSeveridade, [cExercicio], [nRecnoLan], [nRecnoCob])` | `logical` — registra anomalia em AUDITORIA |
-| `GcAuditoriaFecharPeriodo` | `src/auditoria.prw` | `GcAuditoriaFecharPeriodo(cExercicio)` | `numeric` — quantidade de anomalias críticas detectadas |
-| `GcMenuContabilidade` | `gescon.prw` | `GcMenuContabilidade()` | — (submenu de contabilidade: validar, auditar, fechar) |
-
 ## Acesso a dados
 
 Todo acesso ao banco é via `TCSqlExec`/`TCSqlQuery` (SQL direto, nativos
@@ -345,100 +222,10 @@ Todo valor de texto interpolado numa query passa por `GcSqlLit()`
 numéricos/data não passam por `GcSqlLit` porque seu tipo já garante
 ausência de aspas/caracteres de escape.
 
-As telas (`GcCondominos`, `GcUnidades`, `GcDespesas`, `GcCobrancas`) não
-usam SQL direto — usam `FWMBrowse`, que grava via código Go interno do
-AdvPP (não pelo `TCSqlExec`/work-area), acionado por clique na UI web.
-
-## Gestão de usuários (Plano 2)
-
-`GcMenuUsuarios()` abre submenu com 3 opções: gerar token, revogar token
-e criar novo admin. `GcCriarUsuario()` → `GcCriarAdminNovo()` insere na
-tabela `USR` com `USR_PERFIL = 'ADMIN'` e hash SHA-256 da senha — mesmo
-padrão do login principal mas via `FWGetText cSenha` normal (sem
-máscara, já que o campo de senha mascarado exige `bIsPassword=.T.`).
-
-## Portal do condômino (Plano 2)
-
-GcPortalCondmino() autentica um token na tabela `GCT_TOKEN`, marca como
-usado (`USADO = 1`) e abre `FWMBrowse` sobre `RPT_COND_COBRANCAS`, que
-é um snapshot recalculado do zero pela função `GcPortalCalcCobrancas()`
-(contém só as cobranças da unidade vinculada ao token). O token é válido
-por 48h e pode ser revogado a qualquer momento pelo admin via
-`GcRevogarToken()` (DELETE lógico em `GCT_TOKEN`).
-
-O fluxo de geração de token (`GcGerarToken()`) lista condôminos com sua
-unidade, o admin seleciona por índice, e o sistema gera um token
-UUID-like via `GcGerarTokenId()` (SHA-256 de timestamp + random AdvPL).
-O token é mostrado ao admin em `MsgInfo` para repassar ao condômino.
-
-## Boleto bancário (Plano 2)
-
-`GcGeraBoleto(nRecnoCob)` abre diálogo para preencher parâmetros do
-boleto (banco, agência, conta, carta/cedente, carteira, fator vencimento,
-valor, DV), depois monta a linha digitável com DV via
-`GcFormatLinhaDigitavel()` e o código de barras em 44 dígitos via
-`GcGeraCodigoBarras()` — suportando bancos Itaú (341/237) e Bradesco
-(237).
-
-## Decisões e limitações conhecidas
-
-- **Cobrança é editável pela UI.** `GcCobrancas()` usa o mesmo
-  `FWMBrowse` editável das outras telas — nada impede editar/excluir uma
-  `Cobrança` (inclusive `COB_VALOR`) fora do fluxo de Fechamento
-  Mensal/Registrar Pagamento. A garantia "valor travado no fechamento" é
-  imposta pela lógica de negócio, **não pela UI**. O AdvPP tem um campo
-  `ReadOnly` em `FWFormBrowse` (`pkg/mvc/browse.go`), mas ele não está
-  ligado a nada (nem dispatch nativo, nem renderer web) — tornar isso
-  real exigiria trabalho novo no compilador. Aceito para a v1 (login
-  único, uso pessoal/piloto).
-- **Portal do Condômino tem a mesma limitação, com risco maior** (Wilson
-  Kraft, QA 2026-08-23, `Wilson/Relatorio_Portal_Usuario_GesCon_20260823.doc`):
-  o comentário de `GcPortalBrowse` (`src/portal.prw`) promete acesso
-  "read-only", mas usa o mesmo `FWMBrowse` sem nenhuma restrição —
-  Incluir/Editar/Excluir ficam disponíveis pro condômino autenticado.
-  Testado e confirmado: **sem risco de persistência real** —
-  `RPT_COND_COBRANCAS` é um snapshot recriado do zero
-  (`GcPortalCalcCobrancas`, DELETE + INSERT a partir de `COB`) a cada
-  login, então qualquer inclusão/edição forjada nunca chega à tabela
-  financeira de verdade. O risco é de confiança/UX: durante a sessão, a
-  tela pode mostrar uma cobrança "paga" que nunca ocorreu. Mitigação
-  aplicada: `GcPortalBrowse` agora chama `GcPortalCalcCobrancas()` de novo
-  assim que o browse fecha, encolhendo a janela de exposição de "até o
-  próximo login" para "durante esta tela". A correção definitiva (um modo
-  read-only real em `FWMBrowse`) segue dependendo do mesmo trabalho no
-  compilador citado no item anterior.
-- **`GetMV()` é um stub no AdvPP** — sempre retorna o valor padrão
-  passado, nunca lê configuração real (confirmado em teste direto:
-  `GetMV("X", .F., "y")` retorna `.F.`, não `"y"`). Por isso a
-  configuração SMTP da mala direta usa `GetEnv()` (variáveis de
-  ambiente), não `GetMV()`.
-- **Sem transação em volta do loop de `INSERT` do Fechamento Mensal.**
-  Se `TCSqlExec` falhar no meio do loop (uma unidade gravada, outra
-  não), a trava de duplicidade impede qualquer nova tentativa de fechar
-  a competência — não há caminho de recuperação automática. A
-  infraestrutura de banco do GesCon (via `TCSqlExec`) não expõe
-  `Begin/End Transaction`; corrigir isso exigiria trabalho no AdvPP.
-- **Vínculo Unidade→Condômino é texto livre**, sem combo/lookup — o
-  `FWMBrowse` não expõe esse tipo de campo relacionado na integração
-  atual. Aceitável para o volume de dados de um condomínio.
-- **`advplc check` não pega tudo.** Validação de sintaxe por arquivo não
-  garante que um símbolo trazido por `#include` transitivo resolve de
-  fato em tempo de execução — sempre rodar `advplc run` nos testes, não
-  só `advplc check`.
-
-## Testes
-
-Estratégia dupla:
-
-- `advplc check <arquivo>` em todo `.prw` — gate de sintaxe.
-- Fixtures end-to-end via `advplc run tests/*.prw`, cobrindo o fluxo de
-  negócio real (não mocks): cadastrar → lançar despesa → fechar mês →
-  conferir cálculo → registrar pagamento → conferir status, e mala
-  direta contra um handshake SMTP real. Todo teste isola seus próprios
-  dados (códigos como `T01`/`PAGTEST`/`MALATEST`) com `DELETE` no setup
-  **e no teardown** — o banco usado é o mesmo compartilhado da aplicação
-  real (`~/.advpp/ADVPP.db`), não há banco de teste isolado, então o
-  teardown não é opcional.
+Desde o AdvPP 4.8.6, erro de SQL volta ao programa (`TCSqlExec` = `.F.`,
+mensagem em `TCSqlError()`); gravação que precisa ser tudo-ou-nada vai num
+único comando (ex.: as cobranças do Fechamento num `INSERT` de várias
+linhas). Leitura para tela: `src/consultas.prw`.
 
 ## Bugs reais e capacidades novas encontradas/motivadas no AdvPP
 
@@ -493,3 +280,13 @@ O processo completo de design (perguntas, alternativas consideradas,
 decisões e por quê) está em `docs/superpowers/specs/` e
 `docs/superpowers/plans/` — útil para entender o *raciocínio* por trás
 de uma decisão, não só o resultado final documentado aqui.
+
+## Testes
+
+`scripts/test.sh` roda cada `tests/*_test.prw` num banco descartável montado
+de `schema.sql` e reprova saída com `FALHA`/`FAIL`/`Error` ou vazia; recusa
+`advplc` diferente de `ADVPP_VERSION`. `scripts/check.sh`: sintaxe de todos os
+fontes, alcance (toda função de negócio tem caminho a partir de `GesCon()`,
+exceto as diferidas com motivo em `scripts/alcance.py`) e filial.
+`packaging/launcher`: `go test`. A interface foi conferida no navegador
+(Playwright) a cada fase.

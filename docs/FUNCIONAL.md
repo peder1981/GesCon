@@ -1,184 +1,139 @@
 # Documentação funcional — GesCon
 
-O que o GesCon faz, do ponto de vista de quem administra um condomínio.
-Para como o sistema é construído por dentro, ver
-[`ARQUITETURA.md`](ARQUITETURA.md).
+Regras de negócio. Como usar cada tela: [Manual do usuário](../MANUAL_USUARIO.md).
 
 ## Visão geral
 
-GesCon é um sistema de gestão condominial: cadastro de unidades e
-condôminos, lançamento de despesas, rateio mensal por fração ideal,
-cobrança e registro de pagamento, mala direta por e-mail, relatórios,
-e login de administrador. Suporta múltiplos condomínios numa mesma
-instância — um banco único com dados isolados por filial (`FILIAL`).
-Usuários do tipo `SUPERADMIN` acessam todos os condomínios; do tipo
-`SINDICO` acessam apenas os vinculados. Menu fornece "Trocar Condomínio"
-para trocar entre os disponíveis no contexto do usuário.
+Gestão de condomínios: cadastro de unidades e condôminos, despesas do mês,
+fechamento mensal com rateio por fração ideal, cobranças e pagamentos,
+boleto, portal do condômino, comunicação, relatórios, contabilidade e
+auditoria. Uma instalação atende vários condomínios; cada um tem os dados
+separados (filial) e cada usuário só abre os condomínios a que tem acesso.
 
-## Login
+## Acesso e perfis
 
-Gate de acesso antes de qualquer tela — administrador único, sem
-papéis/permissões. No primeiro acesso (nenhum usuário cadastrado
-ainda), o sistema pede pra escolher login e senha e cria o
-administrador na hora. Nos acessos seguintes, pede login e senha e
-confere contra o que foi cadastrado (até 3 tentativas). A senha nunca
-é gravada em texto puro — sempre em hash SHA-256 (`FWHash`, AdvPP
-v1.23.5+). O campo de senha é mascarado (3º argumento `bIsPassword=.T.`
-de `FWGetText`, AdvPP v1.24.0+) — os caracteres ficam ocultos ao
-digitar, tanto na criação quanto no login.
+- **Super administrador**: todos os condomínios; cadastra condomínios e
+  cria outros super administradores.
+- **Síndico**: os condomínios vinculados a ele; cria síndicos do condomínio
+  aberto. Não cadastra condomínio nem cria super administrador.
+- **Condômino**: entra com token (uso único, 48 horas) emitido pela
+  administração; vê só cobranças, boleto e avisos da própria unidade.
+- Login único, sem diferenciar maiúsculas. Senha com 10+ caracteres,
+  maiúscula, minúscula, número e especial, sem o login; troca obrigatória no
+  primeiro acesso e depois de redefinida; 5 erros seguidos bloqueiam por 15
+  minutos; 30 minutos sem uso encerram a sessão.
+- Instalação nova: o administrador `admin` só nasce com a senha inicial de
+  `GESCON_ADMIN_SENHA` (o pacote gera sozinho); não há senha padrão.
 
-## Menu e navegação
+## Cadastros
 
-`advplc serve gescon.prw` (sobe em `http://localhost:8080` por padrão)
-mostra a tela de login e, depois, um **menu real** — clique numa opção
-pra abrir a tela, feche a tela (botão "Fechar browse") pra voltar ao
-menu. Nenhum reinício de processo, nenhuma troca de porta/aba:
+- **Unidade**: código (até 10 letras, números, hífen ou barra), bloco,
+  fração ideal (maior que 0, até 1) e condômino (precisa existir). Unidade
+  com cobranças não é excluída.
+- **Condômino**: código, nome, CPF/CNPJ (conferido pelo dígito; aceita o
+  CNPJ alfanumérico da Receita, a partir de julho de 2026), e-mail (validado,
+  usado na mala direta) e telefone. Condômino vinculado a unidade não é
+  excluído.
+- **Despesa**: competência `AAAA-MM`, descrição, categoria (define a conta
+  contábil) e valor maior que zero, arredondado a 2 casas. Competência já
+  fechada não recebe nem muda despesa.
 
-1. Unidades
-2. Condôminos
-3. Despesas
-4. Cobranças
-5. Fechamento Mensal (pede a competência e o dia de vencimento, mostra o resultado)
-6. Mala Direta (pede a competência, mostra quantos e-mails foram enviados)
-7. Relatórios (abre um submenu — ver seção própria abaixo)
-8. Usuários (gestão de usuários — criar novo admin, gerar/revogar tokens)
-9. Trocar Senha (altera a senha do usuário autenticado)
-10. Sair
+## Fechamento mensal
 
-## Telas
-
-As quatro primeiras dão CRUD completo (Incluir, Alterar, Excluir,
-Consultar) automaticamente:
-
-- **Condôminos** — nome, CPF, e-mail, telefone.
-- **Unidades** — código, bloco, fração ideal, e o código do condômino
-  responsável (digitado como texto — não há um seletor vinculado).
-- **Despesas** — descrição, categoria, valor, competência (mês/ano no
-  formato `YYYY-MM`), data de lançamento.
-- **Cobranças** — consulta das cobranças geradas pelo Fechamento
-  Mensal (unidade, competência, valor, vencimento, status, data de
-  pagamento). Tecnicamente editável pela mesma tela de CRUD — ver
-  "Limitações" abaixo.
-
-Fechamento Mensal e Mala Direta não são telas de cadastro — são ações:
-o menu pede a competência (`FWMenuSelect`/`FWGetText`, capacidades do
-AdvPP v1.23.0+) e mostra o resultado num diálogo, sem sair do menu.
-Relatórios (abaixo) usam o mesmo mecanismo de submenu.
-
-## Fechamento Mensal
-
-A ação central do sistema. Dado um mês/ano (competência), soma todas as
-despesas lançadas naquela competência e gera uma Cobrança por unidade
-ativa, proporcional à fração ideal de cada uma:
+Dada a competência, soma as despesas e gera uma cobrança por unidade:
 
 ```
-valor da cobrança da unidade = total de despesas da competência × fração ideal da unidade
+cobrança da unidade = total de despesas da competência × fração ideal da unidade
 ```
 
-Regras:
+- **Recusa** se a soma das frações ideais não estiver entre 99,9% e 100,1%,
+  ou se a competência não estiver em `AAAA-MM`.
+- **Uma vez por competência**: uma competência com cobranças não é fechada de
+  novo (índice único por condomínio, competência e unidade). Exceção: se foi
+  fechada sem exercício aberto e o exercício foi aberto depois, fechar de
+  novo contabiliza (só os lançamentos).
+- **Tudo ou nada**: as cobranças são gravadas num único comando; se falhar,
+  nenhuma unidade é cobrada.
+- **Soma exata**: o centavo que sobrar do rateio vai para a unidade de maior
+  fração.
+- **Valor travado**: mudar a fração depois não recalcula cobrança gerada.
+- **Vencimento**: no mês seguinte, no dia escolhido (1 a 28; fora disso, 10).
+- **Sem exercício aberto**: pergunta antes; as cobranças saem, a
+  contabilização fica para depois.
 
-- **Só pode ser feito uma vez por competência.** Tentar fechar uma
-  competência que já tem Cobrança gerada é bloqueado — não recalcula,
-  não duplica. Única exceção: se ela foi fechada **sem exercício aberto** e
-  o exercício foi aberto depois, fechar de novo oferece **contabilizar** a
-  competência (gera só os lançamentos, nunca novas Cobranças).
-- **Sem exercício aberto**, o sistema pergunta antes de fechar: as Cobranças
-  são geradas, mas o Balancete não reflete o fechamento até contabilizar.
-- **A soma das Cobranças fecha exata no total das despesas:** o resíduo de
-  arredondamento (ex.: 100,01 rateado em 20 unidades de 5%) vai para a
-  unidade de maior fração.
-- **Competência das despesas:** use `AAAA-MM`; `MM/AAAA` é convertida
-  automaticamente.
-- **O valor gerado fica travado.** Mesmo que a fração ideal de uma
-  unidade mude depois, as Cobranças já geradas não são recalculadas
-  retroativamente — reflete como fechamento contábil real funciona, e
-  evita que uma correção cadastral reescreva cobranças já pagas.
-- **Avisa, mas não bloqueia**, em dois casos: se a soma das frações
-  ideais das unidades ativas não bate com 100%, ou se a competência não
-  tem nenhuma despesa lançada (nesse caso, gera Cobranças de valor
-  zero — fecha mesmo assim).
-- O vencimento de cada Cobrança é no mês seguinte à competência, num
-  dia configurável (o menu pergunta; padrão dia 10). Dias fora da faixa
-  1-28 caem no padrão (evita datas inválidas em fevereiro).
+## Pagamento e boleto
 
-## Registrar Pagamento
+- Pagamento com data válida e não futura; cobrança já paga não é regravada.
+- Cobrança vencida e não paga passa a "atrasado" (ao entrar e ao abrir os
+  relatórios).
+- Boleto: Itaú e Bradesco, padrão FEBRABAN (fator de vencimento com reinício
+  em 22/02/2025), nosso número = número da cobrança; não sai para cobrança
+  paga. Dados bancários conferidos pelo layout do banco ao gravar.
 
-Marca uma Cobrança específica como paga, com a data informada. Só altera
-o status e a data de pagamento — nunca o valor da cobrança.
+## Comunicação
 
-## Mala direta
-
-Envia um e-mail individual para cada condômino com Cobrança pendente
-(não paga) numa competência — nome, unidade, valor, vencimento e
-situação. Só envia para condôminos com e-mail cadastrado; quem não tem,
-é pulado silenciosamente (registrado no log). Se o envio falhar para um
-condômino específico (servidor fora do ar, e-mail inválido), os demais
-ainda recebem — uma falha isolada não interrompe o lote.
-
-Para funcionar, o servidor SMTP precisa estar configurado (ver
-[`README.md`](../README.md), seção "Mala direta"). Sem essa
-configuração, a mala direta simplesmente não envia nada (sem erro).
+- **Avisos**: publicados aparecem no portal do condômino; arquivados somem
+  de lá.
+- **Mala direta**: um e-mail por condômino com e-mail válido e cobrança em
+  aberto na competência, com valor em reais e vencimento em DD/MM/AAAA.
+  Exige SMTP configurado no servidor.
 
 ## Relatórios
 
-Acessados via "Relatórios" no menu principal (abre um submenu com as 4
-opções abaixo + "Voltar"). Todos são leitura sobre os dados já
-cadastrados — nenhum muda Cobrança, Despesa, Unidade ou Condômino.
+Inadimplência (cobranças atrasadas com dias de atraso), extrato da unidade,
+despesas por categoria e resultado do mês (recebido, despesas, saldo, em
+aberto). Sempre do condomínio aberto, calculados na hora.
 
-- **Balancete Mensal** — pede a competência, mostra num diálogo:
-  receitas (soma de Cobrança com status `pago`), despesas (soma de
-  Despesa lançada), saldo (receitas − despesas).
-- **Inadimplência** — lista, sem precisar de nenhum parâmetro, toda
-  Cobrança em status `atrasado`: unidade, competência, valor,
-  vencimento, dias de atraso. Antes de listar, promove pra `atrasado`
-  toda Cobrança `pendente` com vencimento já passado (`GcAtualizarInadimplentes`
-  — também roda automaticamente logo após o login, então o status
-  gravado na Cobrança em si — visível também na tela de Cobranças e na
-  Mala Direta — nunca fica desatualizado por mais que a duração de uma
-  sessão).
-- **Extrato por Unidade** — pede o código da unidade, lista todo o
-  histórico de Cobrança dela (competência, valor, vencimento, status,
-  data de pagamento).
-- **Despesas por Categoria** — pede a competência (vazio = todas),
-  soma as despesas agrupadas por categoria, maior valor primeiro.
+## Contabilidade
 
-Cada relatório recalcula seu conteúdo do zero toda vez que é aberto —
-sempre reflete os dados mais recentes, não fica desatualizado entre
-uma abertura e outra.
+- Exercício (`AAAA-MM`, início e fim válidos); um ativo por vez.
+- Lançamento manual em partida dobrada: data dentro do exercício ativo
+  aberto, contas existentes e diferentes, valor maior que zero, histórico.
+  Grava o login de quem lançou. Só lançamentos manuais podem ser alterados
+  ou excluídos.
+- Balancete por conta: ativo e despesa com saldo devedor (débito − crédito);
+  passivo e receita com saldo credor.
+- Fechar o exercício impede novos lançamentos nele.
 
-## O que já existe (Plano 2 implementado)
+## Reforma tributária
 
-- **Gestão de usuários** — menu "Usuários" no principal com opções de
-  gerar token temporário, revogar token ativo e criar novo administrador.
-  Tokens são válidos por 48h e ficam marcados como usados ao primeiro login.
-- **Portal do condômino** — acesso read-only via token temporário. O
-  condômino cola o token recebido do admin e consulta apenas suas cobranças.
-- **Senha mascarada** — `FWGetText` com 3º argumento `bIsPassword=.T.`
-  esconde os caracteres digitados (AdvPP v1.24.0+).
-- **Boleto bancário Itaú/Bradesco** — geração de linha digitável e
-  código de barras para cobranças.
+![Reforma tributária](img/12-reforma-tributaria.png)
 
-## Limitações conhecidas (Plano 3+)
+- **Regime**: o condomínio edilício não é contribuinte do IBS e da CBS (LC
+  214/2025, art. 26, I). Pode optar pelo regime regular: a opção vale da
+  data informada; a renúncia só é aceita depois de 12 meses de opção e o
+  condomínio continua optante até 31/12 do ano da renúncia (Decreto
+  12.955/2026, art. 25).
+- **Teste dos 80%** (art. 26, § 2º, II): numerador = cobranças do fechamento
+  + receitas de origem "condôminos"; denominador = tudo (inclusive
+  terceiros e financeiras). 80% ou mais: sem IBS e CBS. Menos de 80%, não
+  optante: IBS e CBS sobre as operações que o condomínio realizar, com
+  crédito proporcional — o GesCon avisa e não calcula: é para o contador.
+  Optante: IBS e CBS sobre todas as taxas e demais valores.
+- **NFS-e** (Decreto 12.955/2026, art. 115, VI, "d"; a partir de 01/01/2027
+  pelo Ato Conjunto RFB/CGIBS 7/2026): uma por cobrança, emitida na Sefin
+  Nacional com o certificado A1 do condomínio. Código 99.05.01, NBS
+  1.1001.90.00, local do imóvel (cIndOp 020201), ISSQN não incide, grupo
+  `condominios` com vencimento original e a cobrança (tipo 01, condomínio
+  ordinário). Não optante: CST 410 / cClassTrib 410012; optante: CST 200 /
+  cClassTrib 200046. A Sefin calcula o IBS e a CBS.
+- Exige: CNPJ do condomínio (Condomínios), município, certificado, e CPF ou
+  CNPJ válido do condômino de cada unidade. Cobrança com NFS-e autorizada
+  não é emitida de novo.
 
-- **Permissões finas** — hoje só há dois perfis: admin (acesso total) e
-  condômino (token read-only). Vários administradores já podem coexistir
-  (menu Usuários → Criar Usuário → Admin, tabela USR sem limite de linha);
-  o que fica pro próximo ciclo é controle granular por admin (ex.: um
-  síndico sem acesso a Contabilidade).
+## Limitações conhecidas
 
-## Limitações conhecidas (v1)
-
-- **A tela de Cobranças permite editar/excluir registros livremente.**
-  A garantia de "valor travado no fechamento" é imposta pela lógica de
-  negócio (só o Fechamento Mensal cria Cobrança, só Registrar Pagamento
-  altera status/data), não pela interface — nada tecnicamente impede
-  alguém com acesso à tela de editar o valor na mão. Aceitável para uso
-  com um único administrador de confiança; ver `ARQUITETURA.md` para o
-  motivo técnico.
-- **Vínculo unidade→condômino é texto livre**, sem validação de que o
-  código digitado existe de fato em Condôminos.
-- **Os relatórios também são telas de `FWMBrowse`**, então tecnicamente
-  dá pra clicar Incluir/Alterar/Excluir neles — não faz sentido editar
-  um relatório (o conteúdo é recalculado do zero na próxima abertura,
-  então a edição não sobrevive), mas nada impede clicar. Mesma
-  limitação técnica da tela de Cobranças.
+- Taxa extra (cobrança fora do fechamento mensal): fora da interface até a
+  cobrança ter tipo próprio (o caminho antigo gerava vencimento em 31/02 e
+  colidia com a regra de uma cobrança por unidade e competência).
+- Repartição só por fração ideal.
+- Boleto sem arquivo de remessa CNAB; Itaú sem as carteiras de nosso número
+  com 15 posições.
+- NFS-e: só emissão. Cancelamento e substituição (eventos), detalhamento
+  da cobrança por tipo (gDetCobranca) e descontos ainda não existem.
+- O XSD oficial publicado (produção restrita, 20/10/2026) ainda não traz o
+  grupo `condominios` da NT 009: o GesCon segue a NT; quando sair o XSD
+  definitivo, conferir (`tests/fixtures/nfse`).
+- O nome do campo do envio (`dpsXmlGZipB64`) não está no manual público da
+  API (a documentação Swagger exige certificado); vem de integradores.
+  Primeira emissão real deve ser feita na produção restrita.

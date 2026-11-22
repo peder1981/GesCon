@@ -10,11 +10,8 @@
 // esta lista e não as acusa como código morto.
 // src/auth-primitives.prw — Portal v2 auth primitives (Task 1.5, prerequisite
 // for Task 2's REST auth endpoints in src/auditoria-rest.prw).
-// Non-interactive equivalents of the interactive admin flows already in
-// src/usuarios.prw (GcGerarToken/GcRevogarToken, UI-driven, single condomino
-// picked from a list) and src/login.prw (GcCredenciaisValidas, admin-only
-// login gate) — safe to call from a stateless REST handler: no
-// MsgInfo/MsgStop/MsgYesNo, no globals.
+// Primitivas sem diálogo e sem estado global, para um futuro handler REST
+// do portal (a interface web usa src/operacoes.prw e src/seguranca.prw).
 #include "totvs.ch"
 
 /*/{Protheus.doc} GcValidarToken
@@ -76,8 +73,7 @@ Return oToken
 
 /*/{Protheus.doc} GcValidarLoginPortal
     Valida usuário/senha (reaproveita GcCredenciaisValidas de
-    src/login.prw, que já compara a senha por hash via FWHash — nunca em
-    texto puro) e, se válidas, emite um novo token em GCT_TOKEN com o
+    src/seguranca.prw: Argon2id, bloqueio por tentativas) e, se válidas, emite um novo token em GCT_TOKEN com o
     perfil do usuário (USR_PERFIL, default 'ADMIN' se vazio) e validade
     de 30 dias. Sem interação com o usuário. Usado pelo endpoint REST
     POST /auth/login (src/auditoria-rest.prw::GcAuthLoginRestEndpoint).

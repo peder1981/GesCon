@@ -137,4 +137,3 @@ Return 1
 
 #include "../src/db.prw"
 #include "../src/seguranca.prw"
-#include "../src/login.prw"

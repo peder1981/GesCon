@@ -383,3 +383,50 @@ User Function GcCriarIndiceUnicoUsr()
         Return .F.
     EndIf
 Return TCSqlExec("CREATE UNIQUE INDEX IF NOT EXISTS UQ_USR_LOGIN ON USR (lower(USR_LOGIN)) WHERE D_E_L_E_T_ = ' '")
+
+/*/{Protheus.doc} GcPode
+    Permissão por perfil. SUPERADMIN pode tudo; SINDICO pode tudo dentro
+    dos condomínios dele, menos cadastrar condomínios e criar super
+    administrador. Perfil desconhecido não pode nada.
+    @type User Function
+    @author GesCon
+    @since 2026-11-21
+    @param cPerfil, character, "SUPERADMIN" ou "SINDICO"
+    @param cAcao, character, área/ação (ex.: "condominios", "criar_super")
+    @return logical, .T. se permitido
+*/
+User Function GcPode(cPerfil, cAcao)
+    If cPerfil == "SUPERADMIN"
+        Return .T.
+    EndIf
+    If cPerfil == "SINDICO"
+        Return !(cAcao $ "|condominios|criar_super|")
+    EndIf
+Return .F.
+
+/*/{Protheus.doc} GcCondominiosDoLogin
+    Condomínios ativos que o login pode abrir: todos, para SUPERADMIN; os
+    vinculados em USR_COND, para SINDICO.
+    @type User Function
+    @author GesCon
+    @since 2026-11-21
+    @param cLogin, character, login como gravado
+    @return array, {{filial, nome}, ...} em ordem de nome
+*/
+User Function GcCondominiosDoLogin(cLogin)
+    Local aRows := {} as array
+    Local aRet  := {} as array
+    Local nI    := 0 as numeric
+
+    If GcPerfilDoLogin(cLogin) == "SUPERADMIN"
+        aRows := TCSqlQuery("SELECT COND_FILIAL, COND_NOME FROM COND WHERE COND_ATIVO = 1 AND D_E_L_E_T_ = ' ' ORDER BY COND_NOME")
+    Else
+        aRows := TCSqlQuery("SELECT C.COND_FILIAL, C.COND_NOME FROM COND C " + ;
+            "INNER JOIN USR_COND UC ON UC.FILIAL = C.COND_FILIAL AND UC.D_E_L_E_T_ = ' ' " + ;
+            "WHERE lower(UC.USR_LOGIN) = '" + GcSqlLit(GcLoginNormal(cLogin)) + "' AND C.COND_ATIVO = 1 AND C.D_E_L_E_T_ = ' ' " + ;
+            "ORDER BY C.COND_NOME")
+    EndIf
+    For nI := 1 To Len(aRows)
+        aAdd(aRet, {aRows[nI]:COND_FILIAL, aRows[nI]:COND_NOME})
+    Next nI
+Return aRet

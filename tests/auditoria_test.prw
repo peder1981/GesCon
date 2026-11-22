@@ -935,7 +935,6 @@ Return lOk
 
 #include "../src/db.prw"
 #include "../src/seguranca.prw"
-#include "../src/login.prw"
 #include "../src/usuarios.prw"
 #include "../src/auth-primitives.prw"
 #include "../src/contabil.prw"
