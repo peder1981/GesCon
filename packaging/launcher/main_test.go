@@ -2,9 +2,12 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 	"unicode"
 )
 
@@ -60,5 +63,28 @@ func TestPrimeiroAcessoGravaEnvLegivelSoPeloDono(t *testing.T) {
 	}
 	if fi, _ := os.Stat(env); fi.Mode().Perm() != 0o600 {
 		t.Fatalf("permissão %v, esperada 0600", fi.Mode().Perm())
+	}
+}
+
+// --encerrar mata os processos de gescon.pid e apaga o arquivo.
+func TestEncerrarMataOsProcessosDoArquivo(t *testing.T) {
+	cmd := exec.Command("sleep", "60")
+	if err := cmd.Start(); err != nil {
+		t.Skip("sem sleep:", err)
+	}
+	arq := filepath.Join(t.TempDir(), "gescon.pid")
+	if err := os.WriteFile(arq, []byte(strconv.Itoa(cmd.Process.Pid)+" 999999999\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	encerrar(arq)
+	feito := make(chan error, 1)
+	go func() { feito <- cmd.Wait() }()
+	select {
+	case <-feito:
+	case <-time.After(5 * time.Second):
+		t.Fatal("processo continuou vivo")
+	}
+	if _, err := os.Stat(arq); !os.IsNotExist(err) {
+		t.Fatal("gescon.pid deveria ser apagado")
 	}
 }

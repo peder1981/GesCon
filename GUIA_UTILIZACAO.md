@@ -32,8 +32,10 @@ No primeiro login o GesCon pede uma senha nova; depois apague o
 `PRIMEIRO-ACESSO.txt`. Outra porta: `GESCON_PORTA=8090` no `gescon.env`.
 Registro do servidor: `gescon.log` na pasta de dados.
 
-O servidor continua no ar ao fechar o navegador; ele para ao sair da sessão do
-Windows (ou ao encerrar o processo `advplc`).
+O servidor continua no ar ao fechar o navegador; para pará-lo, rode
+`GesCon --encerrar` (ou saia da sessão do Windows). Atualizar ou desinstalar
+com o GesCon aberto funciona: o instalador encerra antes o servidor desta
+instalação (e só ele).
 
 ## 3. Servidor (vários computadores, acesso pela internet)
 

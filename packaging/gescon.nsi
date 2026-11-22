@@ -7,6 +7,18 @@
 
 !include "MUI2.nsh"
 
+; Encerra o servidor e o iniciador DESTA instalação antes de copiar ou
+; remover arquivos: sem isto, com o GesCon aberto, a atualização não
+; substitui o advplc.exe em uso e a desinstalação o deixa para trás (visto no
+; Windows 10). Pede ao próprio iniciador (64 bits, PIDs em gescon.pid): o
+; NSIS é 32 bits e não enxerga o caminho dos processos de 64 bits, e
+; taskkill por nome mataria o advplc de outro sistema (ex.: GEBAN).
+!macro EncerraGesCon
+    IfFileExists "$INSTDIR\GesCon.exe" 0 +3
+        ExecWait '"$INSTDIR\GesCon.exe" --encerrar'
+        Sleep 1500
+!macroend
+
 !ifndef VERSAO
   !define VERSAO "0.0.0-dev"
 !endif
@@ -30,6 +42,7 @@ SetCompressor /SOLID lzma
 
 Section "GesCon" SecMain
     SetOutPath "$INSTDIR"
+    !insertmacro EncerraGesCon
     ; Atualização: some com os fontes da versão anterior antes de copiar
     RMDir /r "$INSTDIR\app"
     File /r "payload\*.*"
@@ -52,6 +65,7 @@ SectionEnd
 ; O nome precisa ser exatamente "Uninstall" (o makensis só reconhece a seção
 ; de desinstalação por ele).
 Section "Uninstall"
+    !insertmacro EncerraGesCon
     RMDir /r "$INSTDIR"
     Delete "$DESKTOP\GesCon.lnk"
     RMDir /r "$SMPROGRAMS\GesCon"

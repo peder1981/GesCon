@@ -9,7 +9,12 @@
 //   - sobe `advplc serve app/gescon.prw` em 127.0.0.1 (porta 8086 ou
 //     GESCON_PORTA), com a saída num arquivo de log -- nunca em pipe: um
 //     filho que herda o pipe trava o pai no Windows (lição do pacote GEBAN);
-//   - se o GesCon já está no ar, só abre o navegador.
+//   - se o GesCon já está no ar, só abre o navegador;
+//   - `GesCon --encerrar` para o servidor desta instalação (PIDs em
+//     gescon.pid na pasta de dados). O instalador e o desinstalador usam isto:
+//     o NSIS é 32 bits e, num Windows 64 bits, não enxerga o caminho dos
+//     processos de 64 bits (visto no Windows 10), então não dá para achá-los
+//     por caminho.
 package main
 
 import (
@@ -22,6 +27,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -45,6 +51,11 @@ func executar() error {
 	}
 	if err := os.MkdirAll(dados, 0o700); err != nil {
 		return err
+	}
+	pidArq := filepath.Join(dados, "gescon.pid")
+	if len(os.Args) > 1 && os.Args[1] == "--encerrar" {
+		encerrar(pidArq)
+		return nil
 	}
 	envArq := filepath.Join(dados, "gescon.env")
 	if _, err := os.Stat(envArq); os.IsNotExist(err) {
@@ -86,6 +97,8 @@ func executar() error {
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("não consegui executar %s: %w", advplc, err)
 	}
+	_ = os.WriteFile(pidArq, []byte(fmt.Sprintf("%d %d\n", cmd.Process.Pid, os.Getpid())), 0o600)
+	defer os.Remove(pidArq)
 	for i := 0; i < 150; i++ {
 		if noAr(url) {
 			_ = abrir(url)
@@ -95,6 +108,24 @@ func executar() error {
 	}
 	_ = cmd.Process.Kill()
 	return fmt.Errorf("o servidor não respondeu em 30 s (veja %s)", filepath.Join(dados, "gescon.log"))
+}
+
+// encerrar mata o servidor e o iniciador registrados em gescon.pid.
+func encerrar(pidArq string) {
+	b, err := os.ReadFile(pidArq)
+	if err != nil {
+		return
+	}
+	for _, campo := range strings.Fields(string(b)) {
+		pid, err := strconv.Atoi(campo)
+		if err != nil || pid == os.Getpid() {
+			continue
+		}
+		if p, err := os.FindProcess(pid); err == nil {
+			_ = p.Kill()
+		}
+	}
+	_ = os.Remove(pidArq)
 }
 
 func pastaDados() (string, error) {

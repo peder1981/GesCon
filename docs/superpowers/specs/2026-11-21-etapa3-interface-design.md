@@ -42,3 +42,20 @@ condomínio · Sair.
 3a casca (login, troca obrigatória, condomínio, menu, permissões, sessão,
 portal) · 3b cadastros · 3c operações · 3d relatórios e início · 3e remoção
 da interface antiga, documentação e capturas · 3f pacote Windows.
+
+## Estado (2026-11-22)
+
+Fases 3a a 3f concluídas. Conferido no navegador (Playwright) a cada fase e
+no Windows 10 (VM QEMU com disco em snapshot): instalação por usuário,
+primeiro acesso com a senha gerada, troca obrigatória, atualização com o
+GesCon aberto e desinstalação que preserva os dados.
+
+Achados no AdvPP 4.8.6 (para uma próxima versão dele): `PoSelect` não troca
+as opções depois de montado (`poToJSON` não converte `JsonObject`, então
+`Set("options", ...)` não serve); `PoNumber` é `type=number` de passo
+inteiro (sem vírgula nem decimais).
+
+Achado no instalador: o NSIS é 32 bits e, num Windows de 64 bits, o
+PowerShell que ele chama não lê o caminho de processos de 64 bits; o
+encerramento do servidor passou para o próprio iniciador
+(`GesCon --encerrar`, PIDs em `gescon.pid`).
