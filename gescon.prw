@@ -278,10 +278,12 @@ User Function GcMenuCobrancas()
             nRecno := GcSelecionarCobranca("pendente", "Registrar pagamento de qual cobrança?")
             If nRecno > 0
                 cData := AllTrim(FWGetText("Data do pagamento (AAAAMMDD):", DtoS(Date())))
-                If Len(cData) != 8
-                    MsgAlert("Data deve estar no formato AAAAMMDD.", "Registrar Pagamento")
+                // Data inexistente (20261399) virava data vazia; data futura
+                // registraria um pagamento que ainda não aconteceu.
+                If Empty(GcBoletoDataVenc(cData)) .Or. GcBoletoDataVenc(cData) > Date()
+                    MsgAlert("Data inválida: use AAAAMMDD, uma data que exista e que não seja futura.", "Registrar Pagamento")
                 Else
-                    If GcRegistrarPagamento(nRecno, SToD(cData))
+                    If GcRegistrarPagamento(nRecno, GcBoletoDataVenc(cData))
                         MsgInfo("Pagamento registrado.", "Registrar Pagamento")
                     Else
                         MsgAlert("Não foi possível registrar o pagamento.", "Registrar Pagamento")
@@ -351,8 +353,10 @@ User Function GcMenuAvisos()
                 MsgAlert("Não foi possível publicar o aviso.", "Criar Aviso")
             EndIf
         Case nOpcao == 3
+            // Só os avisos deste condomínio (antes listava os de todos)
             aAvisos := TCSqlQuery("SELECT AVI_ID, AVI_TITULO FROM AVISOS " + ;
-                "WHERE AVI_ATIVO = 1 AND D_E_L_E_T_ = ' ' ORDER BY AVI_DATA_CRIACAO DESC")
+                "WHERE AVI_ATIVO = 1 AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('AVISOS')) + "' " + ;
+                "ORDER BY AVI_DATA_CRIACAO DESC")
 
             If Len(aAvisos) == 0
                 MsgInfo("Nenhum aviso ativo.", "Arquivar Aviso")
