@@ -1,178 +1,100 @@
 # Guia de Utilização — GesCon
 
-Instalação, compilação e execução do GesCon.
-Para o passo a passo de cada tela, veja [MANUAL_USUARIO.md](MANUAL_USUARIO.md).
-
----
+Instalação, execução, servidor, cópia de segurança e problemas comuns. Para o
+uso das telas, ver o [Manual do usuário](MANUAL_USUARIO.md).
 
 ## 1. O que é
 
-Sistema de gestão condominial escrito em AdvPL, compilado pelo
-[AdvPP](https://github.com/peder1981/AdvPP) e executado como **aplicação
-desktop** em janela nativa.
+Sistema de gestão condominial em AdvPL/TLPP, executado pelo
+[AdvPP](https://github.com/peder1981/AdvPP). A interface é web (componentes
+PO-UI) servida pelo `advplc serve`; o banco é SQLite. Vários condomínios numa
+instalação, separados por condomínio (filial).
 
-Não há servidor, navegador ou banco externo: o executável é autocontido e os
-dados ficam num arquivo SQLite.
+## 2. Computador do escritório (pacote)
 
----
+| Sistema | Arquivo | Como |
+|---|---|---|
+| Windows 10/11 | `gescon-setup-<versão>.exe` | Instala por usuário em `%LOCALAPPDATA%\Programs\GesCon`, sem administrador; atalho **GesCon** na área de trabalho e no menu Iniciar |
+| Windows (sem instalar) | `GesCon-<versão>-windows-amd64.zip` | Descompacte e abra `GesCon.exe` |
+| Linux | `GesCon-<versão>-linux-amd64.tar.gz` | Descompacte e rode `./GesCon` |
+| macOS (Apple Silicon) | `GesCon-<versão>-darwin-arm64.tar.gz` | Descompacte e rode `./GesCon` |
 
-## 2. Pré-requisitos
+O programa **GesCon** (o iniciador):
 
-| Item | Para quê |
+1. cria a pasta de dados do usuário: `%LOCALAPPDATA%\GesCon` no Windows,
+   `~/.local/share/gescon` no Linux e macOS;
+2. na primeira vez, gera a senha inicial do `admin`, grava em `gescon.env`
+   (só o usuário lê) e abre `PRIMEIRO-ACESSO.txt` com ela;
+3. sobe o servidor em `http://127.0.0.1:8086` (só esta máquina acessa) e
+   abre o navegador. Se o GesCon já estiver aberto, só abre o navegador.
+
+No primeiro login o GesCon pede uma senha nova; depois apague o
+`PRIMEIRO-ACESSO.txt`. Outra porta: `GESCON_PORTA=8090` no `gescon.env`.
+Registro do servidor: `gescon.log` na pasta de dados.
+
+O servidor continua no ar ao fechar o navegador; ele para ao sair da sessão do
+Windows (ou ao encerrar o processo `advplc`).
+
+## 3. Servidor (vários computadores, acesso pela internet)
+
+`deploy/02-setup-advpp.sh` prepara uma máquina Debian 12: instala o `advplc`
+da versão em `ADVPP_VERSION`, clona o GesCon, cria o banco, gera a senha
+inicial em `/etc/gescon/gescon.env` (0600) e cria o serviço systemd
+`gescon` (`advplc serve gescon.prw --port 8080`, mensagens internas só no
+journal). Para publicar na internet, ponha um proxy com HTTPS na frente (o
+exemplo do projeto usa Cloudflare Tunnel: `deploy/03-setup-cloudflared.sh`)
+e defina `ADVPP_WEBUI_ALLOWED_HOSTS=<seu domínio>` no serviço — o `advplc`
+recusa Host que não seja da própria máquina. Detalhes em
+[`deploy/README.md`](deploy/README.md).
+
+## 4. Variáveis de ambiente
+
+| Variável | Para |
 |---|---|
-| `advplc` (AdvPP) | compilar os fontes |
-| Go 1.24+ | `advplc build` gera um binário Go com o bytecode embutido |
-| `sqlite3` | criar o banco a partir de `schema.sql` |
-| Checkout do AdvPP | o stub gerado importa o módulo; aponte `ADVPP_SRC` |
+| `GESCON_ADMIN_SENHA` | Senha inicial do `admin`; só vale com a tabela de usuários vazia (mínimo 10 caracteres, maiúscula, minúscula, número e especial) |
+| `GESCON_SMTP_HOST`, `_PORT`, `_USER`, `_PASS`, `_FROM` | Mala direta |
+| `ADVPP_DB` | Banco SQLite (no pacote, o iniciador usa a pasta de dados) |
+| `GESCON_PORTA` | Porta do pacote (padrão 8086) |
+| `ADVPP_WEBUI_HIDE_LOG=1` | Mensagens internas fora do navegador (o pacote e o deploy já definem) |
 
----
+Sem usuários e sem `GESCON_ADMIN_SENHA`, a tela de entrada explica o que
+fazer: ninguém cria administrador pela tela.
 
-## 3. Instalação
+## 5. Cópia de segurança
 
-**No Windows, use o instalador.** O release publica
-`GesCon-Setup-<versão>.exe`: cria atalho no menu Iniciar, aponta o banco para
-`C:\ProgramData\GesCon\GesCon.db` — compartilhado entre as contas do Windows,
-porque o banco é do condomínio e não da conta de quem abriu —, e traz a opção
-de renderização por software para máquina sem driver de vídeo (seção 7). O
-`.zip` continua publicado para quem prefere descompactar e rodar.
+Tudo está num arquivo: `gescon.db` na pasta de dados (com `gescon.db-wal` e
+`gescon.db-shm` enquanto o sistema está aberto). Com o GesCon fechado, copie
+a pasta inteira; com ele aberto, use `sqlite3 gescon.db ".backup copia.db"`.
+No servidor, `deploy/05-backup-setup.sh` agenda uma cópia diária.
 
-O atalho executa `GesCon.exe`, um lançador que aponta o banco compartilhado
-antes de subir o programa — que fica em `app\` justamente para não haver
-ícone que pule esse passo. Para usar outro banco (teste, pasta de rede),
-defina `ADVPP_DB`: o lançador respeita o que já estiver definido.
-
-Para desenvolver, a partir do fonte:
+## 6. Desenvolvimento
 
 ```bash
-# 1. Banco de dados — opcional desde a 1.0.4: o executável aplica o schema
-#    sozinho no arranque. Este script continua útil para preparar um banco
-#    antes de rodar qualquer coisa.
-scripts/bootstrap-db.sh
-
-# 2. Executável
-export ADVPP_SRC=~/Projetos/AdvPP
-scripts/build.sh                    # gera ./GesConApp
-
-# 3. Primeiro administrador: senha inicial no ambiente (só vale com a
-#    tabela de usuários vazia; no primeiro login ela é trocada)
-export GESCON_ADMIN_SENHA='Uma#SenhaForte1'
+scripts/bootstrap-db.sh                        # banco em ~/.advpp/ADVPP.db
+GESCON_ADMIN_SENHA='Uma#SenhaForte1' ./gescon   # http://127.0.0.1:8086
+scripts/test.sh                                # exige o advplc de ADVPP_VERSION
+scripts/check.sh                               # sintaxe, alcance, isolamento por condomínio
+scripts/check-migracao-filial.sh               # banco antigo sobe limpo
+packaging/build-package.sh <versão>            # pacotes e instalador
 ```
-
-Ninguém cria administrador pela tela: sem usuários e sem
-`GESCON_ADMIN_SENHA`, o GesCon recusa o acesso e diz o que fazer. Com a
-variável definida, nasce o usuário `admin` (super administrador), e o
-primeiro login exige definir uma senha nova. No servidor, o
-`deploy/02-setup-advpp.sh` gera essa senha sozinho em
-`/etc/gescon/gescon.env` (permissão 0600).
-
-Regras de senha: no mínimo 10 caracteres, com letra maiúscula, letra
-minúscula, número e caractere especial, sem conter o login. Cinco erros
-seguidos bloqueiam o usuário por 15 minutos. Senhas gravadas por versões
-anteriores (SHA-256) continuam valendo e são regravadas em Argon2id no
-primeiro login.
-
-O banco padrão é `~/.advpp/ADVPP.db`. Para usar outro, defina `ADVPP_DB`.
-
----
-
-## 4. Execução
-
-```bash
-./gescon
-```
-
-`./GesConApp` direto também funciona: o build usa `advplc build --gui`, que
-marca o programa como app desktop — a janela abre mesmo a partir de um
-terminal, e no Windows o `.exe` sai no subsistema GUI, sem console atrás.
-O launcher `./gescon` ficou como conveniência. O porquê está em
-[docs/PADRAO_GUI.md](docs/PADRAO_GUI.md), seção 4.
-
-No Windows, o release publica um **zip** — `GesConApp-windows-amd64.zip` —
-com o `.exe`, a pasta `mesa\` e o `GesCon-modo-compativel.bat`. Extraia tudo
-para a mesma pasta e execute o `.exe`. O `.bat` só é necessário em máquina
-sem driver de vídeo; veja a seção 7.
-
----
-
-## 5. Verificação
-
-```bash
-scripts/check.sh    # encoding, sintaxe de todos os fontes, alcance dos menus
-scripts/test.sh     # 13 suítes de teste, em banco descartável
-scripts/build.sh    # executável
-```
-
-`check.sh` recusa fonte que não seja UTF-8 e acusa qualquer função de negócio
-que tenha ficado sem caminho de menu. `test.sh` monta um banco novo a cada
-execução, então não depende do estado do seu banco de desenvolvimento.
-
----
-
-## 6. Estrutura
-
-```
-gescon.prw          ponto de entrada: login e menus
-src/                módulos por área (contábil, boleto, portal, auditoria…)
-tests/              13 suítes, uma por área
-schema.sql          tabelas, índices e dicionário SX3
-scripts/            check, test, build, bootstrap do banco
-docs/PADRAO_GUI.md  como escrever tela neste projeto
-```
-
-Regra de módulo: **nenhum arquivo de `src/` inclui outro**. O AdvPP não tem
-include guard, então incluir em cadeia cola o mesmo arquivo várias vezes no
-compilado. Quem lista os módulos é `gescon.prw` (ou o arquivo de teste), uma
-vez cada.
-
----
 
 ## 7. Problemas comuns
 
-**"MSDIALOG: requer o modo web"** — o executável foi compilado sem
-`--gui` (ou é anterior ao AdvPP 2.0.7). Recompile com `scripts/build.sh`,
-ou contorne rodando por `./gescon`, que exporta `ADVPP_FORCE_GUI=1`.
+**A página não abre** — veja `gescon.log` na pasta de dados. Porta ocupada
+por outro programa: defina `GESCON_PORTA` no `gescon.env`.
 
-**"Fyne error: window creation error / WGL: The driver does not appear to
-support OpenGL"** (Windows) — o Windows está sem driver de vídeo real:
-máquina recém-instalada, ou máquina virtual sem aceleração. Nesse estado o
-sistema oferece só OpenGL 1.1 pelo *Microsoft Basic Display Adapter*, e o
-Fyne exige 2.0+. O programa não consegue se defender disso — o Fyne chama
-`os.Exit(1)` dentro do próprio driver, antes de qualquer código nosso rodar.
+**"Nenhum usuário cadastrado"** — falta `GESCON_ADMIN_SENHA` (no pacote, ela é
+gerada na primeira execução; se o `gescon.env` foi apagado, o iniciador gera
+outro).
 
-Duas saídas, nesta ordem:
+**"Usuário bloqueado por excesso de tentativas"** — 15 minutos, ou um
+administrador desbloqueia em Usuários.
 
-1. **Instale o driver de vídeo** (Windows Update → *Drivers opcionais*, ou o
-   site do fabricante). É a melhor: mantém a aceleração por hardware.
-2. **Renderização por software** com o Mesa3D — CPU pura, suficiente para as
-   grades e formulários deste sistema, e a única saída no Hyper-V, que não
-   oferece OpenGL nenhum. Pelo instalador, marque *Renderização por software*
-   (ele já vem marcado quando não encontra driver registrado); se o GesCon já
-   estiver instalado, rode o instalador de novo e marque a opção. Pelo zip,
-   execute `GesCon-modo-compativel.bat`, que copia os DLLs de `mesa\` para
-   junto do `.exe`.
+**"test: advplc vX no PATH, mas ADVPP_VERSION pede vY"** — instale o `advplc`
+da versão fixada (a suíte recusa outra versão de propósito).
 
-O Mesa fica em `mesa\` e não na raiz justamente porque o `opengl32.dll` dele
-substitui o driver em vez de encadear: na raiz, todo usuário perderia a placa
-de vídeo, inclusive quem tem uma boa.
+**Acentos trocados** — algum fonte voltou a CP-1252; os deste projeto são
+UTF-8 (`scripts/check.sh` acusa).
 
-**Acentos aparecem trocados** — algum fonte voltou a CP-1252.
-`scripts/check.sh` acusa qual. Os fontes deste projeto são UTF-8; a
-convenção CP-1252 do Protheus real não se aplica ao AdvPP.
-
-**"Nenhum exercício ativo"** — abra um em *Contabilidade > Abrir Exercício*.
-Lançamentos, rateio e fechamento dependem de um exercício aberto.
-
-**Uma tela abre sem colunas** — falta metadado SX3 da tabela em
-`schema.sql`. O `FWMBrowse` monta as colunas a partir do dicionário.
-
-**`advplc build` falha** — confira `ADVPP_SRC` e se o Go está instalado.
-
----
-
-## 8. Fora do escopo por enquanto
-
-O **portal do condômino** — acesso externo por token, extratos e agenda pela
-web — está adiado. O código de autenticação já existe em
-`src/auth-primitives.prw`, compilado e testado, mas sem tela: é a base de
-quando a fase for retomada. Dentro do app, o condômino já acessa suas
-cobranças pela opção *Sou condômino* na tela inicial.
+**403 atrás de proxy** — defina `ADVPP_WEBUI_ALLOWED_HOSTS` com o domínio
+público.

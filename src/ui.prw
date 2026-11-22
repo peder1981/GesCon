@@ -346,7 +346,7 @@ Return
 Static Function GcUIPgCobrancas(oApp)
     Local oPg   := PoPage():New(oApp, "Cobranças") as object
     Local oWT   := PoWidget():New(oPg, "Cobranças") as object
-    Local oFil  := PoSelect():New(oWT, "Situação", {{"Todas", ""}, {"Em aberto", "pendente"}, {"Atrasadas", "atrasado"}, {"Pagas", "pago"}}, "") as object
+    Local oFil  := PoSelect():New(oWT, "Situação", {{"Todas", "todas"}, {"Em aberto", "pendente"}, {"Atrasadas", "atrasado"}, {"Pagas", "pago"}}, "todas") as object
     Local oTab  := PoTable():New(oWT) as object
     Local oA    := PoWidget():New(oPg, "Cobrança selecionada") as object
     Local oData := PoInput():New(oA, "Data do pagamento (DD/MM/AAAA)") as object
@@ -368,7 +368,7 @@ Static Function GcUIPgCobrancas(oApp)
     oWT:SetCols(12)
     oA:SetCols(6)
     oCfg:SetCols(6)
-    oFil:OnChange({|o, x| GcUIToque(), GcUITabela(oTab, GcQCobrancas(GcStr(x)))})
+    oFil:OnChange({|o, x| GcUIToque(), GcUITabela(oTab, GcQCobrancas(GcUIFiltro(x)))})
     oTab:OnSelect({|o, aLin| aSel[1] := GcNum(aLin[1])})
     oData:SetValue(DToC(Date()))
     oB := PoButton():New(oA, "Registrar pagamento", {|| GcUIPaga(oApp, oTab, oFil, aSel[1], GcStr(oData:GetValue()))})
@@ -389,8 +389,16 @@ Static Function GcUIPgCobrancas(oApp)
     oB := PoButton():New(oCfg, "Gravar dados bancários", {|| GcUIMsg(oApp, GcSalvarCfgBoleto(GcStr(oBco:GetValue()), ;
         GcStr(oAg:GetValue()), GcStr(oCc:GetValue()), GcStr(oConv:GetValue()), GcStr(oCart:GetValue())), "Dados bancários gravados.")})
     oB:Set("kind", "secondary")
-    GcUIRegistra(oPg, {|| GcUITabela(oTab, GcQCobrancas(GcStr(oFil:GetValue())))})
+    GcUIRegistra(oPg, {|| GcUITabela(oTab, GcQCobrancas(GcUIFiltro(oFil:GetValue())))})
 Return oPg
+
+// Filtro de situação: "todas" (a opção precisa de valor para aparecer
+// selecionada) vira "" na consulta.
+Static Function GcUIFiltro(x)
+    If GcStr(x) == "todas"
+        Return ""
+    EndIf
+Return GcStr(x)
 
 Static Function GcUIPaga(oApp, oTab, oFil, nRecno, cData)
     Local dPag := GcDataDigitada(cData) as date
@@ -409,7 +417,7 @@ Static Function GcUIPaga(oApp, oTab, oFil, nRecno, cData)
         Return
     EndIf
     oApp:Notify("Pagamento registrado.", "success")
-    GcUITabela(oTab, GcQCobrancas(GcStr(oFil:GetValue())))
+    GcUITabela(oTab, GcQCobrancas(GcUIFiltro(oFil:GetValue())))
 Return
 
 /*/{Protheus.doc} GcUIMsg
@@ -1157,7 +1165,7 @@ User Function GcUIBoleto(oApp, oLinha, oBarra, nRecno, cUnidade)
         oApp:Notify(aB[2], "warning")
         Return
     EndIf
-    oLinha:Set("label", "Linha digitável — competência " + aB[7] + ", vencimento " + DToC(aB[5]) + ", R$ " + ;
+    oLinha:Set("label", "Linha digitável — competência " + Right(aB[7], 2) + "/" + Left(aB[7], 4) + ", vencimento " + DToC(aB[5]) + ", R$ " + ;
         AllTrim(Transform(aB[6], "@E 999,999,999.99")))
     oLinha:SetValue(aB[3])
     oBarra:SetValue(aB[4])

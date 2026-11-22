@@ -4,7 +4,33 @@ Mudanças notáveis do GesCon.
 
 ## [Não lançado]
 
-Refatoração sobre o AdvPP 4.8.5, etapas 1 (bugs e segurança) e 2 (login) de 4. Detalhes
+Refatoração sobre o AdvPP 4.8.x, etapas 1 (bugs e segurança), 2 (login) e
+3 (interface) de 4.
+
+### Interface nova (etapa 3)
+
+- **Interface web PO-UI** no lugar do menu de diálogos e das grades
+  genéricas: entrada com login e acesso do condômino, menu só com o que o
+  perfil pode, Início com indicadores, cadastros com tabela e formulário,
+  fechamento, cobranças com boleto, comunicação, relatórios, contabilidade,
+  auditoria, usuários e condomínios. Sessão encerrada após 30 minutos sem uso.
+- **Portal do condômino** lê cobranças e avisos direto da consulta, filtrados
+  pela unidade do token. As tabelas de rascunho `RPT_*` (relatórios e portal)
+  eram compartilhadas por condomínio: na web, um condômino podia ver a
+  cobrança de outra unidade. Boleto só da própria unidade.
+- **Cadastros validados** (antes a grade gravava qualquer coisa): fração entre
+  0 e 1, condômino existente, competência fechada não muda despesa, CPF/CNPJ
+  pelo dígito, inclusive o CNPJ alfanumérico (julho de 2026).
+- **Distribuição**: iniciador que sobe o servidor em 127.0.0.1 e abre o
+  navegador, gera a senha inicial do administrador e a mostra uma vez;
+  pacotes para Windows, Linux e macOS e instalador Windows por usuário
+  (desinstalar não apaga os dados). A janela nativa (Fyne) saiu: ela não
+  mostra a interface PO-UI.
+- Balancete por conta com saldo pela natureza da conta (o antigo só somava as
+  faixas 3000 e 4000); abertura de exercício recusa fim antes do início.
+- "Lançar despesa com rateio" (taxa extra) saiu da interface: gerava
+  vencimento em 31/02 e colidia com a regra de uma cobrança por unidade e
+  competência. Volta com um tipo de cobrança próprio. Detalhes
 e o que fica para as etapas de login, interface e reforma tributária em
 `docs/superpowers/specs/2026-11-21-refatoracao-advpp485-achados.md`.
 
