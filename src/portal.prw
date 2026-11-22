@@ -37,23 +37,29 @@ Return .T.
     @return lOk, logical
 */
 User Function GcAuthPortalToken(cToken)
-    Local aToken := TCSqlQuery("SELECT GCT_TOKEN.TOKEN, GCT_TOKEN.UNI_CODIGO, GCT_TOKEN.CON_CODIGO, " + ;
-        "GCT_TOKEN.VALIDO_ATE, GCT_TOKEN.USADO, GCT_TOKEN.FILIAL, COND.COND_NOME " + ;
-        "FROM GCT_TOKEN LEFT JOIN COND ON COND.COND_FILIAL = GCT_TOKEN.FILIAL " + ;
-        "WHERE GCT_TOKEN.TOKEN = '" + GcSqlLit(cToken) + "' " + ;
-        "AND GCT_TOKEN.D_E_L_E_T_ = ' ' " + ;
-        "AND GCT_TOKEN.USADO = 0 " + ;
-        "AND GCT_TOKEN.VALIDO_ATE > datetime('now')")
+    Local aToken := {} as array
+    Local aCond  := {} as array
 
-    If Len(aToken) == 0
+    If ValType(cToken) != "C" .Or. Empty(cToken)
         Return .F.
     EndIf
 
-    // Marca como usado. TOKEN e' PRIMARY KEY (globalmente unico) -- sem
-    // filtro de FILIAL aqui de proposito, pelo mesmo motivo do LEFT JOIN
-    // acima: um token gerado antes desta migracao tem FILIAL=''/NULL e
-    // ainda precisa ser marcado como usado.
-    TCSqlExec("UPDATE GCT_TOKEN SET USADO = 1 WHERE TOKEN = '" + GcSqlLit(cToken) + "' AND D_E_L_E_T_ = ' '")
+    // Consome o token num único comando: o UPDATE só marca USADO = 1 se o
+    // token ainda está válido e não usado, e devolve a linha consumida.
+    // Antes era SELECT e depois UPDATE: dois acessos simultâneos passavam
+    // com o mesmo token de uso único. TOKEN é PRIMARY KEY (globalmente
+    // único) -- sem filtro de FILIAL de propósito: um token gerado antes da
+    // migração multi-condomínio tem FILIAL=''/NULL.
+    aToken := TCSqlQuery("UPDATE GCT_TOKEN SET USADO = 1 " + ;
+        "WHERE TOKEN = '" + GcSqlLit(AllTrim(cToken)) + "' " + ;
+        "AND D_E_L_E_T_ = ' ' " + ;
+        "AND USADO = 0 " + ;
+        "AND VALIDO_ATE > datetime('now') " + ;
+        "RETURNING UNI_CODIGO, CON_CODIGO, FILIAL")
+    If Len(aToken) == 0
+        Return .F.
+    EndIf
+    aCond := TCSqlQuery("SELECT COND_NOME FROM COND WHERE COND_FILIAL = '" + GcSqlLit(aToken[1]:FILIAL) + "' AND D_E_L_E_T_ = ' '")
 
     // A sessão do portal NUNCA passa por GcSelecionarCondominio (esse é o
     // fluxo do admin, gescon.prw:72/126) -- então FWxFilial() aqui dentro
@@ -74,9 +80,12 @@ User Function GcAuthPortalToken(cToken)
     g_cConPortal := aToken[1]:CON_CODIGO
     g_cFilialAtiva := aToken[1]:FILIAL
     g_lAutoPortal := .T.
-    // COND_NOME vem do LEFT JOIN acima -- fica vazio para tokens gerados
-    // antes desta migração (FILIAL=''/NULL, sem COND correspondente).
-    g_cCondNomePortal := aToken[1]:COND_NOME
+    // Fica vazio para tokens gerados antes da migração multi-condomínio
+    // (FILIAL=''/NULL, sem COND correspondente).
+    g_cCondNomePortal := ""
+    If Len(aCond) > 0
+        g_cCondNomePortal := aCond[1]:COND_NOME
+    EndIf
 
     If Empty(g_cCondNomePortal)
         MsgInfo("Autenticado como condômino " + g_cConPortal + ". Bem-vindo!", "Portal Condômino")

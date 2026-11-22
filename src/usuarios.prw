@@ -85,8 +85,12 @@ User Function GcGerarToken()
     Local cConCod := aCond[nIdx]:CON_CODIGO
     Local cUniCod := aCond[nIdx]:UNI_CODIGO
 
-    // Gera token (UUID36 simplificado)
+    // Token aleatório criptográfico (ver GcGerarTokenId)
     Local cToken := GcGerarTokenId()
+    If Empty(cToken)
+        MsgStop("Não foi possível gerar um token seguro. Tente de novo.", "Gerar Token")
+        Return
+    EndIf
 
     // Validade +48h em ISO (YYYY-MM-DD HH:MM:SS), para comparar direto com
     // datetime('now') do SQLite.
@@ -104,10 +108,16 @@ User Function GcGerarToken()
     Local cCriadoIso   := aDatas[1]:CRIADO
     Local cValidadeIso := aDatas[1]:VALIDADE
     Local cValidadeLocal := aDatas[1]:VALIDADE_LOCAL
-    Local cLoginAtual  := GetEnv("USER")
+    // Emissor = login de quem está na sessão (Private cLoginAtual de
+    // GesCon()). Antes um Local com GetEnv("USER") encobria a variável e
+    // gravava o usuário do sistema operacional do servidor.
+    Local cEmissor     := ""
+    If Type("cLoginAtual") == "C"
+        cEmissor := cLoginAtual
+    EndIf
 
     TCSqlExec("INSERT INTO GCT_TOKEN (TOKEN, USR_LOGIN, CON_CODIGO, UNI_CODIGO, CRIPTADO, VALIDO_ATE, USADO, FILIAL) " + ;
-        "VALUES ('" + GcSqlLit(cToken) + "', '" + GcSqlLit(cLoginAtual) + "', '" + GcSqlLit(cConCod) + "', " + ;
+        "VALUES ('" + GcSqlLit(cToken) + "', '" + GcSqlLit(cEmissor) + "', '" + GcSqlLit(cConCod) + "', " + ;
         "'" + GcSqlLit(cUniCod) + "', '" + GcSqlLit(cCriadoIso) + "', '" + GcSqlLit(cValidadeIso) + "', 0, '" + GcSqlLit(FWxFilial('GCT_TOKEN')) + "')")
 
     // Mostra token ao admin
@@ -333,16 +343,21 @@ User Function GcCriarSindicoNovo()
 Return .T.
 
 /*/{Protheus.doc} GcGerarTokenId
-    Gera identificador único de 36 chars (formato UUID-like) para tokens.
-    Usa timestamp + random em AdvPL puro (não há gen uuid nativo do AdvPP v1).
+    Gera o token de acesso do condômino: dois UUID v4 do runtime
+    (UUIDRandom, gerador aleatório criptográfico) sem hífens = 64
+    caracteres hexadecimais, 244 bits aleatórios. Antes era data + hora +
+    Random() passados por SHA-256: previsível por quem soubesse a hora da
+    emissão.
     @type User Function
     @author GesCon
-    @since 2026-07-24
-    @return cTokenId, character, 36 chars no formato xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    @since 2026-11-21
+    @return character, token de 64 hex, ou "" se o runtime não gerou UUID
 */
 User Function GcGerarTokenId()
-    Local cSeed := DTOC(Date()) + Time() + Str(Random(999999999), 9)
-    Local cHash := FWHash(cSeed)
-    // Usa os primeiros 32 chars hex + formatação UUID-like = 36
-    Local cToken := Left(cHash, 8) + "-" + SubStr(cHash, 9, 4) + "-" + SubStr(cHash, 13, 4) + "-" + SubStr(cHash, 17, 4) + "-" + SubStr(cHash, 21, 12)
-Return cToken
+    Local cU1 := StrTran(UUIDRandom(), "-", "") as character
+    Local cU2 := StrTran(UUIDRandom(), "-", "") as character
+
+    If Len(cU1) != 32 .Or. Len(cU2) != 32 .Or. cU1 == cU2
+        Return ""
+    EndIf
+Return Lower(cU1 + cU2)
