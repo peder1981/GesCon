@@ -19,6 +19,20 @@ User Function GcSqlLit(cValor)
     EndIf
 Return StrTran(cRet, "'", "''")
 
+/*/{Protheus.doc} GcUsuarioSessao
+    Login de quem está na sessão (Private cLoginAtual de GesCon()), para
+    trilha de auditoria. Fora de uma sessão (job, teste), "SISTEMA".
+    @type User Function
+    @author GesCon
+    @since 2026-11-21
+    @return character, login ou "SISTEMA"
+*/
+User Function GcUsuarioSessao()
+    If Type("cLoginAtual") == "C" .And. !Empty(cLoginAtual)
+        Return cLoginAtual
+    EndIf
+Return "SISTEMA"
+
 /*/{Protheus.doc} GcPerfilDoLogin
     Consulta USR_PERFIL do login informado. Extraída da revisão final
     (achados C2/I4/I5): três telas diferentes (src/usuarios.prw,

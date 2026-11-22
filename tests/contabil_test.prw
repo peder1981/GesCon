@@ -22,6 +22,8 @@
     @since 2026-07-30
 */
 User Function ContabilTest()
+    // Login da sessão gravado em LAN_USUARIO (GcUsuarioSessao)
+    Private cLoginAtual := "TEST_USER"
     ConOut("")
     ConOut("========== TESTES DO SISTEMA CONTÁBIL ==========")
     ConOut("")

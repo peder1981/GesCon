@@ -28,6 +28,9 @@
     @since 2026-07-30
 */
 User Function ContabilE2ETest()
+    // Login da sessão: GcUsuarioSessao() grava este valor em LAN_USUARIO, e a
+    // limpeza abaixo usa o mesmo marcador.
+    Private cLoginAtual := "TEST_USER"
     ConOut("")
     ConOut("========== TESTE END-TO-END DO SISTEMA CONTÁBIL ==========")
     ConOut("")
