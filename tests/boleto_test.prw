@@ -1,5 +1,12 @@
-// tests/boleto_test.prw -- validacao de formulas FEBRABAN para codigo de
-// barras e linha digitavel de boletos Itau (341) e Bradesco (237).
+// tests/boleto_test.prw -- codigo de barras e linha digitavel de boleto
+// Itau (341) e Bradesco (237), conferidos contra os exemplos numericos
+// dos manuais dos bancos:
+//   - Itau, "Cobranca CNAB 400" (jan/2017): itens 7.3/7.4, anexos 2, 3, 4 e 6
+//   - Bradesco, "Arquivos layout 400 posicoes" (abr/2022): "Montagem dos
+//     Dados do Codigo de Barras" e "Composicao da Linha Digitavel"
+// Chama as funcoes reais de src/boleto.prw (a versao anterior deste teste
+// reimplementava a formula dentro do proprio teste e comparava copia com
+// copia).
 #include "totvs.ch"
 
 // Os #include dos modulos ficam no FIM do arquivo, de proposito.
@@ -7,359 +14,121 @@
 // Function cuja linha seja >= a primeira linha de codigo do arquivo raiz
 // (pkg/compiler/codegen.go). Como #include cola o texto incluido no lugar,
 // includes no topo empurram as funcoes dos modulos para antes do runner
-// deste arquivo -- e a suite inteira roda em silencio, executando algo
-// como GcSqlLit no lugar dos testes. Com os includes no fim, o runner
-// abaixo e sempre a primeira funcao do compilado. scripts/test.sh
+// deste arquivo -- e a suite inteira roda em silencio. scripts/test.sh
 // confere isso a cada execucao.
 
 /*/{Protheus.doc} RunBoletoTests
     Ponto de entrada da suite de boletos. Precisa ser a primeira User
     Function do arquivo -- ver a nota sobre includes no topo.
-    @type Function
+    @type User Function
     @author GesCon
-    @since 2026-07-31
+    @since 2026-11-21
 */
 User Function RunBoletoTests()
-    BoletoTest()
+    Local nFalhas := 0 as numeric
+
+    // Fator de vencimento (Itau, anexo 6): base 07/10/1997; 1000 = 03/07/2000;
+    // 9999 = 21/02/2025; a partir de 22/02/2025 volta a 1000.
+    nFalhas += Confere("fator 03/07/2000", GcBoletoFatorVenc(SToD("20000703")), 1000)
+    nFalhas += Confere("fator 01/05/2002", GcBoletoFatorVenc(SToD("20020501")), 1667)
+    nFalhas += Confere("fator 17/11/2010", GcBoletoFatorVenc(SToD("20101117")), 4789)
+    nFalhas += Confere("fator 21/02/2025", GcBoletoFatorVenc(SToD("20250221")), 9999)
+    nFalhas += Confere("fator 22/02/2025", GcBoletoFatorVenc(SToD("20250222")), 1000)
+    nFalhas += Confere("fator 26/02/2025", GcBoletoFatorVenc(SToD("20250226")), 1004)
+    nFalhas += Confere("fator data vazia", GcBoletoFatorVenc(CToD("")), 0)
+
+    // Modulo 10 (Itau, anexo 3) e modulo 11 do codigo de barras (anexo 2)
+    nFalhas += Confere("mod10 campo 1", GcBoletoMod10("341911012"), 1)
+    nFalhas += Confere("mod10 campo 2", GcBoletoMod10("3456788005"), 8)
+    nFalhas += Confere("mod10 campo 3", GcBoletoMod10("7123457000"), 1)
+    nFalhas += Confere("mod10 DAC nosso numero", GcBoletoMod10("00571234511012345678"), 8)
+    nFalhas += Confere("mod11 DAC barras", GcBoletoDacBarras("3419166700000123451101234567880057123457000"), 6)
+
+    // Itau: exemplo do manual (ag 0057, conta 12345-7, carteira 110,
+    // nosso numero 12345678-8, R$ 123,45, vencimento 01/05/2002)
+    nFalhas += Confere("itau campo livre", ;
+        GcBoletoCampoLivre("341", "0057", "12345", "110", "12345678"), ;
+        "1101234567880057123457000")
+    nFalhas += Confere("itau codigo de barras", ;
+        GcBoletoCodigoBarras("341", "0057", "12345", "110", "12345678", SToD("20020501"), 123.45), ;
+        "34196166700000123451101234567880057123457000")
+    nFalhas += Confere("itau linha digitavel", ;
+        GcBoletoLinhaDigitavel("341", "0057", "12345", "110", "12345678", SToD("20020501"), 123.45), ;
+        "34191.10121 34567.880058 71234.570001 6 16670000012345")
+    // Conta informada com DV ("12345-7") da o mesmo resultado
+    nFalhas += Confere("itau conta com DV", ;
+        GcBoletoCodigoBarras("341", "57", "12345-7", "110", "12345678", SToD("20020501"), 123.45), ;
+        "34196166700000123451101234567880057123457000")
+    // Carteiras 126/131/146/150/168: DAC do nosso numero so com carteira + nosso numero
+    nFalhas += Confere("itau carteira 126 DAC", ;
+        SubStr(GcBoletoCampoLivre("341", "0057", "12345", "126", "12345678"), 12, 1), ;
+        cValToChar(GcBoletoMod10("12612345678")))
+
+    // Bradesco: exemplo do manual (linha 23790.03102 40031.772003
+    // 28009.527905 7 10010000000000). Campo livre = agencia 0031, carteira
+    // 04, nosso numero 00317720028, conta 0095279, zero. Fator 1001 =
+    // 23/02/2025 (depois do reinicio). Valor zerado como no manual.
+    nFalhas += Confere("bradesco campo livre", ;
+        GcBoletoCampoLivre("237", "0031", "0095279", "04", "00317720028"), ;
+        "0031040031772002800952790")
+    nFalhas += Confere("bradesco codigo de barras", ;
+        GcBoletoCodigoBarras("237", "0031", "0095279", "04", "00317720028", SToD("20250223"), 0), ;
+        "23797100100000000000031040031772002800952790")
+    nFalhas += Confere("bradesco linha digitavel", ;
+        GcBoletoLinhaDigitavel("237", "0031", "0095279", "04", "00317720028", SToD("20250223"), 0), ;
+        "23790.03102 40031.772003 28009.527905 7 10010000000000")
+
+    // Valor: 10 digitos, arredondado (nao para cima)
+    nFalhas += Confere("valor 350,50", SubStr( ;
+        GcBoletoCodigoBarras("341", "0057", "12345", "110", "12345678", SToD("20261210"), 350.5), 10, 10), ;
+        "0000035050")
+    nFalhas += Confere("valor 100,004 arredonda", SubStr( ;
+        GcBoletoCodigoBarras("341", "0057", "12345", "110", "12345678", SToD("20261210"), 100.004), 10, 10), ;
+        "0000010000")
+
+    // Entradas recusadas devolvem ""
+    nFalhas += Confere("banco nao suportado", ;
+        GcBoletoCodigoBarras("001", "0057", "12345", "110", "12345678", SToD("20261210"), 10), "")
+    nFalhas += Confere("sem vencimento", ;
+        GcBoletoCodigoBarras("341", "0057", "12345", "110", "12345678", CToD(""), 10), "")
+    nFalhas += Confere("valor negativo", ;
+        GcBoletoCodigoBarras("341", "0057", "12345", "110", "12345678", SToD("20261210"), -1), "")
+    nFalhas += Confere("agencia com letra", ;
+        GcBoletoCodigoBarras("341", "00A7", "12345", "110", "12345678", SToD("20261210"), 10), "")
+    nFalhas += Confere("nosso numero longo demais (itau)", ;
+        GcBoletoCodigoBarras("341", "0057", "12345", "110", "123456789", SToD("20261210"), 10), "")
+    nFalhas += Confere("carteira itau de 15 posicoes nao suportada", ;
+        GcBoletoCodigoBarras("341", "0057", "12345", "198", "12345678", SToD("20261210"), 10), "")
+
+    // Vencimento gravado pelo Fechamento (AAAA-MM-DD) e lido certo
+    nFalhas += Confere("vencimento AAAA-MM-DD", DToS(GcBoletoDataVenc("2026-12-10")), "20261210")
+    nFalhas += Confere("vencimento AAAAMMDD", DToS(GcBoletoDataVenc("20261210")), "20261210")
+    nFalhas += Confere("vencimento invalido", DToS(GcBoletoDataVenc("2026-13-40")), "")
+
+    If nFalhas == 0
+        ConOut("boleto: todos os casos ok")
+    Else
+        ConOut("FALHA boleto: " + cValToChar(nFalhas) + " caso(s)")
+    EndIf
 Return
 
-// Modulo 11 (pesos 2-7 da direita para esquerda)
-Static Function StBoletoCalcDv(cNum)
-    Local nSom := 0, nPeso := 2, nI, nDig, cDigStr, nResto
-    For nI := Len(cNum) To 1 Step -1
-        cDigStr := SubStr(cNum, nI, 1)
-        If cDigStr >= "0" .And. cDigStr <= "9"
-            nDig := Val(cDigStr)
-        Else
-            nDig := 0
-        EndIf
-        nSom += nDig * nPeso
-        nPeso++
-        If nPeso > 7
-            nPeso := 2
-        EndIf
-    Next
-    nResto := Mod(nSom, 11)
-    If nResto == 0
+/*/{Protheus.doc} Confere
+    Compara obtido x esperado e imprime ok/FALHA.
+    @type Static Function
+    @author GesCon
+    @since 2026-11-21
+    @param cNome, character, nome do caso
+    @param xObtido, variant, valor obtido
+    @param xEsperado, variant, valor esperado
+    @return numeric, 0 se bateu, 1 se falhou
+*/
+Static Function Confere(cNome, xObtido, xEsperado)
+    If ValType(xObtido) == ValType(xEsperado) .And. xObtido == xEsperado
+        ConOut("ok    " + cNome)
         Return 0
-    ElseIf nResto == 1
-        Return 1
-    Else
-        Return 11 - nResto
     EndIf
-
-// PadLeft
-Static Function StPadLeft(cStr, nTam, cPad)
-    While Len(cStr) < nTam
-        cStr := cPad + cStr
-    EndDo
-    Return Left(cStr, nTam)
-
-// Fator Vencimento
-Static Function StFatorVenc(dData)
-    Local nTarget, nFator, nAno, nMes, nDia, nAdjAno, nAdjMes
-    If Type("dData") == "C" .Or. ValType("dData") == "C"
-        If Len(AllTrim(dData)) >= 8
-            nTarget := Val(SubStr(AllTrim(dData), 7, 4) + SubStr(AllTrim(dData), 4, 2) + SubStr(AllTrim(dData), 1, 2))
-        Else
-            Return 90001
-        EndIf
-    ElseIf ValType("dData") == "D"
-        nTarget := DToS(dData)
-    Else
-        Return 90001
-    EndIf
-    If nTarget <= 19970907
-        Return 90001
-    EndIf
-    nAno := Int(nTarget / 10000)
-    nMes := Int((nTarget % 10000) / 100)
-    nDia := nTarget % 100
-    nAdjAno := nAno
-    nAdjMes := nMes
-    If nAdjMes <= 2
-        nAdjMes += 12
-        nAdjAno--
-    EndIf
-    nFator := Int(365.25 * (nAdjAno + 4716)) + Int(30.6001 * (nAdjMes + 1)) + nDia - 1524.5
-    nFator -= Int(365.25 * (1997 + 4716)) + Int(30.6001 * (9 + 1)) + 7 - 1524.5
-    If nFator > 9999
-        nFator := 9999
-    EndIf
-Return nFator
-
-// Campo Livre Itau
-Static Function StCampoLivreItau(cAgencia, cConta, nAgDv, cCobrta, cCarteira, nCartDv)
-    Local cCl := ""
-    cCl := StPadLeft(AllTrim(cCarteira), 2, "0")
-    cCl += StPadLeft(AllTrim(cAgencia), 5, "0")
-    cCl += StrZero(nAgDv, 1)
-    cCl += StPadLeft(AllTrim(cConta), 5, "0")
-    cCl += StrZero(nCartDv, 1)
-    cCl += StPadLeft(AllTrim(cCobrta), 10, "0")
-    cCl := Left(cCl, 24)
-    While Len(cCl) < 24
-        cCl := "0" + cCl
-    EndDo
-Return cCl
-
-// Linha Digitavel Ita? completo
-Static Function StLinhaItau(cBanco, cAgencia, cConta, nAgDv, cCobrta, cCarteira, nCartDv, dVenc, nValor, cNumeroDoc)
-    Local cCampoLivre := StCampoLivreItau(cAgencia, cConta, nAgDv, cCobrta, cCarteira, nCartDv)
-    Local nFator := StFatorVenc(dVenc)
-    Local cFator := StrZero(nFator, 4)
-    Local cValorStr := StrZero(Ceiling(nValor * 100), 8)
-    Local nDv14 := StBoletoCalcDv(cBanco + "9")
-    Local nDvVal := StBoletoCalcDv(cValorStr)
-    
-    Local cSeq42 := cBanco + "9" + StrZero(nDv14, 1) + cFator + cValorStr + StrZero(nDvVal, 1) + cCampoLivre
-    While Len(cSeq42) < 42
-        cSeq42 := cSeq42 + "0"
-    EndDo
-    cSeq42 := Left(cSeq42, 42)
-    
-    // Rearranjo FEBRABAN — usa todos os 42 digitos sem padding com zeros:
-    // G1: pos1-4 + CL[19] + DV (6)
-    // G2: CL[20..28] + DV (10)
-    // G3: CL[29..37] + DV (10)
-    // G4: dv14(1)+fator(4)+valor(8)+dv_val(1) + DV (15)
-    // G5: CL[38..42] + DV (6)
-    // Total com separadores: 6+1+10+1+10+1+15+1+6 = 51
-    
-    // G1: header(4) + first CL char(pos19) + DV
-    cG1 := SubStr(cSeq42, 1, 4) + SubStr(cSeq42, 19, 1)
-    cG1 := cG1 + StrZero(StBoletoCalcDv(cG1), 1)
-    
-    // G2: CL chars at pos20-28 (9 chars) + DV
-    cG2 := SubStr(cSeq42, 20, 9)
-    cG2 := cG2 + StrZero(StBoletoCalcDv(cG2), 1)
-    
-    // G3: CL chars at pos29-37 (9 chars) + DV
-    cG3 := SubStr(cSeq42, 29, 9)
-    cG3 := cG3 + StrZero(StBoletoCalcDv(cG3), 1)
-    
-    // G4: header[dv14+fator+valor+dv_val](14) + DV
-    cG4 := SubStr(cSeq42, 5, 1) + SubStr(cSeq42, 6, 4) + SubStr(cSeq42, 10, 8) + SubStr(cSeq42, 18, 1)
-    cG4 := cG4 + StrZero(StBoletoCalcDv(cG4), 1)
-    
-    // G5: CL chars at pos38-42 (5 chars) + DV
-    cG5 := SubStr(cSeq42, 38, 5)
-    cG5 := cG5 + StrZero(StBoletoCalcDv(cG5), 1)
-    
-    Return cG1 + "." + cG2 + "." + cG3 + "-" + cG4 + "." + cG5
-
-// Linha Digitavel Bradesco
-Static Function StLinhaBradesco(cBanco, cAgencia, cConta, nAgDv, cCobrta, cCarteira, nCartDv, dVenc, nValor, cNumeroDoc)
-    Local cCl := ""
-    Local cCobrtaP := StPadLeft(AllTrim(cCobrta), 8, "0")
-    Local cAgP := StPadLeft(AllTrim(cAgencia), 4, "0")
-    Local cContaP := StPadLeft(AllTrim(cConta), 5, "0")
-    Local cCartP := StPadLeft(AllTrim(cCarteira), 2, "0")
-    Local cNumP := StPadLeft(AllTrim(cNumeroDoc), 2, "0")
-    Local nDvC := StBoletoCalcDv(cCobrtaP)
-    Local nDvCo := StBoletoCalcDv(cContaP)
-    Local nDvCa := StBoletoCalcDv(cCartP)
-    cCl := cCobrtaP + StrZero(nDvC, 1) + cAgP + StrZero(nAgDv, 1) + cContaP + StrZero(nDvCo, 1) + cCartP + StrZero(nDvCa, 1) + cNumP
-    cCl := Left(cCl, 24)
-    While Len(cCl) < 24
-        cCl := "0" + cCl
-    EndDo
-    
-    Local nFator := StFatorVenc(dVenc)
-    Local cFator := StrZero(nFator, 4)
-    Local cValorStr := StrZero(Ceiling(nValor * 100), 8)
-    Local nDv14 := StBoletoCalcDv(cBanco + "9")
-    Local nDvVal := StBoletoCalcDv(cValorStr)
-    
-    Local cSeq42 := cBanco + "9" + StrZero(nDv14, 1) + cFator + cValorStr + StrZero(nDvVal, 1) + cCl
-    While Len(cSeq42) < 42
-        cSeq42 := cSeq42 + "0"
-    EndDo
-    cSeq42 := Left(cSeq42, 42)
-    
-    // Mesmo rearranjo que Itaú — usa todos os 42 digitos sem padding:
-    Local cG1 := SubStr(cSeq42, 1, 4) + SubStr(cSeq42, 19, 1)
-    cG1 := cG1 + StrZero(StBoletoCalcDv(cG1), 1)
-    Local cG2 := SubStr(cSeq42, 20, 9)
-    cG2 := cG2 + StrZero(StBoletoCalcDv(cG2), 1)
-    Local cG3 := SubStr(cSeq42, 29, 9)
-    cG3 := cG3 + StrZero(StBoletoCalcDv(cG3), 1)
-    Local cG4 := SubStr(cSeq42, 5, 1) + SubStr(cSeq42, 6, 4) + SubStr(cSeq42, 10, 8) + SubStr(cSeq42, 18, 1)
-    cG4 := cG4 + StrZero(StBoletoCalcDv(cG4), 1)
-    Local cG5 := SubStr(cSeq42, 38, 5)
-    cG5 := cG5 + StrZero(StBoletoCalcDv(cG5), 1)
-    
-Return cG1 + "." + cG2 + "." + cG3 + "-" + cG4 + "." + cG5
-
-// === TESTE PRINCIPAL ===
-User Function BoletoTest()
-    Local nErros := 0, ii, np
-    
-    ConOut("=== Testes Modulo 11 ===")
-    
-    Local nDv1 := StBoletoCalcDv("3419")
-    ConOut("dv_3419=" + Str(nDv1))
-    If nDv1 != 3
-        ConOut("FALHA: dv_3419 esperado=3, obtido=" + Str(nDv1))
-        nErros++
-    EndIf
-    
-    Local nDv2 := StBoletoCalcDv("2379")
-    ConOut("dv_2379=" + Str(nDv2))
-    
-    Local nDvZ := StBoletoCalcDv("00")
-    ConOut("dv_00=" + Str(nDvZ))
-    If nDvZ != 0
-        ConOut("FALHA: dv_00 esperado=0, obtido=" + Str(nDvZ))
-        nErros++
-    EndIf
-    
-    ConOut("")
-    ConOut("=== Testes Fator Vencimento ===")
-    
-    Local nFator1 := StFatorVenc("10/08/2026")
-    ConOut("fator_10082026=" + Str(nFator1))
-    If nFator1 <= 0 .Or. nFator1 > 9999
-        ConOut("FALHA: fator 10/08/2026 fora do intervalo (0..9999], obtido=" + Str(nFator1))
-        nErros++
-    EndIf
-    
-    Local nFatorBase := StFatorVenc("07/09/1997")
-    ConOut("fator_07091997=" + Str(nFatorBase))
-    If nFatorBase != 90001
-        ConOut("FALHA: fator 07/09/1997 esperado=90001, obtido=" + Str(nFatorBase))
-        nErros++
-    EndIf
-    
-    Local nFatorAnt := StFatorVenc("01/01/1997")
-    ConOut("fator_01011997=" + Str(nFatorAnt))
-    If nFatorAnt != 90001
-        ConOut("FALHA: fator 01/01/1997 esperado=90001, obtido=" + Str(nFatorAnt))
-        nErros++
-    EndIf
-    
-    ConOut("")
-    ConOut("=== Testes Campo Livre Ita? ===")
-    
-    Local cl1 := StCampoLivreItau("1234", "12345", 5, "1234567890", "17", 3)
-    ConOut("cl_itau=[" + cl1 + "]")
-    ConOut("tam_cl_itau=" + Str(Len(cl1)))
-    If Len(cl1) != 24
-        ConOut("FALHA: campo livre Itau tem " + Str(Len(cl1)) + " chars, esperado 24")
-        nErros++
-    EndIf
-    
-    ConOut("")
-    ConOut("=== Testes Linha Digitavel Ita? ===")
-    
-    Local cLinhaIt := StLinhaItau("341", "1234", "12345", 5, "1234567890", "17", 3, "10/08/2026", 1234.56, "00001")
-    ConOut("linha_itau=[" + cLinhaIt + "]")
-    ConOut("tam_itau=" + Str(Len(cLinhaIt)))
-    
-    If Len(cLinhaIt) != 51
-        ConOut("FALHA: linha digitavel Itau tem " + Str(Len(cLinhaIt)) + " chars, esperado 51")
-        nErros++
-    EndIf
-    
-    np := 0
-    For ii := 1 To Len(cLinhaIt)
-        Local cCh := SubStr(cLinhaIt, ii, 1)
-        If cCh == "." .Or. cCh == "-"
-            np++
-        EndIf
-    Next
-    ConOut("separadores_itau=" + Str(np))
-    If np != 4
-        ConOut("FALHA: linha digitavel Itau tem " + Str(np) + " separadores, esperado 4")
-        nErros++
-    EndIf
-    
-    // Validar que todos os caracteres sao numericos ou separadores (. -)
-    Local nInvalidos := 0
-    For ii := 1 To Len(cLinhaIt)
-        Local cCh2 := SubStr(cLinhaIt, ii, 1)
-        If cCh2 < "0" .And. cCh2 != "." .And. cCh2 != "-"
-            nInvalidos++
-        EndIf
-    Next
-    If nInvalidos > 0
-        ConOut("FALHA: linha digitavel Itau tem " + Str(nInvalidos) + " caracteres invalidos")
-        nErros++
-    EndIf
-    
-    ConOut("")
-    ConOut("=== Testes Codigo de Barras Ita? ===")
-    
-    Local cValorStr := StrZero(Ceiling(1234.56 * 100), 8)
-    Local cClBarra := cl1
-    Local nFact := StFatorVenc("10/08/2026")
-    Local cFactStr := StrZero(nFact, 4)
-    Local nDV14 := StBoletoCalcDv("3419")
-    Local nDVVal := StBoletoCalcDv(cValorStr)
-    Local cTopo := "3419" + StrZero(nDV14, 1) + cFactStr + cValorStr
-    Local cSeq42 := cTopo + StrZero(nDVVal, 1) + cClBarra
-    While Len(cSeq42) < 42
-        cSeq42 := cSeq42 + "0"
-    EndDo
-    cSeq42 := Left(cSeq42, 42)
-    Local nDVFinal := StBoletoCalcDv(cSeq42)
-    Local cTotalBar := cSeq42 + StrZero(nDVFinal, 1)
-    
-    // Contar digitos numericos (sem espacos)
-    Local nDigitos := 0
-    For ii := 1 To Len(cTotalBar)
-        If SubStr(cTotalBar, ii, 1) >= "0" .And. SubStr(cTotalBar, ii, 1) <= "9"
-            nDigitos++
-        EndIf
-    Next
-    ConOut("num_digitos_codbar=" + Str(nDigitos))
-    
-    ConOut("")
-    ConOut("=== Testes Linha Digitavel Bradesco ===")
-    
-    Local cLinhaBr := StLinhaBradesco("237", "1234", "12345", 3, "87654321", "104", 7, "10/08/2026", 5678.90, "00002")
-    ConOut("linha_bradesco=[" + cLinhaBr + "]")
-    ConOut("tam_bradesco=" + Str(Len(cLinhaBr)))
-    
-    If Len(cLinhaBr) != 51
-        ConOut("FALHA: linha digitavel Bradesco tem " + Str(Len(cLinhaBr)) + " chars, esperado 51")
-        nErros++
-    EndIf
-    
-    np := 0
-    For ii := 1 To Len(cLinhaBr)
-        Local cCh := SubStr(cLinhaBr, ii, 1)
-        If cCh == "." .Or. cCh == "-"
-            np++
-        EndIf
-    Next
-    ConOut("separadores_bradesco=" + Str(np))
-    If np != 4
-        ConOut("FALHA: linha digitavel Bradesco tem " + Str(np) + " separadores, esperado 4")
-        nErros++
-    EndIf
-    
-    // Validar que todos os caracteres sao numericos ou separadores (. -)
-    Local nInvalidos2 := 0
-    For ii := 1 To Len(cLinhaBr)
-        Local cCh3 := SubStr(cLinhaBr, ii, 1)
-        If cCh3 < "0" .And. cCh3 != "." .And. cCh3 != "-"
-            nInvalidos2++
-        EndIf
-    Next
-    If nInvalidos2 > 0
-        ConOut("FALHA: linha digitavel Bradesco tem " + Str(nInvalidos2) + " caracteres invalidos")
-        nErros++
-    EndIf
-    
-    ConOut("")
-    ConOut("=== RESULTADO ===")
-    If nErros == 0
-        ConOut("PASS: todos os testes passaram (" + Str(nErros) + " falhas)")
-    Else
-        ConOut("FAIL: " + Str(nErros) + " falhas detectadas")
-    EndIf
-Return 0
+    ConOut("FALHA " + cNome + ": obtido [" + cValToChar(xObtido) + "] esperado [" + cValToChar(xEsperado) + "]")
+Return 1
 
 #include "../src/db.prw"
 #include "../src/boleto.prw"

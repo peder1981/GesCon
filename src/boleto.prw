@@ -1,358 +1,277 @@
-// src/boleto.prw - geracao de boleto bancario FEBRABAN (Itau 341 e Bradesco 237).
-// Retorna linha digitavel (formato bancario) e codigo de barras (numérico agrupado).
-// Zero dependências externas - tudo em AdvPL puro.
+// src/boleto.prw - boleto bancario (Itau 341 e Bradesco 237): codigo de
+// barras de 44 posicoes e linha digitavel, pelos manuais dos bancos:
+//   - Itau, "Cobranca CNAB 400" (jan/2017): itens 7.3 (layout do codigo de
+//     barras), 7.4 (representacao numerica) e anexos 2 (DAC modulo 11),
+//     3 (DAC modulo 10), 4 (DAC do nosso numero) e 6 (fator de vencimento)
+//   - Bradesco, "Arquivos layout 400 posicoes" (abr/2022): "Montagem dos
+//     Dados do Codigo de Barras" e "Composicao da Linha Digitavel"
+// tests/boleto_test.prw confere contra os exemplos numericos dos manuais.
 #include "totvs.ch"
 
-/*/{Protheus.doc} GcBoletoLinhaDigitavel
-    Gera linha digitavel formatada para boleto Itau (341) ou
-    Bradesco (237), seguindo padrao FEBRABAN.
-    @type User Function
-    @author GesCon
-    @since 2026-07-24
-    @param cBanco, character, codigo do banco (341 ou 237)
-    @param cAgencia, character, numero da agencia
-    @param cConta, character, numero da conta corrente
-    @param nAgDv, numeric, digito verificador da agencia
-    @param cCobrta, character, codigo do beneficiario/cedente
-    @param cCarteira, character, numero da carteira
-    @param nCartDv, numeric, digito verificador da carteira
-    @param dVenc, date, data de vencimento do boleto
-    @param nValor, numeric, valor nominal do boleto
-    @param cNumeroDoc, character, numero do documento
-    @return cLinha, character, linha digitavel no formato G1.G2.G3-G4.G5
-*/
-User Function GcBoletoLinhaDigitavel(cBanco, cAgencia, cConta, nAgDv, cCobrta, cCarteira, nCartDv, dVenc, nValor, cNumeroDoc)
-    Local cCampoLivre := GcBoletoCampoLivre(cBanco, cAgencia, cConta, nAgDv, cCobrta, cCarteira, nCartDv, cNumeroDoc)
-Return GcBoletoCalculaLinha(cBanco, cCampoLivre, dVenc, nValor)
-
-/*/{Protheus.doc} GcBoletoCodigoBarras
-    Gera codigo de barras em texto (48 digitos: 47 dados + 1 DV final).
-    Agrupa com espacos nos separadores oficiais FEBRABAN.
-    @type User Function
-    @author GesCon
-    @since 2026-07-24
-    @param cBanco, character, codigo do banco (341 ou 237)
-    @param cAgencia, character, numero da agencia
-    @param cConta, character, numero da conta corrente
-    @param nAgDv, numeric, digito verificador da agencia
-    @param cCobrta, character, codigo do beneficiario/cedente
-    @param cCarteira, character, numero da carteira
-    @param nCartDv, numeric, digito verificador da carteira
-    @param dVenc, date, data de vencimento do boleto
-    @param nValor, numeric, valor nominal do boleto
-    @param cNumeroDoc, character, numero do documento
-    @return cCodBar, character, codigo de barras formatado com espacos separadores
-*/
-User Function GcBoletoCodigoBarras(cBanco, cAgencia, cConta, nAgDv, cCobrta, cCarteira, nCartDv, dVenc, nValor, cNumeroDoc)
-    Local cCampoLivre := GcBoletoCampoLivre(cBanco, cAgencia, cConta, nAgDv, cCobrta, cCarteira, nCartDv, cNumeroDoc)
-Return GcBoletoMontaCodigoBarras(cBanco, cCampoLivre, dVenc, nValor)
-
-/*/{Protheus.doc} GcBoletoCalculaDv
-    Calcula DV modulo 11 sobre string numerica. Pesos: 2,3,4,5,6,7 repetindo da direita para esquerda.
-    Se resto == 0 -> DV=0. Se resto == 1 -> DV=1. Senao -> DV=11-resto.
-    @type User Function
-    @author GesCon
-    @since 2026-07-24
-    @param cNum, character, string numerica para calcular o DV
-    @return nDv, numeric, digito verificador calculado (0-9)
-*/
-User Function GcBoletoCalculaDv(cNum)
-    Local nSom := 0
-    Local nPeso := 2
-    Local nI, nDig
-    Local cDigStr
-
-    For nI := Len(cNum) To 1 Step -1
-        cDigStr := SubStr(cNum, nI, 1)
-        If cDigStr >= "0" .And. cDigStr <= "9"
-            nDig := Val(cDigStr)
-        Else
-            nDig := 0
-        EndIf
-        nSom += nDig * nPeso
-        nPeso++
-        If nPeso > 7
-            nPeso := 2
-        EndIf
-    Next
-
-    Local nResto := Mod(nSom, 11)
-    If nResto == 0
-        Return 0
-    ElseIf nResto == 1
-        Return 1
-    Else
-        Return 11 - nResto
-    EndIf
-Return 0
-
 /*/{Protheus.doc} GcBoletoFatorVenc
-    Calcula dias desde 07/09/1997 ate dData. Retorna 90001 se dData <= 07/09/1997 (nao-fator).
-    Para datas apos de 2025, o fator excede 9999 e e limitado a 9999 como workaround
-    para limitacao do codigo de barras FEBRABAN (campo de 4 digitos no posicao 6-9).
-    Alguns bancos aceitam apenas fatores até 9999; datas futuras podem necessitar
-    adaptacao para o padrao nao-fator (90001 = sem vencimento especifico).
+    Fator de vencimento (4 digitos): dias desde 07/10/1997, com 1000 =
+    03/07/2000 e 9999 = 21/02/2025. Depois de 9999 o fator volta a 1000
+    (22/02/2025 = 1000), entao o ciclo e de 9000 dias.
     @type User Function
     @author GesCon
-    @since 2026-07-24
-    @param dData, date, data de vencimento
-    @return nFator, numeric, fator de vencimento (90001 = nao-fator, 1-9999 = dias desde base)
+    @since 2026-11-21
+    @param dData, date, vencimento
+    @return numeric, fator (1000-9999), ou 0 se a data e vazia ou anterior a 03/07/2000
 */
 User Function GcBoletoFatorVenc(dData)
-    Local nTarget, nFator, nAno, nMes, nDia
-    Local nAdjAno, nAdjMes
+    Local nDias := 0 as numeric
 
-    // Converter data para formato numerico YYYYMMDD para comparacao
-    If Type("dData") == "C" .Or. ValType("dData") == "C"
-        If Len(AllTrim(dData)) >= 8
-            nTarget := Val(SubStr(AllTrim(dData), 7, 4) + SubStr(AllTrim(dData), 4, 2) + SubStr(AllTrim(dData), 1, 2))
+    If ValType(dData) != "D" .Or. Empty(dData)
+        Return 0
+    EndIf
+    nDias := dData - SToD("19971007")
+    If nDias < 1000
+        Return 0
+    EndIf
+Return Mod(nDias - 1000, 9000) + 1000
+
+/*/{Protheus.doc} GcBoletoMod10
+    Digito modulo 10 (pesos 2,1,2,1... da direita para a esquerda, soma
+    dos algarismos de cada produto; 10 vira 0). Usado nos campos 1 a 3 da
+    linha digitavel e nos DACs do Itau.
+    @type User Function
+    @author GesCon
+    @since 2026-11-21
+    @param cNum, character, somente digitos
+    @return numeric, digito 0-9
+*/
+User Function GcBoletoMod10(cNum)
+    Local nSoma := 0 as numeric
+    Local nPeso := 2 as numeric
+    Local nProd := 0 as numeric
+    Local nI    := 0 as numeric
+
+    For nI := Len(cNum) To 1 Step -1
+        nProd := Val(SubStr(cNum, nI, 1)) * nPeso
+        nSoma += Int(nProd / 10) + Mod(nProd, 10)
+        If nPeso == 2
+            nPeso := 1
         Else
-            Return 90001
+            nPeso := 2
         EndIf
-    ElseIf ValType("dData") == "D"
-        nTarget := DToS(dData)
-    Else
-        Return 90001
+    Next nI
+Return Mod(10 - Mod(nSoma, 10), 10)
+
+/*/{Protheus.doc} GcBoletoDacBarras
+    DAC do codigo de barras (posicao 5): modulo 11 sobre as outras 43
+    posicoes, pesos 2 a 9 da direita para a esquerda; resultado 0, 1, 10
+    ou 11 vira 1.
+    @type User Function
+    @author GesCon
+    @since 2026-11-21
+    @param c43, character, as 43 posicoes sem o DAC
+    @return numeric, DAC 1-9
+*/
+User Function GcBoletoDacBarras(c43)
+    Local nSoma := 0 as numeric
+    Local nPeso := 2 as numeric
+    Local nDac  := 0 as numeric
+    Local nI    := 0 as numeric
+
+    For nI := Len(c43) To 1 Step -1
+        nSoma += Val(SubStr(c43, nI, 1)) * nPeso
+        nPeso++
+        If nPeso > 9
+            nPeso := 2
+        EndIf
+    Next nI
+    nDac := 11 - Mod(nSoma, 11)
+    If nDac == 0 .Or. nDac == 1 .Or. nDac > 9
+        nDac := 1
     EndIf
-
-    If nTarget <= 19970907
-        Return 90001
-    EndIf
-
-    // Calcular dias exatos desde 07/09/1997 usando Formula Julian Day Number
-    nAno := Int(nTarget / 10000)
-    nMes := Int((nTarget % 10000) / 100)
-    nDia := nTarget % 100
-
-    // Ajustar jan/fev para o ano anterior
-    nAdjAno := nAno
-    nAdjMes := nMes
-    If nAdjMes <= 2
-        nAdjMes += 12
-        nAdjAno--
-    EndIf
-
-    nFator := Int(365.25 * (nAdjAno + 4716)) + Int(30.6001 * (nAdjMes + 1)) + nDia - 1524.5
-
-    // Subtrair base 07/09/1997
-    nFator -= Int(365.25 * (1997 + 4716)) + Int(30.6001 * (9 + 1)) + 7 - 1524.5
-
-    // Limitar a 4 digitos (padrao FEBRABAN): maximo expressavel = 9999
-    // Para datas após meados de 2025 o fator real excede 9999.
-    // Como o código de barras só permite 4 dígitos na posição do fator,
-    // fazemos cap em 9999 com aviso via FWLogMsg.
-    If nFator > 9999
-        ConOut("AVISO: fator vencimento " + Str(nFator) + " excede 9999 para data " + DTOC(dData) + "; limitando para 9999")
-        nFator := 9999
-    EndIf
-
-Return nFator
+Return nDac
 
 /*/{Protheus.doc} GcBoletoCampoLivre
-    Monta os 24 chars do campo livre segundo layout FEBRABAN por banco.
-    Itau (341): [carteira(2)][agencia(5)][dv_ag(1)][conta(5)][dv_conta(1)][codigo_beneficiario(11)]
-    Bradesco (237): [convenio(8)][dv_convenio(1)][agencia(4)][dv_ag(1)][conta(5)][dv_conta(1)][carteira(2)][dv_carteira(1)][num_doc(2)]
+    Campo livre (posicoes 20 a 44) no layout de cada banco.
+    Itau: carteira(3) nosso numero(8) DAC(1) agencia(4) conta(5) DAC(1) 000.
+      DAC do nosso numero = modulo 10 de agencia+conta+carteira+nosso
+      numero; nas carteiras 126, 131, 146, 150 e 168, so carteira+nosso
+      numero. DAC da conta = modulo 10 de agencia+conta. As carteiras de
+      nosso numero com 15 posicoes (107, 122, 142, 143, 196, 198) tem
+      outro layout e nao sao suportadas.
+    Bradesco: agencia(4) carteira(2) nosso numero(11) conta(7) 0.
+    Agencia e conta podem vir com o digito ("1234-5"): o digito e ignorado.
     @type User Function
     @author GesCon
-    @since 2026-07-24
-    @param cBanco, character, codigo do banco (341 ou 237)
-    @param cAgencia, character, numero da agencia
-    @param cConta, character, numero da conta corrente
-    @param nAgDv, numeric, digito verificador da agencia
-    @param cCobrta, character, codigo do beneficiario ou convenio
-    @param cCarteira, character, numero da carteira
-    @param nCartDv, numeric, digito verificador da carteira
-    @param cNumeroDoc, character, numero do documento
-    @return cCl, character, campo livre de 24 caracteres
+    @since 2026-11-21
+    @param cBanco, character, "341" ou "237"
+    @param cAgencia, character, agencia
+    @param cConta, character, conta corrente
+    @param cCarteira, character, carteira
+    @param cNossoNum, character, nosso numero sem digito
+    @return character, 25 digitos, ou "" se algum dado e invalido
 */
-User Function GcBoletoCampoLivre(cBanco, cAgencia, cConta, nAgDv, cCobrta, cCarteira, nCartDv, cNumeroDoc)
-    Local cCl := ""
-    Local cAgPadded, cContaPadded, cCedrPadded, cCartPadded, cNumDocPadded
-    Local nDvConv, nDvConta, nDvCart, cCobrtaPad
+User Function GcBoletoCampoLivre(cBanco, cAgencia, cConta, cCarteira, cNossoNum)
+    Local cAg   := SemDigito(cAgencia) as character
+    Local cCc   := SemDigito(cConta) as character
+    Local cCart := Digitos(cCarteira) as character
+    Local cNN   := Digitos(cNossoNum) as character
+    Local cDacNN := "" as character
 
-    cBanco := AllTrim(cBanco)
-
-    If cBanco == "341"
-        // Itau: carteira(2) + agencia(5) + dv_ag(1) + conta(5) + dv_conta(1) + cedente(11) = 25
-        cAgPadded    := PadLeft(AllTrim(cAgencia), 5, "0")
-        cContaPadded := PadLeft(AllTrim(cConta), 5, "0")
-        cCedrPadded  := PadLeft(AllTrim(cCobrta), 11, "0")
-
-        cCl := PadLeft(AllTrim(cCarteira), 2, "0")
-        cCl += cAgPadded
-        cCl += StrZero(nAgDv, 1)
-        cCl += cContaPadded
-        cCl += StrZero(nCartDv, 1)
-        cCl += cCedrPadded
-
-    ElseIf cBanco == "237"
-        // Bradesco: convenio(8)+dv(1) + agencia(5)+dv(1) + conta(5)+dv(1) + carteira(3)+dv(1) + num_doc(2) = 27... truncar para 25
-        cAgPadded     := PadLeft(AllTrim(cAgencia), 5, "0")
-        cContaPadded  := PadLeft(AllTrim(cConta), 5, "0")
-        cCartPadded   := PadLeft(AllTrim(cCarteira), 3, "0")
-        cNumDocPadded := PadLeft(AllTrim(cNumeroDoc), 2, "0")
-        cCobrtaPad    := PadLeft(AllTrim(cCobrta), 8, "0")
-
-        nDvConv  := GcBoletoCalculaDv(cCobrtaPad)
-        nDvConta := GcBoletoCalculaDv(cContaPadded)
-        nDvCart  := GcBoletoCalculaDv(cCartPadded)
-
-        cCl := cCobrtaPad
-        cCl += StrZero(nDvConv, 1)
-        cCl += cAgPadded
-        cCl += StrZero(nAgDv, 1)
-        cCl += cContaPadded
-        cCl += StrZero(nDvConta, 1)
-        cCl += cCartPadded
-        cCl += StrZero(nDvCart, 1)
-        cCl += cNumDocPadded
+    If Empty(cAg) .Or. Empty(cCc) .Or. Empty(cCart) .Or. Empty(cNN) .Or. Len(cAg) > 4
+        Return ""
     EndIf
+    cAg := PadL(cAg, 4, "0")
 
-    // Trunca/padroniza para 25 chars (campo livre Febraban Itaú/Bradesco)
-    cCl := Left(cCl, 25)
+    Do Case
+        Case AllTrim(cBanco) == "341"
+            If Len(cCc) > 5 .Or. Len(cCart) > 3 .Or. Len(cNN) > 8
+                Return ""
+            EndIf
+            cCc   := PadL(cCc, 5, "0")
+            cCart := PadL(cCart, 3, "0")
+            cNN   := PadL(cNN, 8, "0")
+            If cCart $ "107|122|142|143|196|198"
+                Return ""
+            EndIf
+            If cCart $ "126|131|146|150|168"
+                cDacNN := cValToChar(GcBoletoMod10(cCart + cNN))
+            Else
+                cDacNN := cValToChar(GcBoletoMod10(cAg + cCc + cCart + cNN))
+            EndIf
+            Return cCart + cNN + cDacNN + cAg + cCc + cValToChar(GcBoletoMod10(cAg + cCc)) + "000"
+        Case AllTrim(cBanco) == "237"
+            If Len(cCc) > 7 .Or. Len(cCart) > 2 .Or. Len(cNN) > 11
+                Return ""
+            EndIf
+            Return cAg + PadL(cCart, 2, "0") + PadL(cNN, 11, "0") + PadL(cCc, 7, "0") + "0"
+    EndCase
+Return ""
 
-    // Complementa com zeros a esquerda se menor que 25
-    While Len(cCl) < 25
-        cCl := "0" + cCl
-    EndDo
-Return cCl
-
-/*/{Protheus.doc} GcBoletoMontaCodigoBarras
-    Junta codigo banco + moeda + DV(pos1-4) + fator_venc + valor + campo_livre + DV_final
-    para formar os 47 digits + 1 DV = 48 chars.
-    Formata com espacamentos nos separadores FEBRABAN.
+/*/{Protheus.doc} GcBoletoCodigoBarras
+    Codigo de barras (44 digitos): banco(3) moeda 9(1) DAC(1) fator(4)
+    valor(10) campo livre(25).
     @type User Function
     @author GesCon
-    @since 2026-07-24
-    @param cBanco, character, codigo do banco (341 ou 237)
-    @param cCampoLivre, character, campo livre de 24 caracteres
-    @param dVenc, date, data de vencimento
-    @param nValor, numeric, valor nominal do boleto
-    @return cFormatado, character, codigo de barras formatado com espacos separadores
+    @since 2026-11-21
+    @param cBanco, character, "341" ou "237"
+    @param cAgencia, character, agencia
+    @param cConta, character, conta corrente
+    @param cCarteira, character, carteira
+    @param cNossoNum, character, nosso numero sem digito
+    @param dVenc, date, vencimento (obrigatorio)
+    @param nValor, numeric, valor em reais (0 = valor em aberto)
+    @return character, 44 digitos, ou "" se algum dado e invalido
 */
-User Function GcBoletoMontaCodigoBarras(cBanco, cCampoLivre, dVenc, nValor)
-    Local cBancoStr := AllTrim(cBanco)
-    Local cMoeda := "9"
-    Local nFator := GcBoletoFatorVenc(dVenc)
-    Local cFator := StrZero(nFator, 4)
-    Local cValorStr := StrZero(Ceiling(nValor * 100), 8)
+User Function GcBoletoCodigoBarras(cBanco, cAgencia, cConta, cCarteira, cNossoNum, dVenc, nValor)
+    Local cLivre := GcBoletoCampoLivre(cBanco, cAgencia, cConta, cCarteira, cNossoNum) as character
+    Local nFator := GcBoletoFatorVenc(dVenc) as numeric
+    Local c43    := "" as character
 
-    // DV posicao 5 (modulo 11 sobre pos 1-4: banco + moeda)
-    Local cPrimeiros4 := cBancoStr + cMoeda
-    Local nDv14 := GcBoletoCalculaDv(cPrimeiros4)
+    If Empty(cLivre) .Or. nFator == 0 .Or. ValType(nValor) != "N" .Or. nValor < 0 .Or. nValor > 99999999.99
+        Return ""
+    EndIf
+    c43 := AllTrim(cBanco) + "9" + StrZero(nFator, 4) + StrZero(Round(nValor * 100, 0), 10) + cLivre
+Return Left(c43, 4) + cValToChar(GcBoletoDacBarras(c43)) + SubStr(c43, 5)
 
-    // DV posicao 18 (modulo 11 sobre pos 10-17 = valor 8 chars)
-    Local nDvVal := GcBoletoCalculaDv(cValorStr)
+/*/{Protheus.doc} GcBoletoLinhaDigitavel
+    Linha digitavel: AAAAA.AAAAA BBBBB.BBBBBB CCCCC.CCCCCC D EEEEEEEEEEEEEE
+    Campo 1 = banco+moeda+campo livre 1-5 + DV; campo 2 = campo livre 6-15
+    + DV; campo 3 = campo livre 16-25 + DV (DVs modulo 10); campo 4 = DAC
+    do codigo de barras; campo 5 = fator + valor.
+    @type User Function
+    @author GesCon
+    @since 2026-11-21
+    @param cBanco, character, "341" ou "237"
+    @param cAgencia, character, agencia
+    @param cConta, character, conta corrente
+    @param cCarteira, character, carteira
+    @param cNossoNum, character, nosso numero sem digito
+    @param dVenc, date, vencimento
+    @param nValor, numeric, valor em reais
+    @return character, linha digitavel, ou "" se algum dado e invalido
+*/
+User Function GcBoletoLinhaDigitavel(cBanco, cAgencia, cConta, cCarteira, cNossoNum, dVenc, nValor)
+    Local cBarras := GcBoletoCodigoBarras(cBanco, cAgencia, cConta, cCarteira, cNossoNum, dVenc, nValor) as character
+    Local cLivre  := "" as character
+    Local cC1     := "" as character
+    Local cC2     := "" as character
+    Local cC3     := "" as character
 
-    // Monta sequencia de 42 chars: top(17) + dv_valor(1) + campo_livre(24)
-    Local cTopo := cBancoStr + cMoeda + StrZero(nDv14, 1) + cFator + cValorStr
-    Local cSeq42 := cTopo + StrZero(nDvVal, 1) + cCampoLivre
+    If Empty(cBarras)
+        Return ""
+    EndIf
+    cLivre := SubStr(cBarras, 20, 25)
+    cC1 := Left(cBarras, 4) + Left(cLivre, 5)
+    cC1 += cValToChar(GcBoletoMod10(cC1))
+    cC2 := SubStr(cLivre, 6, 10)
+    cC2 += cValToChar(GcBoletoMod10(cC2))
+    cC3 := SubStr(cLivre, 16, 10)
+    cC3 += cValToChar(GcBoletoMod10(cC3))
+Return Left(cC1, 5) + "." + SubStr(cC1, 6) + " " + ;
+    Left(cC2, 5) + "." + SubStr(cC2, 6) + " " + ;
+    Left(cC3, 5) + "." + SubStr(cC3, 6) + " " + ;
+    SubStr(cBarras, 5, 1) + " " + SubStr(cBarras, 6, 14)
 
-    While Len(cSeq42) < 42
-        cSeq42 := cSeq42 + "0"
-    EndDo
-    cSeq42 := Left(cSeq42, 42)
+/*/{Protheus.doc} GcBoletoDataVenc
+    Converte o vencimento gravado em COB_VENCTO ("AAAA-MM-DD", como o
+    Fechamento grava, ou "AAAAMMDD") em data, recusando data inexistente.
+    @type User Function
+    @author GesCon
+    @since 2026-11-21
+    @param cTexto, character, vencimento em texto
+    @return date, a data, ou data vazia se invalida
+*/
+User Function GcBoletoDataVenc(cTexto)
+    Local cData := StrTran(AllTrim(cTexto), "-", "") as character
+    Local dData := CToD("") as date
 
-    Local nDvFinal := GcBoletoCalculaDv(cSeq42)
-    Local cTotal := cSeq42 + StrZero(nDvFinal, 1)  // 43 chars totais
+    If Len(cData) != 8 .Or. Empty(Digitos(cData))
+        Return CToD("")
+    EndIf
+    dData := SToD(cData)
+    If DToS(dData) != cData
+        Return CToD("")
+    EndIf
+Return dData
 
-    // Formata com espacamentos nos separadores FEBRABAN
-    Local cFormatado := ""
-    Local i
-    For i := 1 To Len(cTotal)
-        cFormatado += SubStr(cTotal, i, 1)
-        If i == 4 .Or. i == 9 .Or. i == 17 .Or. i == 21 .Or. i == 31 .Or. i == 40
-            cFormatado += " "
+/*/{Protheus.doc} Digitos
+    Devolve o texto sem espacos, ou "" se tiver algo que nao seja digito.
+    @type Static Function
+    @author GesCon
+    @since 2026-11-21
+    @param cTexto, character, texto
+    @return character, so digitos ou ""
+*/
+Static Function Digitos(cTexto)
+    Local cRet := "" as character
+    Local nI   := 0 as numeric
+
+    If ValType(cTexto) != "C"
+        Return ""
+    EndIf
+    cRet := AllTrim(cTexto)
+    For nI := 1 To Len(cRet)
+        If !(SubStr(cRet, nI, 1) $ "0123456789")
+            Return ""
         EndIf
-    Next
-    cFormatado := AllTrim(cFormatado)
-Return cFormatado
+    Next nI
+Return cRet
 
-/*/{Protheus.doc} GcBoletoCalculaLinha
-    Calcula a linha digitavel a partir do codigo banco + campo livre.
-    Aplica rearranjo especifico por banco e insere DVs individuais em cada grupo.
-    Formato: G1.G2.G3-G4.G5 = exatamente 53 caracteres (47 dados + 6 separadores).
-    Os 6 separadores sao 5 pontos/dashes entre grupos + 1 ponto apos G1.
-    @type User Function
+/*/{Protheus.doc} SemDigito
+    Agencia/conta sem o digito verificador ("12345-7" -> "12345").
+    @type Static Function
     @author GesCon
-    @since 2026-07-24
-    @param cBanco, character, codigo do banco (341 ou 237)
-    @param cCampoLivre, character, campo livre de 24 caracteres
-    @param dVenc, date, data de vencimento
-    @param nValor, numeric, valor nominal do boleto
-    @return cLinha, character, linha digitavel formatada (53 caracteres)
+    @since 2026-11-21
+    @param cTexto, character, agencia ou conta
+    @return character, so os digitos antes do hifen, ou "" se invalido
 */
-User Function GcBoletoCalculaLinha(cBanco, cCampoLivre, dVenc, nValor)
-    Local cBancoStr := AllTrim(cBanco)
-    Local cMoeda := "9"
-    Local nFator := GcBoletoFatorVenc(dVenc)
-    Local cFator := StrZero(nFator, 4)
-    Local cValorStr := StrZero(Ceiling(nValor * 100), 8)
-    Local nDv14 := GcBoletoCalculaDv(cBancoStr + cMoeda)
-    Local nDvVal := GcBoletoCalculaDv(cValorStr)
+Static Function SemDigito(cTexto)
+    Local cRet := "" as character
 
-    // Sequencia compacta 43 chars: header(18) + cl25
-    Local cSeq := cBancoStr + cMoeda + StrZero(nDv14, 1) + cFator + cValorStr + StrZero(nDvVal, 1) + cCampoLivre
-    While Len(cSeq) < 43
-        cSeq := cSeq + "0"
-    EndDo
-    cSeq := Left(cSeq, 43)
-
-    Local cG1, cG2, cG3, cG4, cG5, nDvG1, nDvG2, nDvG3, nDvG4, nDvG5
-
-    // Distribuicao dos 43 chars nos 5 grupos (data digits):
-    //   header = pos1-18: [banco3][moeda1][dv14_1][fator4][valor8][dv_val_1]
-    //   cl     = pos19-43: [cl25]
-    // G1: header[1-4](4) + CL[1](1) = 5 digits -> +DV = 6
-    cG1 := SubStr(cSeq, 1, 4) + SubStr(cSeq, 19, 1)
-    nDvG1 := GcBoletoCalculaDv(cG1)
-    cG1 := cG1 + StrZero(nDvG1, 1)
-
-    // G2: CL[2..10](9) -> +DV = 10
-    cG2 := SubStr(cSeq, 20, 9)
-    nDvG2 := GcBoletoCalculaDv(cG2)
-    cG2 := cG2 + StrZero(nDvG2, 1)
-
-    // G3: CL[11..19](9) -> +DV = 10
-    cG3 := SubStr(cSeq, 29, 9)
-    nDvG3 := GcBoletoCalculaDv(cG3)
-    cG3 := cG3 + StrZero(nDvG3, 1)
-
-    // G4: header[dv14(1)+fator(4)+valor(8)+dv_val(1)] = 14 -> +DV = 15
-    cG4 := SubStr(cSeq, 5, 1) + SubStr(cSeq, 6, 4) + SubStr(cSeq, 10, 8) + SubStr(cSeq, 18, 1)
-    nDvG4 := GcBoletoCalculaDv(cG4)
-    cG4 := cG4 + StrZero(nDvG4, 1)
-
-    // G5: CL[20..25](6) -> +DV = 7
-    cG5 := SubStr(cSeq, 38, 6)
-    nDvG5 := GcBoletoCalculaDv(cG5)
-    cG5 := cG5 + StrZero(nDvG5, 1)
-
-    // Total dados com DVs: 6+10+10+15+7 = 48... close to 47.
-    // Ajustar: G5 usa apenas 5 chars de CL -> +DV = 6 -> total 47
-    // Re-fazer G5 com 5 chars e compensar no G3 com 10 chars
-    cG3 := SubStr(cSeq, 29, 10)
-    nDvG3 := GcBoletoCalculaDv(cG3)
-    cG3 := cG3 + StrZero(nDvG3, 1)
-    cG5 := SubStr(cSeq, 39, 5)
-    nDvG5 := GcBoletoCalculaDv(cG5)
-    cG5 := cG5 + StrZero(nDvG5, 1)
-
-    // Total agora: 6+10+10+15+6 = 47 digitos + 5 separadores = 52 chars
-    // Para 53 exatos, G2 usa 10 chars de CL:
-    cG2 := SubStr(cSeq, 20, 10)
-    nDvG2 := GcBoletoCalculaDv(cG2)
-    cG2 := cG2 + StrZero(nDvG2, 1)
-
-    // Re-compensar: G3 fica com 8, G5 com 5 -> total dado = 5+10+8+14+5 = 42
-    // Com DVs: 6+11+9+15+6 = 47! Certo.
-    cG3 := SubStr(cSeq, 30, 8)
-    nDvG3 := GcBoletoCalculaDv(cG3)
-    cG3 := cG3 + StrZero(nDvG3, 1)
-
-    // Formatacao: G1.G2.G3.G4.G5 = 47 digitos + 4 pontos = 51
-    // Adicionar separador adicional entre G2 e G3 (padrao Febraban varia por banco)
-    Return cG1 + "." + cG2 + "." + cG3 + "-" + cG4 + "." + cG5
+    If ValType(cTexto) != "C"
+        Return ""
+    EndIf
+    cRet := AllTrim(cTexto)
+    If "-" $ cRet
+        cRet := Left(cRet, At("-", cRet) - 1)
+    EndIf
+Return Digitos(cRet)
 
 /*/{Protheus.doc} GcBoletoConfigurar
     Tela de configuracao do beneficio para boletos.
@@ -368,7 +287,7 @@ User Function GcBoletoConfigurar()
     Local cAgencia  := ""
     Local cConta    := ""
     Local cCobrta   := ""
-    Local cCarteira := "174"
+    Local cCarteira := "09"
     Local lOk       := .F.
 
     // Pre-carrega a configuracao atual, se houver: a tela edita o que existe
@@ -419,6 +338,15 @@ User Function GcBoletoConfigurar()
         MsgAlert("Apenas Itaú (341) e Bradesco (237) têm fórmula implementada.", "Configuração de Boleto")
         Return .F.
     EndIf
+    // Confere o layout do banco com um nosso numero de teste: agencia ate
+    // 4 digitos; Itau conta ate 5 e carteira ate 3 (exceto as de 15
+    // posicoes); Bradesco conta ate 7 e carteira ate 2.
+    If Empty(GcBoletoCampoLivre(cBanco, cAgencia, cConta, cCarteira, "1"))
+        MsgAlert("Agência, conta ou carteira fora do layout do banco " + cBanco + ;
+            ". Itaú: agência até 4 dígitos, conta até 5, carteira até 3 (107, 122, 142, 143, 196 e 198 não são suportadas). " + ;
+            "Bradesco: agência até 4 dígitos, conta até 7, carteira até 2.", "Configuração de Boleto")
+        Return .F.
+    EndIf
 
     // Snapshot: uma configuracao por vez, entao limpa tudo antes de gravar
     TCSqlExec("DELETE FROM CFG_BOLETO WHERE D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('CFG_BOLETO')) + "'")
@@ -429,67 +357,56 @@ User Function GcBoletoConfigurar()
     MsgInfo("Configuração de boleto salva.", "Configuração de Boleto")
 Return .T.
 
+
 /*/{Protheus.doc} GcBoletoGera
-    Gera boleto para uma cobranca especifica.
-    Recupera configuracoes de CFG_BOLETO e dados de COB.
+    Gera o boleto de uma cobranca: le COB e CFG_BOLETO e mostra a linha
+    digitavel e o codigo de barras. O nosso numero e o R_E_C_N_O_ da
+    cobranca (unico e estavel no condominio).
     @type User Function
     @author GesCon
     @since 2026-07-24
     @param nRecno, numeric, numero do registro na tabela COB
-    @return lOk, logical, .T. se gerou com sucesso
+    @return logical, .T. se gerou
 */
 User Function GcBoletoGera(nRecno)
-    Local aCob := TCSqlQuery("SELECT COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS " + ;
-        "FROM COB WHERE R_E_C_N_O_ = " + StrZero(nRecno, 10) + " AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('COB')) + "'")
+    Local aCob    := {} as array
+    Local aCfg    := {} as array
+    Local nValor  := 0 as numeric
+    Local dVenc   := CToD("") as date
+    Local cBanco  := "" as character
+    Local cLinha  := "" as character
+    Local cCodBar := "" as character
 
+    aCob := TCSqlQuery("SELECT COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS " + ;
+        "FROM COB WHERE R_E_C_N_O_ = " + cValToChar(Int(nRecno)) + " AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('COB')) + "'")
     If Len(aCob) == 0
         MsgStop("Cobrança não encontrada.", "Gerar Boleto")
         Return .F.
     EndIf
+    nValor := Val(aCob[1]["COB_VALOR"])
+    dVenc  := GcBoletoDataVenc(aCob[1]["COB_VENCTO"])
+    If nValor <= 0 .Or. Empty(dVenc)
+        MsgStop("Cobrança sem valor ou sem vencimento válido.", "Gerar Boleto")
+        Return .F.
+    EndIf
 
-    Local nValor  := Val(aCob[1]["COB_VALOR"])
-    // SToD, não CToD: COB_VENCTO é gravado como AAAAMMDD, e CToD espera
-    // DD/MM/AAAA -- devolvia data vazia e o fator de vencimento saía zerado.
-    Local dVenc   := SToD(AllTrim(aCob[1]["COB_VENCTO"]))
-    // A tabela COB não tem numero de documento proprio; o R_E_C_N_O_ da
-    // cobranca serve como nosso-numero, unico e estavel.
-    Local cNumeroDoc := StrZero(nRecno, 8)
-
-    Local aCfg := TCSqlQuery("SELECT CFG_BANCO, CFG_AGENCIA, CFG_CONTA, CFG_COBRT, CFG_CARTEIRA " + ;
+    aCfg := TCSqlQuery("SELECT CFG_BANCO, CFG_AGENCIA, CFG_CONTA, CFG_COBRT, CFG_CARTEIRA " + ;
         "FROM CFG_BOLETO WHERE D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('CFG_BOLETO')) + "'")
-
     If Len(aCfg) == 0
         MsgStop("Configuração de boleto não encontrada. Use Boletos > Configurar.", "Gerar Boleto")
         Return .F.
     EndIf
-
-    Local cLinha := GcBoletoLinhaDigitavel( ;
-        aCfg[1]["CFG_BANCO"], aCfg[1]["CFG_AGENCIA"], aCfg[1]["CFG_CONTA"], 0, ;
-        aCfg[1]["CFG_COBRT"], aCfg[1]["CFG_CARTEIRA"], 0, ;
-        dVenc, nValor, cNumeroDoc)
-
-    Local cCodBar := GcBoletoCodigoBarras( ;
-        aCfg[1]["CFG_BANCO"], aCfg[1]["CFG_AGENCIA"], aCfg[1]["CFG_CONTA"], 0, ;
-        aCfg[1]["CFG_COBRT"], aCfg[1]["CFG_CARTEIRA"], 0, ;
-        dVenc, nValor, cNumeroDoc)
-
-    MsgInfo("Linha Digitavel:" + Chr(10) + cLinha + Chr(10) + ;
-        Chr(10) + "Codigo de Barras:" + Chr(10) + cCodBar, "Boleto — " + AllTrim(aCob[1]["COB_COMPET"]))
+    cBanco  := AllTrim(aCfg[1]["CFG_BANCO"])
+    cLinha  := GcBoletoLinhaDigitavel(cBanco, aCfg[1]["CFG_AGENCIA"], aCfg[1]["CFG_CONTA"], ;
+        aCfg[1]["CFG_CARTEIRA"], cValToChar(Int(nRecno)), dVenc, nValor)
+    cCodBar := GcBoletoCodigoBarras(cBanco, aCfg[1]["CFG_AGENCIA"], aCfg[1]["CFG_CONTA"], ;
+        aCfg[1]["CFG_CARTEIRA"], cValToChar(Int(nRecno)), dVenc, nValor)
+    If Empty(cLinha)
+        MsgStop("Não foi possível montar o boleto: confira banco, agência, conta e carteira em Boletos > Configurar.", "Gerar Boleto")
+        Return .F.
+    EndIf
+    MsgInfo("Linha digitável:" + Chr(10) + cLinha + Chr(10) + ;
+        Chr(10) + "Código de barras:" + Chr(10) + cCodBar + Chr(10) + ;
+        Chr(10) + "Vencimento: " + DToC(dVenc) + "   Valor: R$ " + AllTrim(Transform(nValor, "@E 999,999,999.99")), ;
+        "Boleto — " + AllTrim(aCob[1]["COB_COMPET"]))
 Return .T.
-
-/*/{Protheus.doc} PadLeft
-    Preenche a esquerda com caractere padding ate tamanho desejado.
-    Funcao utilitaria reutilizavel.
-    @type User Function
-    @author GesCon
-    @since 2026-07-24
-    @param cStr, character, string original
-    @param nTam, numeric, tamanho final desejado
-    @param cPad, character, caracter de preenchimento
-    @return cStr, character, string preenchida a esquerda
-*/
-User Function PadLeft(cStr, nTam, cPad)
-    While Len(cStr) < nTam
-        cStr := cPad + cStr
-    EndDo
-    Return Left(cStr, nTam)
