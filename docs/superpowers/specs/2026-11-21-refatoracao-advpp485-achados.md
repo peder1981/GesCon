@@ -9,7 +9,12 @@ Ponto de partida: branch `master` em `cd7220d`, AdvPP fixado em 4.4.6.
 Com o advplc 4.8.5 a suíte já passa sem mudança (15 suítes, `check`,
 `alcance`, `check-filial`, `check-migracao-filial`).
 
-## Projeto 1 — corrigido nesta etapa
+## Projeto 1 — corrigido nesta etapa (branch `refactor/advpp-485`)
+
+Estado: B1 a B9 concluídos, cada um com teste. Suíte: 18 suítes, 0 falha
+(eram 15); `check.sh` 40 fontes, 0 erro; `check-migracao-filial` ok;
+executável desktop gerado com o 4.8.5; `advplc serve gescon.prw` sobe e o
+boot cria o índice único.
 
 | # | Onde | Achado | Correção |
 |---|------|---------|----------|
@@ -17,17 +22,41 @@ Com o advplc 4.8.5 a suíte já passa sem mudança (15 suítes, `check`,
 | B2 | `src/fechamento.prw` | Frações ideais fora de 100% só geram aviso no log: com 120% cobra 20% a mais, com 50% arrecada a metade. Competência não validada ("abc" vira vencimento 0000-01-10). Cobranças gravadas uma a uma, fora de transação. Nada impede cobrança duplicada da mesma unidade na mesma competência. | Recusa competência fora de `AAAA-MM` e soma de frações fora de 0,999 a 1,001. Grava todas as cobranças num único `BEGIN;...COMMIT;`. Índice único parcial em `COB (FILIAL, COB_COMPET, COB_UNIDADE)` para registros ativos. |
 | B3 | `src/usuarios.prw`, `src/portal.prw` | Token previsível (data + hora + `Random()` + SHA-256). Consumo do token em duas operações (`SELECT` e depois `UPDATE`): dois acessos simultâneos passam com o mesmo token. | Token = 2 × `UUIDRandom()` (aleatório criptográfico, 64 hex). Consumo atômico: `UPDATE ... WHERE USADO = 0` e só então a leitura. |
 | B4 | `gescon.prw` | "Arquivar Aviso" lista avisos de todos os condomínios (consulta sem filial). | Filtro por filial. |
-| B5 | `src/contabil.prw` | Lançamento manual grava `LAN_USUARIO = 'TEST_USER'`. Lançamentos automáticos (despesa/rateio) podem ser editados e excluídos. Valor sem arredondamento a 2 casas. Editar/excluir pelo `R_E_C_N_O_`, que pode se repetir (`MAX+1` concorrente). | Usuário real da sessão. Edição e exclusão só de `LAN_TIPO = 'MANUAL'`. `Round(nValor, 2)`. Operações pelo `LAN_ID` (chave primária). |
-| B6 | `gescon.prw` (Registrar Pagamento) | Data de pagamento não validada (`20261399` vira data vazia). | Rejeita data inválida e data futura. |
+| B5 | `src/contabil.prw` | Lançamento manual grava `LAN_USUARIO = 'TEST_USER'`. Lançamentos automáticos (despesa/rateio) podem ser editados e excluídos. Valor sem arredondamento a 2 casas. | `GcUsuarioSessao()` (login da sessão). Edição e exclusão só de `LAN_TIPO = 'MANUAL'`. `Round(nValor, 2)`. |
+| B6 | `gescon.prw`, `src/cobrancas.prw` | Data de pagamento não validada (`20261399` vira data vazia; data futura aceita). `GcRegistrarPagamento` devolvia o sucesso do comando: `.T.` mesmo sem alterar linha (cobrança inexistente ou de outro condomínio), e a tela dizia "Pagamento registrado"; regravava a data de cobrança já paga. | Recusa na tela e na função; `UPDATE ... RETURNING`: `.T.` só se a cobrança passou a constar como paga. |
 | B7 | `src/malas.prw` | Valor sai cru ("350.5") e vencimento em ISO. E-mail do condômino não validado antes de ir ao cabeçalho. | `Transform("@E 999,999,999.99")`, vencimento DD/MM/AAAA, e-mail validado (sem CR/LF, formato `x@y.z`). |
 | B8 | `scripts/check-filial.sh` | Checa por arquivo (basta a palavra FILIAL aparecer uma vez) e ignora `gescon.prw`. Por isso B4 passou. | Checagem por comando SQL, incluindo `gescon.prw`, com lista de exceções justificadas (tabelas globais e migrações). |
 | B9 | `ADVPP_VERSION`, CI, deploy | Fixado em 4.4.6. A CI de testes compila o AdvPP da branch principal, sem versão. O `deploy/02-setup-advpp.sh` instala o 3.0.0 do pacote completo (GLIBC 2.38; o servidor é Debian 12, GLIBC 2.36). | 4.8.5 em todos, lido do `ADVPP_VERSION`; deploy com o pacote `advpp-cli`. |
 
-Itens retirados depois de conferidos: `Return` dentro de `Begin Transaction`
+Achados no caminho, corrigidos junto: `GcBoletoGera` lia o vencimento
+`AAAA-MM-DD` (formato que o Fechamento grava) com `SToD`, que espera
+`AAAAMMDD` -- a data saía vazia; `GcGerarToken` gravava como emissor
+`GetEnv("USER")` (usuário do sistema operacional do servidor), por um
+`Local` que encobria `cLoginAtual`; o teste antigo do boleto reimplementava
+a fórmula e comparava cópia com cópia; o de pagamento só imprimia.
+
+Itens retirados depois de conferidos: `R_E_C_N_O_` repetido em
+`LANCAMENTOS` por `MAX+1` concorrente -- é um único comando e o SQLite
+serializa as escritas (numa disputa, o segundo recebe "banco ocupado"),
+sem evidência de duplicata. `Return` dentro de `Begin Transaction`
 não deixa transação aberta, porque no AdvPP (inclusive no 4.8.5)
 `Begin/End Transaction` é só marcador (`pkg/parser/expressions.go`,
 `parseBeginEndBlock`). As grades `FWMBrowse` já filtram por filial
 (`pkg/vm/browse.go`).
+
+## AdvPP — divergência do Protheus achada nesta etapa (corrigir no AdvPP)
+
+`TCSqlExec`/`TCSqlQuery` com erro de SQL (violação de NOT NULL, de índice
+único, `RAISE(ABORT)` de gatilho) **encerram o programa**: o erro sai da
+função nativa e nem `Try/Catch` nem `ErrorBlock` + `Begin Sequence` o
+capturam (testado no 4.8.5). No Protheus, `TCSqlExec` devolve número
+negativo e a mensagem fica em `TCSqlError()`. Consequências no GesCon: as
+travas por gatilho da tabela de cobranças derrubam a operação em vez de
+voltar uma mensagem, e `BEGIN;...COMMIT;` num `TCSqlExec` deixa a
+transação aberta se um comando do meio falha. Contorno usado aqui:
+gravação em um único comando (atômico no SQLite). Correção proposta no
+AdvPP (`pkg/vm/natives.go`, `TCSQLEXEC`): devolver negativo e expor
+`TCSqlError()`, como o Protheus.
 
 ## Projeto 2 — login (próxima etapa)
 

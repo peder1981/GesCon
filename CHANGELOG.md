@@ -2,6 +2,49 @@
 
 Mudanças notáveis do GesCon.
 
+## [Não lançado]
+
+Refatoração sobre o AdvPP 4.8.5, etapa 1 de 4 (bugs e segurança). Detalhes
+e o que fica para as etapas de login, interface e reforma tributária em
+`docs/superpowers/specs/2026-11-21-refatoracao-advpp485-achados.md`.
+
+### Corrigido
+
+- **Boleto não pagável** (crítico): fator de vencimento com data base errada
+  (07/09/1997 em vez de 07/10/1997) e travado em 9999 -- desde 22/02/2025 o
+  fator volta a 1000, então todo boleto saía com vencimento 21/02/2025;
+  valor com 8 dígitos e arredondado para cima; código de barras de 43
+  posições com DVs a mais; campo livre fora do layout do Itaú e do
+  Bradesco; vencimento gravado pelo Fechamento lido como data vazia.
+  Reescrito pelos manuais CNAB 400 do Itaú (jan/2017) e do Bradesco
+  (abr/2022), com teste contra os exemplos numéricos dos manuais.
+- **Fechamento Mensal**: frações ideais fora de 100% rateavam errado em
+  silêncio (com 120% cobrava 20% a mais); competência inválida gerava
+  vencimento inválido; cobranças gravadas uma a uma (queda no meio deixava
+  unidades sem cobrança) -- agora num único comando; índice único de
+  cobrança por condomínio/competência/unidade.
+- **Token do condômino**: previsível (data + hora + `Random()`); agora 64
+  hexadecimais de `UUIDRandom()`. Dois acessos simultâneos passavam com o
+  mesmo token de uso único; agora consumo num único `UPDATE ... RETURNING`.
+  O emissor gravado era o usuário do sistema operacional do servidor.
+- **Contabilidade**: todo lançamento manual gravava `TEST_USER` como
+  usuário; lançamentos automáticos do Fechamento podiam ser editados e
+  excluídos à mão; valor sem arredondamento.
+- **Registrar Pagamento**: data inexistente ou futura aceita; confirmava
+  "registrado" mesmo sem alterar a cobrança; regravava data de cobrança já
+  paga.
+- **Avisos**: "Arquivar Aviso" listava avisos de todos os condomínios.
+- **Mala direta**: valor e datas sem formatação; e-mail não validado antes
+  do cabeçalho (um endereço com quebra de linha injetava cabeçalho).
+
+### Alterado
+
+- AdvPP 4.8.5 fixado em `ADVPP_VERSION`, lido pela CI de testes (antes
+  compilava o AdvPP do master), pelo release e pelo deploy (que instalava
+  o 3.0.0 do pacote que não roda no Debian 12; agora `advpp-cli`).
+- `scripts/check-filial.sh` checa comando a comando, incluindo
+  `gescon.prw` (antes bastava a palavra FILIAL aparecer no arquivo).
+
 ## [1.2.1] — 2026-10-10
 
 Terceira rodada de QA do Wilson Kraft (relatório
