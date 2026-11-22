@@ -57,7 +57,7 @@ jobs:
         run: |
           mkdir -p "$HOME/.local/bin"
           cd AdvPP
-          go build -o "$HOME/.local/bin/advplc" ./cmd/advplc
+          go build -ldflags "-X main.version=${{ steps.advpp.outputs.versao }}" -o "$HOME/.local/bin/advplc" ./cmd/advplc
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Bootstrap do banco
