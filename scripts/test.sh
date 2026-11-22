@@ -16,6 +16,16 @@ set -e
 
 cd "$(dirname "$0")/.."
 
+# Mesma versão do compilador que a CI e o release usam (ADVPP_VERSION):
+# com outra, um teste que depende do comportamento da versão fixada falha
+# (ou passa) por engano.
+esperada="v$(tr -d ' \n\r' < ADVPP_VERSION)"
+atual="$(advplc --version 2>/dev/null | awk '{print $2}')"
+if [ "$atual" != "$esperada" ]; then
+    echo "test: advplc $atual no PATH, mas ADVPP_VERSION pede $esperada"
+    exit 1
+fi
+
 falhas=0
 total=0
 saida=$(mktemp)
