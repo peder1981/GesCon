@@ -1043,9 +1043,29 @@ Static Function GcUIPgAuditoria(oApp)
     oB := PoButton():New(oW, "Auditar agora", {|| GcUIAudita(oApp, oAn, oAl)})
     oB:Set("kind", "primary")
     oB:Set("icon", "an an-shield-check")
-    PoInfo():New(oW, "", "Confere equilíbrio contábil, lançamentos e cobranças sem par, rateio, datas fora do período e alterações em período fechado.")
+    oB := PoButton():New(oW, "Conferir fechamento do período", {|| GcUIAuditaFech(oApp)})
+    oB:Set("kind", "secondary")
+    PoInfo():New(oW, "", "Auditar: equilíbrio contábil, lançamentos e cobranças sem par, rateio, datas fora do período e alterações " + ;
+        "em período fechado. Conferir fechamento: anomalias críticas que impedem fechar o exercício ativo.")
     GcUIRegistra(oPg, {|| GcUITabela(oAn, GcQAnomalias()), GcUITabela(oAl, GcQAlertas())})
 Return oPg
+
+Static Function GcUIAuditaFech(oApp)
+    Local cExe := GcExercicioAtivo() as character
+    Local nAn  := 0 as numeric
+
+    GcUIToque()
+    If Empty(cExe)
+        oApp:Notify("Nenhum exercício ativo.", "warning")
+        Return
+    EndIf
+    nAn := GcAuditoriaFecharPeriodo(cExe)
+    If nAn == 0
+        oApp:Notify("Exercício " + cExe + " sem anomalias críticas: pode ser fechado.", "success")
+    Else
+        oApp:Notify("Exercício " + cExe + ": " + cValToChar(nAn) + " anomalia(s) crítica(s) antes de fechar.", "error")
+    EndIf
+Return
 
 Static Function GcUIAudita(oApp, oAn, oAl)
     Local cExe := GcExercicioAtivo() as character

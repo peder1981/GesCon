@@ -34,14 +34,8 @@ User Function GcUsuarioSessao()
 Return "SISTEMA"
 
 /*/{Protheus.doc} GcPerfilDoLogin
-    Consulta USR_PERFIL do login informado. Extraída da revisão final
-    (achados C2/I4/I5): três telas diferentes (src/usuarios.prw,
-    src/condominios-cadastro.prw) precisavam do mesmo "este login é
-    SUPERADMIN?" pra fechar buracos de autorização (síndico se
-    autovinculando a qualquer condomínio, editando/excluindo condomínio
-    alheio, ou criando outro super admin) -- mesma query que
-    GcSelecionarCondominio (src/login.prw) já fazia inline, centralizada
-    aqui pra não triplicar o SQL.
+    Consulta USR_PERFIL do login informado (base de GcPode e das checagens
+    de super administrador em src/operacoes.prw e src/cadastros.prw).
     @type Function
     @author GesCon
     @since 2026-08-08
@@ -352,7 +346,7 @@ User Function GcMigrarParaFilial()
     // toda base instalada antes desta versão (v1.0.10) só tem admins
     // 'ADMIN', nunca 'SUPERADMIN' -- USR_COND (o vínculo usuário-condomínio
     // do síndico) é tabela nova e nasce vazia. Sem esta promoção,
-    // GcSelecionarCondominio (src/login.prw) cai no ramo USR_COND para
+    // GcCondominiosDoLogin (src/seguranca.prw) cai no ramo USR_COND para
     // esse admin, o JOIN não acha nada, devolve 0 condomínios, e o login
     // trava sem caminho de recuperação (o menu Usuários fica atrás do
     // próprio login). A spec promete "sobe direto no condomínio nº 1 sem

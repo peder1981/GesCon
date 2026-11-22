@@ -3,29 +3,6 @@
 // da sua unidade em modo read-only.
 #include "totvs.ch"
 
-/*/{Protheus.doc} GcPortalCondmino
-    Gateway do portal do condômino. Pede o token, valida, autentica e
-    abre o browse limitado de cobranças da unidade vinculada.
-    @type User Function
-    @author GesCon
-    @since 2026-07-24
-    @return lOk, logical, .T. se autenticado com sucesso
-*/
-User Function GcPortalCondmino()
-    Local cToken := FWGetText("Cole o token recebido do administrador:", "")
-    If Empty(cToken)
-        Return .F.
-    EndIf
-
-    Local lAutenticado := GcAuthPortalToken(cToken)
-    If !lAutenticado
-        MsgStop("Token inválido, expirado ou já utilizado.", "Portal Condômino")
-        Return .F.
-    EndIf
-
-    GcPortalBrowse()
-Return .T.
-
 /*/{Protheus.doc} GcAuthPortalToken
     Autentica um token na tabela GCT_TOKEN.
     Verifica: TOKEN existente, D_E_L_E_T_=' ', VALIDO_ATE > agora, USADO=0.
@@ -90,76 +67,3 @@ User Function GcAuthPortalToken(cToken)
     // Sem diálogo aqui: a função também serve à interface web, que avisa do jeito dela.
 Return .T.
 
-/*/{Protheus.doc} GcPortalBrowse
-    Abre browse limitado: apenas cobranças da unidade do condômino autenticado.
-    Recalcula RPT_COND_COBRANCAS antes E depois do browse.
-    @type User Function
-    @author GesCon
-    @since 2026-07-24
-*/
-User Function GcPortalBrowse()
-    // Recalcula o snapshot da unidade atual
-    Local nQtd := GcPortalCalcCobrancas()
-    Local cMsg := "Cobranças encontradas: " + Str(nQtd)
-
-    MsgInfo(cMsg + Chr(10) + "Selecione 'Sair' no menu para encerrar.", "Portal Condômino")
-
-    Local cTitulo := "Minhas Cobranças — " + g_cConPortal
-    If !Empty(g_cCondNomePortal)
-        cTitulo += " / " + g_cCondNomePortal
-    EndIf
-    cTitulo += " (Portal Condômino)"
-
-    Local oBrowse := FWMBrowse():New()
-    oBrowse:SetAlias("RPT_COND_COBRANCAS")
-    oBrowse:SetDescription(cTitulo)
-    oBrowse:Activate()
-
-    // Mitigação (Wilson Kraft, QA 2026-08-23): o comentário deste módulo
-    // promete "read-only", mas FWMBrowse (AdvPP) não expõe nenhum jeito de
-    // desabilitar Incluir/Editar/Excluir -- mesma limitação já aceita pra
-    // Cobrança (ver ARQUITETURA.md). Sem persistência real (RPT_COND_COBRANCAS
-    // é sempre recriado do zero a partir de COB), mas o dado forjado ficava
-    // visível até o próximo login. Recalcular de novo aqui, assim que o
-    // condômino fecha a tela, reduz a janela de exposição pra "durante esta
-    // tela", não "até o próximo login".
-    GcPortalCalcCobrancas()
-Return
-
-/*/{Protheus.doc} GcPortalCalcCobrancas
-    Recalcula RPT_COND_COBRANCAS do zero: filtra COB por unidade do portal.
-    @type User Function
-    @author GesCon
-    @since 2026-07-24
-    @return nQtd, numeric, quantidade de linhas geradas
-*/
-User Function GcPortalCalcCobrancas()
-    If Empty(g_cUniPortal)
-        Return 0
-    EndIf
-
-    TCSqlExec("DELETE FROM RPT_COND_COBRANCAS WHERE D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('RPT_COND_COBRANCAS')) + "'")
-    TCSqlExec("INSERT INTO RPT_COND_COBRANCAS (RCC_UNIDADE, RCC_COMPET, RCC_VALOR, RCC_VENCTO, RCC_STATUS, RCC_DTPAG, FILIAL) " + ;
-        "SELECT COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, COB_DTPAG, " + ;
-        "'" + GcSqlLit(FWxFilial('RPT_COND_COBRANCAS')) + "' " + ;
-        "FROM COB WHERE COB_UNIDADE = '" + GcSqlLit(g_cUniPortal) + "' AND D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('COB')) + "' " + ;
-        "ORDER BY COB_VENCTO")
-
-    Local aQtd := TCSqlQuery("SELECT COUNT(*) AS QTD FROM RPT_COND_COBRANCAS WHERE D_E_L_E_T_ = ' ' AND FILIAL = '" + GcSqlLit(FWxFilial('RPT_COND_COBRANCAS')) + "'")
-Return Val(aQtd[1]:QTD)
-
-/*/{Protheus.doc} GcSairPortal
-    Limpa estado do portal e retorna ao menu principal.
-    @type User Function
-    @author GesCon
-    @since 2026-07-24
-*/
-User Function GcSairPortal()
-    g_cUniPortal := ""
-    g_cConPortal := ""
-    g_cCondNomePortal := ""
-    g_lAutoPortal := .F.
-    g_cFilialAtiva := ""
-    RpcSetEnv("      ")
-    MsgInfo("Sessão do portal encerrada.", "Portal Condômino")
-Return

@@ -1,75 +1,75 @@
-// tests/relatorios_test.prw
+// tests/relatorios_test.prw -- relatórios por consulta direta (antes
+// gravavam tabelas de rascunho compartilhadas): inadimplência com dias de
+// atraso e status atualizado, extrato da unidade, despesas por categoria e
+// resultado do mês, todos limitados ao condomínio da sessão.
 #include "totvs.ch"
 
-// Os #include dos modulos ficam no FIM do arquivo, de proposito.
-// `advplc run` escolhe sozinho o ponto de entrada: a primeira User
-// Function cuja linha seja >= a primeira linha de codigo do arquivo raiz
-// (pkg/compiler/codegen.go). Como #include cola o texto incluido no lugar,
-// includes no topo empurram as funcoes dos modulos para antes do runner
-// deste arquivo -- e a suite inteira roda em silencio, executando algo
-// como GcSqlLit no lugar dos testes. Com os includes no fim, o runner
-// abaixo e sempre a primeira funcao do compilado. scripts/test.sh
-// confere isso a cada execucao.
+// Os #include dos modulos ficam no FIM do arquivo, de proposito (ver a
+// nota em tests/boleto_test.prw).
 
+/*/{Protheus.doc} RelatoriosTest
+    Ponto de entrada da suite. Precisa ser a primeira User Function.
+    @type User Function
+    @author GesCon
+    @since 2026-07-24
+*/
 User Function RelatoriosTest()
-    // Isola dados de teste
-    TCSqlExec("DELETE FROM COB WHERE COB_UNIDADE = 'RPT01'")
-    TCSqlExec("DELETE FROM DES WHERE DES_COMPET = '2095-06'")
+    Local nFalhas := 0 as numeric
+    Local aQ      := {} as array
 
-    // FILIAL estampado com 6 espaços: esta suite nunca chama RpcSetEnv,
-    // entao a sessao roda com a filial default (ver FWxFilial), e
-    // relatorios.prw filtra tudo por essa mesma filial. Sem isso, os
-    // fixtures ficariam com FILIAL NULL e nenhum Calc encontraria nada.
-    // Cenário: uma unidade com 1 cobrança paga e 1 vencida/não paga
-    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, COB_DTPAG, FILIAL) VALUES " + ;
-        "('RPT01', '2095-05', 500, '2095-05-10', 'pago', '2095-05-05', '      ')")
-    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, FILIAL) VALUES " + ;
-        "('RPT01', '2095-06', 600, '2020-01-10', 'pendente', '      ')") // vencimento no passado -> inadimplente
+    RpcSetEnv("010101")
+    TCSqlExec("DELETE FROM COB WHERE FILIAL IN ('010101', '020202')")
+    TCSqlExec("DELETE FROM DES WHERE FILIAL IN ('010101', '020202')")
+    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, FILIAL) VALUES ('R1', '2099-01', 100, date('now', '-10 days'), 'pendente', '010101')")
+    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, FILIAL) VALUES ('R2', '2099-01', 200, date('now', '+10 days'), 'pendente', '010101')")
+    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, COB_DTPAG, FILIAL) VALUES ('R1', '2098-12', 150, '2099-01-10', 'pago', '2099-01-09', '010101')")
+    TCSqlExec("INSERT INTO COB (COB_UNIDADE, COB_COMPET, COB_VALOR, COB_VENCTO, COB_STATUS, FILIAL) VALUES ('R1', '2099-01', 999, date('now', '-10 days'), 'pendente', '020202')")
+    TCSqlExec("INSERT INTO DES (DES_DESCR, DES_CATEG, DES_VALOR, DES_COMPET, FILIAL) VALUES ('Água', 'AGUA', 80, '2099-01', '010101')")
+    TCSqlExec("INSERT INTO DES (DES_DESCR, DES_CATEG, DES_VALOR, DES_COMPET, FILIAL) VALUES ('Água 2', 'AGUA', 20, '2099-01', '010101')")
+    TCSqlExec("INSERT INTO DES (DES_DESCR, DES_CATEG, DES_VALOR, DES_COMPET, FILIAL) VALUES ('Luz', '', 50, '2099-01', '010101')")
+    TCSqlExec("INSERT INTO DES (DES_DESCR, DES_CATEG, DES_VALOR, DES_COMPET, FILIAL) VALUES ('Outro', 'AGUA', 5000, '2099-01', '020202')")
 
-    TCSqlExec("INSERT INTO DES (DES_DESCR, DES_CATEG, DES_VALOR, DES_COMPET, FILIAL) VALUES " + ;
-        "('Teste A', 'Manutenção', 300, '2095-06', '      ')")
-    TCSqlExec("INSERT INTO DES (DES_DESCR, DES_CATEG, DES_VALOR, DES_COMPET, FILIAL) VALUES " + ;
-        "('Teste B', 'Manutenção', 200, '2095-06', '      ')")
-    TCSqlExec("INSERT INTO DES (DES_DESCR, DES_CATEG, DES_VALOR, DES_COMPET, FILIAL) VALUES " + ;
-        "('Teste C', 'Limpeza', 100, '2095-06', '      ')")
+    aQ := GcQInadimplencia()
+    nFalhas += Confere("inadimplencia: so a vencida deste condominio", Len(aQ[2]), 1)
+    nFalhas += Confere("inadimplencia: dias de atraso", aQ[2][1][6], "10")
+    nFalhas += Confere("status atualizado para atrasado", TCSqlQuery("SELECT COB_STATUS FROM COB WHERE COB_UNIDADE = 'R1' AND COB_COMPET = '2099-01' AND FILIAL = '010101'")[1]:COB_STATUS, "atrasado")
+    nFalhas += Confere("a vencer continua pendente", TCSqlQuery("SELECT COB_STATUS FROM COB WHERE COB_UNIDADE = 'R2' AND FILIAL = '010101'")[1]:COB_STATUS, "pendente")
+    nFalhas += Confere("extrato da unidade R1", Len(GcQPortalCobrancas("R1")[2]), 2)
+    aQ := GcQDespesasCategoria("2099-01")
+    nFalhas += Confere("despesas: 2 categorias", Len(aQ[2]), 2)
+    nFalhas += Confere("despesas: AGUA somada e primeiro", aQ[2][1][1] == "AGUA" .And. aQ[2][1][3] == "100,00", .T.)
+    nFalhas += Confere("despesas: sem categoria", aQ[2][2][1], "(sem categoria)")
+    aQ := GcResultadoMensal("2099-01")
+    nFalhas += Confere("resultado do mes", aQ[1] == 0 .And. aQ[2] == 150 .And. aQ[3] == -150 .And. aQ[4] == 300, .T.)
 
-    // Balancete de 2095-05: receita 500 (pago), despesa 0 -> saldo 500
-    Local nSaldo := GcBalanceteMensal("2095-05")
-    ConOut("saldo=" + Str(nSaldo))
-
-    // Inadimplência: deve conter RPT01/2095-06, e o status real da
-    // Cobrança deve ter sido promovido pra "atrasado" (não fica só no
-    // relatório — GcInadimplenciaCalc chama GcAtualizarInadimplentes)
-    GcInadimplenciaCalc()
-    Local aInadim := TCSqlQuery("SELECT RIN_UNIDADE, RIN_VALOR FROM RPT_INADIM WHERE RIN_UNIDADE = 'RPT01'")
-    ConOut("inadim_qtd=" + Str(Len(aInadim)))
-    If Len(aInadim) > 0
-        ConOut("inadim_valor=" + aInadim[1]:RIN_VALOR)
+    TCSqlExec("DELETE FROM COB WHERE FILIAL IN ('010101', '020202')")
+    TCSqlExec("DELETE FROM DES WHERE FILIAL IN ('010101', '020202')")
+    RpcSetEnv("      ")
+    If nFalhas == 0
+        ConOut("relatorios: todos os casos ok")
+    Else
+        ConOut("FALHA relatorios: " + cValToChar(nFalhas) + " caso(s)")
     EndIf
-
-    Local aStatus := TCSqlQuery("SELECT COB_STATUS FROM COB WHERE COB_UNIDADE = 'RPT01' AND COB_COMPET = '2095-06'")
-    ConOut("status_real=" + aStatus[1]:COB_STATUS)
-
-    // Extrato da unidade RPT01: deve ter as 2 cobranças
-    GcExtratoUnidadeCalc("RPT01")
-    Local aExtrato := TCSqlQuery("SELECT COUNT(*) AS QTD FROM RPT_EXTRATO")
-    ConOut("extrato_qtd=" + aExtrato[1]:QTD)
-
-    // Despesas por categoria de 2095-06: Manutenção=500, Limpeza=100
-    GcDespesasCategoriaCalc("2095-06")
-    Local aCateg := TCSqlQuery("SELECT RDC_CATEG, RDC_TOTAL FROM RPT_DESCAT ORDER BY RDC_TOTAL DESC")
-    Local i
-    For i := 1 To Len(aCateg)
-        ConOut("categ=" + aCateg[i]:RDC_CATEG + " total=" + aCateg[i]:RDC_TOTAL)
-    Next
-
-    // Teardown
-    TCSqlExec("DELETE FROM COB WHERE COB_UNIDADE = 'RPT01'")
-    TCSqlExec("DELETE FROM DES WHERE DES_COMPET = '2095-06'")
-    TCSqlExec("DELETE FROM RPT_INADIM")
-    TCSqlExec("DELETE FROM RPT_EXTRATO")
-    TCSqlExec("DELETE FROM RPT_DESCAT")
 Return
+
+/*/{Protheus.doc} Confere
+    Compara obtido x esperado e imprime ok/FALHA.
+    @type Static Function
+    @author GesCon
+    @since 2026-11-21
+    @param cNome, character, nome do caso
+    @param xObtido, variant, valor obtido
+    @param xEsperado, variant, valor esperado
+    @return numeric, 0 se bateu, 1 se falhou
+*/
+Static Function Confere(cNome, xObtido, xEsperado)
+    If ValType(xObtido) == ValType(xEsperado) .And. xObtido == xEsperado
+        ConOut("ok    " + cNome)
+        Return 0
+    EndIf
+    ConOut("FALHA " + cNome + ": obtido [" + cValToChar(xObtido) + "] esperado [" + cValToChar(xEsperado) + "]")
+Return 1
 
 #include "../src/db.prw"
 #include "../src/relatorios.prw"
+#include "../src/consultas.prw"
