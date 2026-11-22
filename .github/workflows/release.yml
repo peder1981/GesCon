@@ -8,137 +8,33 @@ permissions:
   contents: write
 
 jobs:
-  # O GesCon e um app Fyne: o executavel embute bytecode num stub Go e
-  # compila com CGO. Cross-compilar de Linux para Windows esbarra em
-  # conflito de headers do mingw, entao cada plataforma e compilada no seu
-  # proprio runner.
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            plataforma: linux-amd64
-            ext: ""
-            pacote: GesConApp-linux-amd64
-          - os: windows-latest
-            plataforma: windows-amd64
-            ext: ".exe"
-            pacote: GesConApp-windows-amd64.zip
-          - os: macos-latest
-            plataforma: darwin-arm64
-            ext: ""
-            pacote: GesConApp-darwin-arm64
-    runs-on: ${{ matrix.os }}
+  release:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout GesCon
         uses: actions/checkout@v4
         with:
-          path: GesCon
+          fetch-depth: 0
 
-      # Versao FIXA, lida de ADVPP_VERSION. Sem isto o checkout pegava o
-      # master do AdvPP no instante do build: reconstruir uma tag antiga
-      # produziria um binario diferente do publicado, e um commit no
-      # compilador mudaria o proximo release do GesCon sem passar por
-      # revisao deste lado. Para adotar um AdvPP novo, edite o arquivo --
-      # a mudanca fica no historico do GesCon, como qualquer dependencia.
-      - name: Le a versao do AdvPP
-        id: advpp
-        shell: bash
-        run: echo "versao=v$(tr -d ' \n\r' < GesCon/ADVPP_VERSION)" >> "$GITHUB_OUTPUT"
-
-      - name: Checkout AdvPP (compilador)
-        uses: actions/checkout@v4
-        with:
-          repository: peder1981/AdvPP
-          ref: ${{ steps.advpp.outputs.versao }}
-          path: AdvPP
-
-      # Go exigido pelo AdvPP fixado em ADVPP_VERSION (o 4.4.6 pede >= 1.27;
-      # com 1.24 fixo o build do stub falhava). Mesmo critério do test.yml.
       - uses: actions/setup-go@v5
         with:
-          go-version-file: AdvPP/go.mod
+          go-version-file: packaging/launcher/go.mod
 
-      - name: Dependencias do Fyne (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev xorg-dev
+      # A interface do GesCon é web (PO-UI, `advplc serve`): o pacote leva o
+      # advplc da release do AdvPP fixada em ADVPP_VERSION (pacote advpp-cli),
+      # os fontes e o iniciador (packaging/launcher), que sobe o servidor em
+      # 127.0.0.1 e abre o navegador. O instalador Windows é NSIS, por usuário.
+      - name: Ferramentas de empacotamento
+        run: sudo apt-get update && sudo apt-get install -y nsis zip
 
-      - name: Build advplc
-        shell: bash
-        run: |
-          cd AdvPP
-          go build -o "$RUNNER_TEMP/advplc${{ matrix.ext }}" ./cmd/advplc
+      - name: Testa o iniciador
+        run: cd packaging/launcher && go vet ./... && go test ./...
 
-      - name: Build GesCon
-        shell: bash
-        env:
-          ADVPP_SRC: ${{ github.workspace }}/AdvPP
-        run: |
-          cd GesCon
-          VERSAO="${GITHUB_REF_NAME#v}"
-          "$RUNNER_TEMP/advplc${{ matrix.ext }}" build gescon.prw \
-            -o "GesConApp-${{ matrix.plataforma }}${{ matrix.ext }}" --gui
+      - name: Monta os pacotes
+        run: packaging/build-package.sh "${GITHUB_REF_NAME#v}"
 
-      # Windows recem-instalado -- e toda VM sem aceleracao -- so tem o
-      # Microsoft Basic Display Adapter, que oferece OpenGL 1.1. O Fyne exige
-      # 2.0+ e morre em os.Exit(1) dentro do proprio driver glfw
-      # (internal/driver/glfw/driver.go:148, initFailed), sem chance de o
-      # programa cair na TUI. O zip leva o Mesa3D em mesa\ para esses casos.
-      #
-      # Em mesa\ e nao na raiz de proposito: o opengl32.dll do Mesa nao
-      # repassa nada para o driver real, ele substitui. Na raiz do zip ele
-      # tiraria a aceleracao por hardware de todo mundo. Sao dois arquivos --
-      # desde a 21.3 o opengl32.dll e so um loader (139 KB) e o driver de
-      # verdade e o libgallium_wgl.dll (61 MB).
-      - name: Empacota o Windows com o Mesa3D de reserva
-        if: runner.os == 'Windows'
-        shell: bash
-        env:
-          MESA_VERSAO: 26.1.4
-        run: |
-          cd GesCon
-          curl -fsSL -o mesa.7z \
-            "https://github.com/pal1000/mesa-dist-win/releases/download/${MESA_VERSAO}/mesa3d-${MESA_VERSAO}-release-msvc.7z"
-          7z e -y mesa.7z x64/opengl32.dll x64/libgallium_wgl.dll -omesa
-          cp scripts/windows/GesCon-modo-compativel.bat .
-          7z a -tzip "${{ matrix.pacote }}" \
-            GesConApp-windows-amd64.exe GesCon-modo-compativel.bat mesa/
-
-      # O zip serve para quem so quer descompactar e rodar. O instalador
-      # resolve o que o zip nao resolve: pasta de dados gravavel (o banco
-      # nasce no diretorio de trabalho, e Program Files nao aceita escrita),
-      # atalho no menu Iniciar, desinstalacao, e o Mesa como opcao marcada na
-      # instalacao em vez de copia manual de DLL.
-      - name: Instalador Windows (Inno Setup)
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          cd GesCon
-          choco install innosetup --no-progress -y
-          cp installer/gescon.iss .
-          # // e o escape do MSYS: com /D simples o bash converteria o
-          # argumento num caminho do Windows antes do ISCC ver.
-          "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" \
-            //DAppVersion="${GITHUB_REF_NAME#v}" gescon.iss
-          ls -la GesCon-Setup-*.exe
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: GesConApp-${{ matrix.plataforma }}
-          path: |
-            GesCon/${{ matrix.pacote }}
-            GesCon/GesCon-Setup-*.exe
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: artefatos
-      - name: Publica os binarios no release
+      - name: Publica no release
         uses: softprops/action-gh-release@v2
         with:
-          files: artefatos/**/*
+          files: packaging/dist/*
           generate_release_notes: true

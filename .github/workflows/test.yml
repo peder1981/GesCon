@@ -7,6 +7,7 @@ on:
       - '**.prw'
       - 'schema.sql'
       - 'scripts/**'
+      - 'packaging/**'
       - 'ADVPP_VERSION'
       - '.github/workflows/test.yml'
   pull_request:
@@ -14,6 +15,7 @@ on:
       - '**.prw'
       - 'schema.sql'
       - 'scripts/**'
+      - 'packaging/**'
       - 'ADVPP_VERSION'
       - '.github/workflows/test.yml'
 
@@ -65,16 +67,13 @@ jobs:
           cd GesCon
           sqlite3 "$ADVPP_DB" < schema.sql
 
-      # `advplc build` gera um executavel Fyne, que precisa dos headers de
-      # OpenGL e X11 para compilar o stub com CGO.
-      - name: Dependencias do Fyne
-        run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev xorg-dev
-
       - name: Sintaxe de todos os fontes
         run: GesCon/scripts/check.sh
 
       - name: Suite de testes
         run: GesCon/scripts/test.sh
 
-      - name: Executavel desktop
-        run: GesCon/scripts/build.sh -o /tmp/GesConApp
+      # Iniciador do pacote (packaging/launcher): senha inicial dentro da
+      # política, arquivo de ambiente só do dono.
+      - name: Iniciador do pacote
+        run: cd GesCon/packaging/launcher && go vet ./... && go test ./...
