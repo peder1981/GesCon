@@ -636,6 +636,7 @@ Static Function GcUIPgComunicacao(oApp)
     Local oUni  := PoInput():New(oT2, "Unidade") as object
     Local oTkT  := Nil
     Local oRes  := PoWidget():New(oT2, "Token emitido") as object
+    Local oTok  := Nil
     Local oComp := PoInput():New(oT3, "Competência (AAAA-MM)") as object
     Local oB    := Nil
 
@@ -647,7 +648,10 @@ Static Function GcUIPgComunicacao(oApp)
 
     oRes:SetCols(12)
     PoInfo():New(oRes, "", "O token vale uma vez e expira em 48 horas. Entregue ao condômino por um canal seguro.")
-    oB := PoButton():New(oT2, "Emitir token", {|| GcUIToken(oApp, oRes, oTkT, GcStr(oUni:GetValue()))})
+    // Criado aqui e só atualizado depois: componente criado depois de a
+    // página montada não aparece (o token emitido ficava invisível).
+    oTok := PoInfo():New(oRes, "Token", "informe a unidade e clique em Emitir token")
+    oB := PoButton():New(oT2, "Emitir token", {|| GcUIToken(oApp, oTok, oTkT, GcStr(oUni:GetValue()))})
     oB:Set("kind", "primary")
     oB := PoButton():New(oT2, "Revogar tokens da unidade", {|| GcUIMsg(oApp, GcRevogarTokenUnidade(GcStr(oUni:GetValue())), "Tokens revogados."), ;
         GcUITabela(oTkT, GcQTokens())})
@@ -686,7 +690,7 @@ Static Function GcUIArquiva(oApp, oAvT, nId)
     GcUITabela(oAvT, GcQAvisos())
 Return
 
-Static Function GcUIToken(oApp, oRes, oTkT, cUni)
+Static Function GcUIToken(oApp, oTok, oTkT, cUni)
     Local aT := GcEmitirToken(cUni) as array
 
     GcUIToque()
@@ -694,7 +698,8 @@ Static Function GcUIToken(oApp, oRes, oTkT, cUni)
         oApp:Notify(aT[3], "error")
         Return
     EndIf
-    PoInfo():New(oRes, "Unidade " + cUni + " — válido até " + aT[2], aT[1])
+    oTok:Set("label", "Unidade " + cUni + " — válido até " + aT[2])
+    oTok:SetValue(aT[1])
     oApp:Notify("Token emitido.", "success")
     GcUITabela(oTkT, GcQTokens())
 Return
