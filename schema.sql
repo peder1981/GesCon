@@ -133,7 +133,14 @@ CREATE TABLE IF NOT EXISTS USR (
     R_E_C_D_E_L_ INTEGER DEFAULT 0,
     USR_LOGIN TEXT NOT NULL,
     USR_SENHA TEXT NOT NULL,
-    USR_PERFIL TEXT DEFAULT 'ADMIN'
+    USR_PERFIL TEXT DEFAULT 'ADMIN',
+    -- Segurança (src/seguranca.prw): salt do Argon2id, erros seguidos,
+    -- bloqueio até (UTC), troca obrigatória (S/N), última troca (UTC).
+    USR_SALT TEXT DEFAULT '',
+    USR_FALHAS INTEGER DEFAULT 0,
+    USR_BLOQ_ATE TEXT DEFAULT '',
+    USR_TROCA TEXT DEFAULT 'N',
+    USR_SENHA_EM TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS COND (

@@ -34,6 +34,27 @@ User Function MalasTest()
     TCSqlExec("DELETE FROM COB WHERE COB_UNIDADE = 'MALATEST'")
     TCSqlExec("DELETE FROM UNI WHERE UNI_CODIGO = 'MALATEST'")
     TCSqlExec("DELETE FROM CON WHERE CON_CODIGO = 'MALATEST'")
+
+    // Validação de e-mail (vai para o cabeçalho da mensagem)
+    Local aCasos := {{"fulano@teste.com.br", .T.}, {"a@b.co", .T.}, {"", .F.}, {"semarroba.com", .F.}, ;
+        {"dois@@x.com", .F.}, {"a@b@c.com", .F.}, {"a@semponto", .F.}, {"a@x..com", .F.}, {"a@x.com.", .F.}, ;
+        {"a b@x.com", .F.}, {"a@x.com" + Chr(13) + Chr(10) + "Bcc: alvo@y.com", .F.}, {"a@x.com,b@y.com", .F.}, {"@x.com", .F.}}
+    Local nC
+    For nC := 1 To Len(aCasos)
+        If GcEmailValido(aCasos[nC][1]) == aCasos[nC][2]
+            ConOut("ok    email [" + StrTran(StrTran(aCasos[nC][1], Chr(13), "\r"), Chr(10), "\n") + "]")
+        Else
+            ConOut("FALHA email [" + aCasos[nC][1] + "] esperado " + cValToChar(aCasos[nC][2]))
+        EndIf
+    Next nC
+
+    // Corpo: valor em reais e datas no formato brasileiro
+    Local cCorpo := GcMalaCorpo("Fulano", "101", "2026-11", 1234.5, "2026-12-10", "pendente")
+    If "R$ 1.234,50" $ cCorpo .And. "Vencimento: 10/12/2026" $ cCorpo .And. "competência 11/2026" $ cCorpo .And. "Situação: Pendente" $ cCorpo
+        ConOut("ok    corpo formatado")
+    Else
+        ConOut("FALHA corpo formatado: " + cCorpo)
+    EndIf
 Return
 
 #include "../src/db.prw"

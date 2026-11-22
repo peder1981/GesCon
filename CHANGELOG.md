@@ -2,6 +2,72 @@
 
 Mudanças notáveis do GesCon.
 
+## [Não lançado]
+
+Refatoração sobre o AdvPP 4.8.5, etapas 1 (bugs e segurança) e 2 (login) de 4. Detalhes
+e o que fica para as etapas de login, interface e reforma tributária em
+`docs/superpowers/specs/2026-11-21-refatoracao-advpp485-achados.md`.
+
+### Corrigido
+
+- **Boleto não pagável** (crítico): fator de vencimento com data base errada
+  (07/09/1997 em vez de 07/10/1997) e travado em 9999 -- desde 22/02/2025 o
+  fator volta a 1000, então todo boleto saía com vencimento 21/02/2025;
+  valor com 8 dígitos e arredondado para cima; código de barras de 43
+  posições com DVs a mais; campo livre fora do layout do Itaú e do
+  Bradesco; vencimento gravado pelo Fechamento lido como data vazia.
+  Reescrito pelos manuais CNAB 400 do Itaú (jan/2017) e do Bradesco
+  (abr/2022), com teste contra os exemplos numéricos dos manuais.
+- **Fechamento Mensal**: frações ideais fora de 100% rateavam errado em
+  silêncio (com 120% cobrava 20% a mais); competência inválida gerava
+  vencimento inválido; cobranças gravadas uma a uma (queda no meio deixava
+  unidades sem cobrança) -- agora num único comando; índice único de
+  cobrança por condomínio/competência/unidade.
+- **Token do condômino**: previsível (data + hora + `Random()`); agora 64
+  hexadecimais de `UUIDRandom()`. Dois acessos simultâneos passavam com o
+  mesmo token de uso único; agora consumo num único `UPDATE ... RETURNING`.
+  O emissor gravado era o usuário do sistema operacional do servidor.
+- **Contabilidade**: todo lançamento manual gravava `TEST_USER` como
+  usuário; lançamentos automáticos do Fechamento podiam ser editados e
+  excluídos à mão; valor sem arredondamento.
+- **Registrar Pagamento**: data inexistente ou futura aceita; confirmava
+  "registrado" mesmo sem alterar a cobrança; regravava data de cobrança já
+  paga.
+- **Avisos**: "Arquivar Aviso" listava avisos de todos os condomínios.
+- **Mala direta**: valor e datas sem formatação; e-mail não validado antes
+  do cabeçalho (um endereço com quebra de linha injetava cabeçalho).
+
+- **Escalada de privilégio por login repetido** (crítico): um síndico
+  criava outro usuário com o login de um super administrador e a senha que
+  quisesse; ao entrar, o perfil lido pelo login era o do super. Login agora
+  é único (sem diferenciar maiúsculas), com índice único no banco.
+- **Síndico vinculava usuário a condomínio alheio**: a criação de síndico
+  listava todos os condomínios; agora só os do síndico que cria.
+- **Primeiro acesso**: com a tabela de usuários vazia, qualquer visitante
+  criava o super administrador pela tela. Agora o administrador só nasce
+  com a senha de `GESCON_ADMIN_SENHA` (ambiente do servidor), com troca
+  obrigatória no primeiro login; o deploy gera essa senha em
+  `/etc/gescon/gescon.env` (0600).
+- **Senha**: SHA-256 sem salt trocado por Argon2id com salt por usuário
+  (hashes antigos são regravados no primeiro login); política de senha
+  (10+ caracteres, maiúscula, minúscula, número, especial, sem o login);
+  5 erros seguidos bloqueiam o usuário por 15 minutos; usuário inexistente
+  e senha errada dão a mesma resposta; "Trocar Senha" troca só a do usuário
+  logado (antes pedia o login e trocava a de qualquer um de quem se
+  soubesse a senha atual).
+- Segredos do SMTP saíram da unidade systemd (`systemctl show` mostrava a
+  todos) para o arquivo 0600; `ADVPP_WEBUI_HIDE_LOG=1` no serviço.
+
+### Alterado
+
+- AdvPP 4.8.6 fixado em `ADVPP_VERSION` (a 4.8.6 saiu deste trabalho: erro de
+  SQL volta para o programa em vez de encerrá-lo; o Fechamento passa a avisar
+  quando a gravação das cobranças falha, sem gravar nenhuma), lido pela CI de testes (antes
+  compilava o AdvPP do master), pelo release e pelo deploy (que instalava
+  o 3.0.0 do pacote que não roda no Debian 12; agora `advpp-cli`).
+- `scripts/check-filial.sh` checa comando a comando, incluindo
+  `gescon.prw` (antes bastava a palavra FILIAL aparecer no arquivo).
+
 ## [1.2.1] — 2026-10-10
 
 Terceira rodada de QA do Wilson Kraft (relatório

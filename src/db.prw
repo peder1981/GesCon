@@ -19,6 +19,20 @@ User Function GcSqlLit(cValor)
     EndIf
 Return StrTran(cRet, "'", "''")
 
+/*/{Protheus.doc} GcUsuarioSessao
+    Login de quem está na sessão (Private cLoginAtual de GesCon()), para
+    trilha de auditoria. Fora de uma sessão (job, teste), "SISTEMA".
+    @type User Function
+    @author GesCon
+    @since 2026-11-21
+    @return character, login ou "SISTEMA"
+*/
+User Function GcUsuarioSessao()
+    If Type("cLoginAtual") == "C" .And. !Empty(cLoginAtual)
+        Return cLoginAtual
+    EndIf
+Return "SISTEMA"
+
 /*/{Protheus.doc} GcPerfilDoLogin
     Consulta USR_PERFIL do login informado. Extraída da revisão final
     (achados C2/I4/I5): três telas diferentes (src/usuarios.prw,
@@ -89,11 +103,14 @@ User Function GcBootstrapDB()
     // Kraft, QA v1.2.0). Antes do schema.sql: o SX3 que ele recria já
     // referencia a coluna.
     GcAdicionarColunaSeFaltar("DES", "DES_LANCADO_CONTABIL", "NUMERIC DEFAULT 0")
+    GcAdicionarColunasSeguranca()
     lOk := TCSqlExec(GcSchemaSQL())
     If !lOk
         ConOut("GesCon: falha ao aplicar o schema no banco.")
     EndIf
     GcSanearDadosLegados()
+    GcCriarIndiceUnicoCob()
+    GcCriarIndiceUnicoUsr()
 
     // A restauração das _OLD roda SEMPRE, mesmo fora de uma migração
     // "nova" -- é a rede de segurança de uma migração anterior que tenha
@@ -108,6 +125,35 @@ User Function GcBootstrapDB()
     // agora -- por isso os dois viram parâmetro, não dois gates iguais.
     GcSemearMigracaoFilialPadrao(lPrecisaMigrar)
 Return lOk
+
+/*/{Protheus.doc} GcCriarIndiceUnicoCob
+    Cria o índice único de cobrança ativa por condomínio, competência e
+    unidade (impede o mesmo fechamento gravar duas vezes, por exemplo com
+    dois administradores fechando ao mesmo tempo). Fica fora do schema.sql
+    de propósito: num banco antigo com duplicatas, o CREATE UNIQUE INDEX
+    falharia e, no AdvPP, um erro de SQL encerra o boot inteiro. Com
+    duplicatas, não cria e avisa no log.
+    @type User Function
+    @author GesCon
+    @since 2026-11-21
+    @return logical, .T. se o índice existe ao final
+*/
+User Function GcCriarIndiceUnicoCob()
+    Local aDup := {} as array
+
+    If Len(TCSqlQuery("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'UQ_COB_COMPET_UNIDADE'")) > 0
+        Return .T.
+    EndIf
+    aDup := TCSqlQuery("SELECT FILIAL, COB_COMPET, COB_UNIDADE, COUNT(*) AS QTD FROM COB " + ;
+        "WHERE D_E_L_E_T_ = ' ' GROUP BY FILIAL, COB_COMPET, COB_UNIDADE HAVING COUNT(*) > 1")
+    If Len(aDup) > 0
+        ConOut("GesCon: AVISO -- " + cValToChar(Len(aDup)) + " combinação(ões) de condomínio/competência/unidade com " + ;
+            "cobrança duplicada (ex.: competência " + aDup[1]:COB_COMPET + ", unidade " + aDup[1]:COB_UNIDADE + "). " + ;
+            "O índice único de cobrança não foi criado; revise as duplicatas.")
+        Return .F.
+    EndIf
+    TCSqlExec("CREATE UNIQUE INDEX IF NOT EXISTS UQ_COB_COMPET_UNIDADE ON COB (FILIAL, COB_COMPET, COB_UNIDADE) WHERE D_E_L_E_T_ = ' '")
+Return .T.
 
 /*/{Protheus.doc} GcSanearDadosLegados
     Saneamento idempotente de dados gravados por versões anteriores (cada
@@ -128,14 +174,19 @@ User Function GcSanearDadosLegados()
     // travado no fechamento). Este saneamento é a única exceção: derruba a
     // trigger, arredonda e reaplica o schema no MESMO Exec (mesma conexão),
     // que recria a trigger. Só entra nesse caminho se houver dízima.
+    // check-filial: global -- saneamento de boot, todas as filiais
     If Len(TCSqlQuery("SELECT 1 FROM COB WHERE COB_VALOR <> ROUND(COB_VALOR, 2) LIMIT 1")) > 0
         TCSqlExec("DROP TRIGGER IF EXISTS TRG_COB_TRAVA_VALOR;" + Chr(10) + ;
             "UPDATE COB SET COB_VALOR = ROUND(COB_VALOR, 2) WHERE COB_VALOR <> ROUND(COB_VALOR, 2);" + Chr(10) + ;
             GcSchemaSQL())
     EndIf
+    // check-filial: global -- saneamento de boot, todas as filiais
     TCSqlExec("UPDATE LANCAMENTOS SET LAN_VALOR = ROUND(LAN_VALOR, 2) WHERE LAN_VALOR <> ROUND(LAN_VALOR, 2)")
+    // check-filial: global -- saneamento de boot, todas as filiais
     TCSqlExec("UPDATE RATEIO_DETALHE SET RAT_VALOR = ROUND(RAT_VALOR, 2) WHERE RAT_VALOR <> ROUND(RAT_VALOR, 2)")
+    // check-filial: global -- saneamento de boot, todas as filiais
     TCSqlExec("UPDATE RPT_PORTAL_EXTRATOS SET REX_VALOR = ROUND(REX_VALOR, 2) WHERE REX_VALOR <> ROUND(REX_VALOR, 2)")
+    // check-filial: global -- saneamento de boot, todas as filiais
     TCSqlExec("UPDATE RPT_PORTAL_AGENDA SET REA_VALOR = ROUND(REA_VALOR, 2) WHERE REA_VALOR <> ROUND(REA_VALOR, 2)")
 Return
 
@@ -150,6 +201,7 @@ Return
     @since 2026-10-10
 */
 User Function GcNormalizarCompetDespesas()
+    // check-filial: global -- saneamento de boot, todas as filiais
     TCSqlExec("UPDATE DES SET DES_COMPET = SUBSTR(DES_COMPET, 4, 4) || '-' || SUBSTR(DES_COMPET, 1, 2) " + ;
         "WHERE DES_COMPET GLOB '[0-9][0-9]/[0-9][0-9][0-9][0-9]'")
 Return

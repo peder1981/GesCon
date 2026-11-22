@@ -111,6 +111,10 @@ User Function FechamentoTest()
     // Arredondamento (Wilson Kraft, QA 2026-08-15): multiplicação de double
     // por fração produz resíduo de ponto flutuante (ex: 333.3333333333333)
     // sem Round(). 3 unidades com fração 1/3 forçam o caso.
+    // T01/T02 (60% + 40%) só servem aos cenários 2099-01 a 2099-03. Somadas
+    // a T03-T05 (3 x 33,3%) davam 200% de fração ideal, que o Fechamento
+    // agora recusa (antes rateava errado em silêncio).
+    TCSqlExec("DELETE FROM UNI WHERE UNI_CODIGO IN ('T01','T02')")
     TCSqlExec("DELETE FROM COB WHERE COB_UNIDADE IN ('T03','T04','T05')")
     TCSqlExec("DELETE FROM UNI WHERE UNI_CODIGO IN ('T03','T04','T05')")
     TCSqlExec("DELETE FROM DES WHERE DES_COMPET = '2099-04'")
@@ -120,19 +124,20 @@ User Function FechamentoTest()
     TCSqlExec("INSERT INTO UNI (FILIAL, UNI_CODIGO, UNI_FRACAO) VALUES ('      ', 'T05', 0.333333333333)")
     TCSqlExec("INSERT INTO DES (FILIAL, DES_DESCR, DES_VALOR, DES_COMPET) VALUES ('      ', 'Teste4', 1000, '2099-04')")
     GcFecharMes("2099-04")
-    // COB_UNIDADE = 'T03' explícito: T01/T02 (fração 0.6/0.4, sem resíduo)
-    // continuam ativas nesta FILIAL até o teardown final e também são
-    // rateadas junto -- sem o filtro, um LIMIT 1 sem ORDER BY podia pegar
-    // a linha de T01 (600) em vez de T03 (a que testa o resíduo).
-    Local aCobRedondo := TCSqlQuery("SELECT COB_VALOR FROM COB WHERE COB_COMPET = '2099-04' AND COB_UNIDADE = 'T03' LIMIT 1")
+    // T04 explícito: com as frações somando 100%, o centavo que sobra
+    // (3 x 333,33 = 999,99) vai para a primeira unidade de maior fração,
+    // a T03 (GcAjustarResiduoRateio). T04 mostra o valor sem resíduo de
+    // ponto flutuante; a soma das três fecha a despesa.
+    Local aCobRedondo := TCSqlQuery("SELECT COB_VALOR FROM COB WHERE COB_COMPET = '2099-04' AND COB_UNIDADE = 'T04' LIMIT 1")
+    Local aSoma04 := TCSqlQuery("SELECT SUM(COB_VALOR) AS S FROM COB WHERE COB_COMPET = '2099-04' AND COB_UNIDADE IN ('T03','T04','T05')")
     Local cValorRedondo := "(vazio)"
     If Len(aCobRedondo) > 0
         cValorRedondo := aCobRedondo[1]:COB_VALOR
     EndIf
-    If Len(aCobRedondo) == 1 .And. AllTrim(cValorRedondo) == '333.33'
-        ConOut("PASS: valor rateado sem resíduo de ponto flutuante (333.33)")
+    If Len(aCobRedondo) == 1 .And. AllTrim(cValorRedondo) == '333.33' .And. Round(Val(aSoma04[1]:S), 2) == 1000
+        ConOut("PASS: valor rateado sem resíduo de ponto flutuante (333.33) e soma = 1000.00")
     Else
-        ConOut("FAIL: esperado COB_VALOR = '333.33', achou '" + cValorRedondo + "'")
+        ConOut("FAIL: esperado T04 = '333.33' e soma 1000, achou '" + cValorRedondo + "' / " + cValToChar(aSoma04[1]:S))
     EndIf
 
     // ---- QA v1.2.0 (Wilson Kraft, 2026-10-10) ----

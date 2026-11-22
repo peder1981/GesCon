@@ -324,7 +324,7 @@ User Function PortalTest()
             GcSqlLit(DtoC(Date()) + " " + Left(Time(), 8)) + "', '" + GcSqlLit(cValidade) + "', 0, '" + GcSqlLit(cFilTest) + "')")
     EndIf
 
-    aTokenCheck := TCSqlQuery("SELECT COUNT(*) AS QTD FROM GCT_TOKEN WHERE TOKEN = '" + GcSqlLit(Left(cTokenTest, 40)) + "' AND USADO = 0 AND D_E_L_E_T_ = ' '")
+    aTokenCheck := TCSqlQuery("SELECT COUNT(*) AS QTD FROM GCT_TOKEN WHERE TOKEN = '" + GcSqlLit(cTokenTest) + "' AND USADO = 0 AND D_E_L_E_T_ = ' '")
     If Len(aTokenCheck) > 0 .And. Val(aTokenCheck[1]:QTD) == 1
         ConOut("PASS: Step 5 - token gravado na GCT_TOKEN")
     Else
@@ -335,7 +335,7 @@ User Function PortalTest()
     // ========================================
     // Step 6: Autenticar como condômino via token
     // ========================================
-    Local lAutenticado := GcAuthPortalToken(Left(cTokenTest, 40))
+    Local lAutenticado := GcAuthPortalToken(cTokenTest)
     If !lAutenticado
         lTodosOk := .F.
         ConOut("FAIL: Step 6 - autenticacao falhou")
@@ -352,7 +352,7 @@ User Function PortalTest()
     EndIf
 
     // Verifica que token foi marcado como USADO=1
-    Local aUsado := TCSqlQuery("SELECT USADO FROM GCT_TOKEN WHERE TOKEN = '" + GcSqlLit(Left(cTokenTest, 40)) + "' AND D_E_L_E_T_ = ' '")
+    Local aUsado := TCSqlQuery("SELECT USADO FROM GCT_TOKEN WHERE TOKEN = '" + GcSqlLit(cTokenTest) + "' AND D_E_L_E_T_ = ' '")
     If Len(aUsado) > 0 .And. Val(aUsado[1]:USADO) == 1
         ConOut("PASS: Step 6c - token marcado como usado")
     Else

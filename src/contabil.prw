@@ -172,6 +172,11 @@ User Function GcCriarLancamentoManualDireto(dData, cDescricao, cContaDeb, cConta
     EndIf
 
     // Valida valor positivo
+    If ValType(nValor) != "N"
+        ConOut("ERROR: Value must be numeric")
+        Return .F.
+    EndIf
+    nValor := Round(nValor, 2)
     If nValor <= 0
         ConOut("ERROR: Value must be greater than zero")
         Return .F.
@@ -190,7 +195,7 @@ User Function GcCriarLancamentoManualDireto(dData, cDescricao, cContaDeb, cConta
     cSql += GcSqlVal("MANUAL") + ", "
     cSql += GcSqlVal(cExercicio) + ", "
     cSql += "datetime('now'), "
-    cSql += GcSqlVal("TEST_USER") + ", "
+    cSql += GcSqlVal(GcUsuarioSessao()) + ", "
     cSql += GcSqlVal(" ") + ", "
     cSql += "(SELECT COALESCE(MAX(R_E_C_N_O_), 0) + 1 FROM LANCAMENTOS), "
     cSql += GcSqlVal(FWxFilial('LANCAMENTOS'))
@@ -232,13 +237,20 @@ User Function GcEditarLancamentoDescricao(nRecno, cDescricao)
     EndIf
 
     // Verifica se lançamento existe
-    aLancamento := TCSqlQuery("SELECT LAN_EXERCICIO FROM LANCAMENTOS WHERE R_E_C_N_O_ = " + cValToChar(nRecno) + " AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('LANCAMENTOS')))
+    aLancamento := TCSqlQuery("SELECT LAN_EXERCICIO, LAN_TIPO FROM LANCAMENTOS WHERE R_E_C_N_O_ = " + cValToChar(nRecno) + " AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('LANCAMENTOS')))
     If Len(aLancamento) = 0
         ConOut("ERROR: Entry not found")
         Return .F.
     EndIf
 
     // Obtém exercício
+    // Lançamento automático (despesa/rateio do Fechamento) só muda pelo
+    // próprio Fechamento: editá-lo ou excluí-lo à mão desequilibra o
+    // vínculo com as cobranças e a flag DES_LANCADO_CONTABIL.
+    If AllTrim(aLancamento[1]:LAN_TIPO) != "MANUAL"
+        ConOut("ERROR: Only MANUAL entries can be changed (this one is " + AllTrim(aLancamento[1]:LAN_TIPO) + ")")
+        Return .F.
+    EndIf
     cExercicio := aLancamento[1]:LAN_EXERCICIO
 
     // Verifica se período está fechado
@@ -285,13 +297,20 @@ User Function GcDeletarLancamento(nRecno)
     EndIf
 
     // Verifica se lançamento existe
-    aLancamento := TCSqlQuery("SELECT LAN_EXERCICIO FROM LANCAMENTOS WHERE R_E_C_N_O_ = " + cValToChar(nRecno) + " AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('LANCAMENTOS')))
+    aLancamento := TCSqlQuery("SELECT LAN_EXERCICIO, LAN_TIPO FROM LANCAMENTOS WHERE R_E_C_N_O_ = " + cValToChar(nRecno) + " AND D_E_L_E_T_ = ' ' AND FILIAL = " + GcSqlVal(FWxFilial('LANCAMENTOS')))
     If Len(aLancamento) = 0
         ConOut("ERROR: Entry not found")
         Return .F.
     EndIf
 
     // Obtém exercício
+    // Lançamento automático (despesa/rateio do Fechamento) só muda pelo
+    // próprio Fechamento: editá-lo ou excluí-lo à mão desequilibra o
+    // vínculo com as cobranças e a flag DES_LANCADO_CONTABIL.
+    If AllTrim(aLancamento[1]:LAN_TIPO) != "MANUAL"
+        ConOut("ERROR: Only MANUAL entries can be changed (this one is " + AllTrim(aLancamento[1]:LAN_TIPO) + ")")
+        Return .F.
+    EndIf
     cExercicio := aLancamento[1]:LAN_EXERCICIO
 
     // Verifica se período está fechado
@@ -524,7 +543,7 @@ User Function GcLancarDespesaContabil(dData, cDescricao, nValor, cReparticao, nD
     cSql += GcSqlVal("AUTOMATICO_DESPESA") + ", "
     cSql += GcSqlVal(cExercicio) + ", "
     cSql += "datetime('now'), "
-    cSql += GcSqlVal("TEST_USER") + ", "
+    cSql += GcSqlVal(GcUsuarioSessao()) + ", "
     cSql += GcSqlVal(" ") + ", "
     cSql += "(SELECT COALESCE(MAX(R_E_C_N_O_), 0) + 1 FROM LANCAMENTOS), "
     cSql += GcSqlVal(FWxFilial('LANCAMENTOS'))
@@ -563,7 +582,7 @@ User Function GcLancarDespesaContabil(dData, cDescricao, nValor, cReparticao, nD
         cSql += cValToChar(nLanIdPrincipal) + ", "
         cSql += GcSqlVal(cExercicio) + ", "
         cSql += "datetime('now'), "
-        cSql += GcSqlVal("TEST_USER") + ", "
+        cSql += GcSqlVal(GcUsuarioSessao()) + ", "
         cSql += GcSqlVal(" ") + ", "
         cSql += "(SELECT COALESCE(MAX(R_E_C_N_O_), 0) + 1 FROM LANCAMENTOS), "
         cSql += GcSqlVal(FWxFilial('LANCAMENTOS'))

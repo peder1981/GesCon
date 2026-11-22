@@ -48,6 +48,7 @@ User Function GcValidarToken(cToken as character) as object
     // Sem filtro de FILIAL: TOKEN e' PRIMARY KEY (globalmente unico), e um
     // token gerado antes desta migracao tem FILIAL=''/NULL -- a mesma razao
     // pela qual src/portal.prw::GcAuthPortalToken usa LEFT JOIN, nao INNER.
+    // check-filial: global -- token é PRIMARY KEY global; a consulta descobre a filial
     aResult := TCSqlQuery("SELECT TOK_PERFIL, USR_LOGIN, UNI_CODIGO, VALIDO_ATE, USADO " + ;
         "FROM GCT_TOKEN WHERE TOKEN = '" + GcSqlLit(cToken) + "' AND D_E_L_E_T_ = ' '")
 
@@ -151,6 +152,7 @@ User Function GcInvalidarToken(cToken as character) as logical
 
     // Sem filtro de FILIAL nesta consulta/UPDATE: TOKEN e' PRIMARY KEY
     // (globalmente unico), mesma razao do GcValidarToken acima.
+    // check-filial: global -- token é PRIMARY KEY global
     aResult := TCSqlQuery("SELECT TOKEN FROM GCT_TOKEN WHERE TOKEN = '" + GcSqlLit(cToken) + ;
         "' AND D_E_L_E_T_ = ' '")
 
@@ -158,6 +160,7 @@ User Function GcInvalidarToken(cToken as character) as logical
         Return .F.
     EndIf
 
+    // check-filial: global -- token é PRIMARY KEY global
     TCSqlExec("UPDATE GCT_TOKEN SET D_E_L_E_T_ = '*', R_E_C_D_E_L_ = " + cValToChar(Seconds()) + ;
         " WHERE TOKEN = '" + GcSqlLit(cToken) + "' AND D_E_L_E_T_ = ' '")
 Return .T.

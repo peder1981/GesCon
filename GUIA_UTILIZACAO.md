@@ -53,10 +53,23 @@ scripts/bootstrap-db.sh
 export ADVPP_SRC=~/Projetos/AdvPP
 scripts/build.sh                    # gera ./GesConApp
 
-# 3. Primeiro administrador
-#    O login inicial é criado pela própria tela de login na primeira
-#    execução, quando ainda não existe nenhum usuário.
+# 3. Primeiro administrador: senha inicial no ambiente (só vale com a
+#    tabela de usuários vazia; no primeiro login ela é trocada)
+export GESCON_ADMIN_SENHA='Uma#SenhaForte1'
 ```
+
+Ninguém cria administrador pela tela: sem usuários e sem
+`GESCON_ADMIN_SENHA`, o GesCon recusa o acesso e diz o que fazer. Com a
+variável definida, nasce o usuário `admin` (super administrador), e o
+primeiro login exige definir uma senha nova. No servidor, o
+`deploy/02-setup-advpp.sh` gera essa senha sozinho em
+`/etc/gescon/gescon.env` (permissão 0600).
+
+Regras de senha: no mínimo 10 caracteres, com letra maiúscula, letra
+minúscula, número e caractere especial, sem conter o login. Cinco erros
+seguidos bloqueiam o usuário por 15 minutos. Senhas gravadas por versões
+anteriores (SHA-256) continuam valendo e são regravadas em Argon2id no
+primeiro login.
 
 O banco padrão é `~/.advpp/ADVPP.db`. Para usar outro, defina `ADVPP_DB`.
 

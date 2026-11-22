@@ -34,12 +34,9 @@ User Function GcMalaDireta(cCompetencia)
     Local nEnviados := 0
     Local i
     For i := 1 To Len(aDest)
-        If !Empty(aDest[i]:EMAIL)
-            Local cCorpo := "Olá " + aDest[i]:NOME + "," + Chr(10) + Chr(10) + ;
-                "Referente à unidade " + aDest[i]:UNIDADE + ", competência " + cCompetencia + ":" + Chr(10) + ;
-                "Valor: " + aDest[i]:VALOR + Chr(10) + ;
-                "Vencimento: " + aDest[i]:VENCTO + Chr(10) + ;
-                "Situação: " + aDest[i]:STATUS
+        If GcEmailValido(aDest[i]:EMAIL)
+            Local cCorpo := GcMalaCorpo(aDest[i]:NOME, aDest[i]:UNIDADE, cCompetencia, ;
+                Val(aDest[i]:VALOR), aDest[i]:VENCTO, aDest[i]:STATUS)
             Begin Sequence
                 Local oMail := TMailMessage():New()
                 oMail:SetServer(cHost, cPort)
@@ -47,8 +44,10 @@ User Function GcMalaDireta(cCompetencia)
                     oMail:SetAuth(cUser, cPass)
                 EndIf
                 oMail:SetFrom(cFrom)
-                oMail:AddTo(aDest[i]:EMAIL)
-                oMail:SetSubject("GesCon — Cobrança " + cCompetencia + " — Unidade " + aDest[i]:UNIDADE)
+                oMail:AddTo(AllTrim(aDest[i]:EMAIL))
+                // Sem CR/LF no assunto: o texto vem de cadastro e iria para o cabeçalho
+                oMail:SetSubject(StrTran(StrTran("GesCon — Cobrança " + cCompetencia + " — Unidade " + ;
+                    AllTrim(aDest[i]:UNIDADE), Chr(13), " "), Chr(10), " "))
                 oMail:SetBody(cCorpo)
                 If oMail:Send()
                     nEnviados++
@@ -56,6 +55,75 @@ User Function GcMalaDireta(cCompetencia)
             Recover
                 ConOut("GcMalaDireta: falha ao enviar pra " + aDest[i]:EMAIL + " (unidade " + aDest[i]:UNIDADE + ")")
             End Sequence
+        ElseIf !Empty(aDest[i]:EMAIL)
+            ConOut("GcMalaDireta: e-mail inválido ignorado (unidade " + aDest[i]:UNIDADE + ")")
         EndIf
     Next
 Return nEnviados
+
+/*/{Protheus.doc} GcEmailValido
+    Validação simples de endereço antes de ir para o cabeçalho da
+    mensagem: sem espaço, CR, LF, vírgula, ponto e vírgula, aspas ou
+    sinais < >; exatamente um "@"; domínio com ponto e sem ponto nas
+    pontas. Não pretende cobrir a RFC 5322 inteira, só barrar o que quebra
+    ou injeta cabeçalho.
+    @type User Function
+    @author GesCon
+    @since 2026-11-21
+    @param cEmail, character, endereço
+    @return logical, .T. se aceitável
+*/
+User Function GcEmailValido(cEmail)
+    Local cEnd    := "" as character
+    Local cDom    := "" as character
+    Local nArroba := 0 as numeric
+    Local nI      := 0 as numeric
+
+    If ValType(cEmail) != "C"
+        Return .F.
+    EndIf
+    cEnd := AllTrim(cEmail)
+    If Empty(cEnd) .Or. Len(cEnd) > 254
+        Return .F.
+    EndIf
+    For nI := 1 To Len(cEnd)
+        If SubStr(cEnd, nI, 1) $ ' ,;<>"' + Chr(13) + Chr(10) + Chr(9) .Or. Asc(SubStr(cEnd, nI, 1)) < 32
+            Return .F.
+        EndIf
+    Next nI
+    nArroba := At("@", cEnd)
+    If nArroba < 2 .Or. At("@", SubStr(cEnd, nArroba + 1)) > 0
+        Return .F.
+    EndIf
+    cDom := SubStr(cEnd, nArroba + 1)
+Return At(".", cDom) > 1 .And. Right(cDom, 1) != "." .And. !(".." $ cDom)
+
+/*/{Protheus.doc} GcMalaCorpo
+    Texto da mensagem de cobrança: valor em reais (R$ 1.234,56) e
+    vencimento em DD/MM/AAAA. Antes saíam crus ("350.5", "2026-12-10").
+    @type User Function
+    @author GesCon
+    @since 2026-11-21
+    @param cNome, character, nome do condômino
+    @param cUnidade, character, unidade
+    @param cCompetencia, character, AAAA-MM
+    @param nValor, numeric, valor
+    @param cVencto, character, vencimento AAAA-MM-DD
+    @param cStatus, character, situação
+    @return character, corpo da mensagem
+*/
+User Function GcMalaCorpo(cNome, cUnidade, cCompetencia, nValor, cVencto, cStatus)
+    Local cVenc := AllTrim(cVencto) as character
+    Local cComp := AllTrim(cCompetencia) as character
+
+    If Len(cVenc) == 10 .And. SubStr(cVenc, 5, 1) == "-"
+        cVenc := SubStr(cVenc, 9, 2) + "/" + SubStr(cVenc, 6, 2) + "/" + Left(cVenc, 4)
+    EndIf
+    If Len(cComp) == 7 .And. SubStr(cComp, 5, 1) == "-"
+        cComp := Right(cComp, 2) + "/" + Left(cComp, 4)
+    EndIf
+Return "Olá " + AllTrim(cNome) + "," + Chr(10) + Chr(10) + ;
+    "Referente à unidade " + AllTrim(cUnidade) + ", competência " + cComp + ":" + Chr(10) + ;
+    "Valor: R$ " + AllTrim(Transform(nValor, "@E 999,999,999.99")) + Chr(10) + ;
+    "Vencimento: " + cVenc + Chr(10) + ;
+    "Situação: " + Upper(Left(AllTrim(cStatus), 1)) + Lower(SubStr(AllTrim(cStatus), 2))
